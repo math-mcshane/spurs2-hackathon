@@ -1,0 +1,416 @@
+{
+  "approvals": [],
+  "authority": "Sports Media Rights & Clip Clearance: AI Audit Rulebook (demo draft)",
+  "effectiveDate": null,
+  "id": "premier-league-media-rights-audit",
+  "questions": [
+    {
+      "description": "Read the network bug, scorebug branding and on-screen graphics. Premier League world feed / league or club produced: Premier League-branded scorebug and graphics, or club-branded graphics, with no third-party broadcaster bug. Domestic broadcasters: Sky Sports, TNT Sports, BBC (Match of the Day and highlights). International broadcasters: NBC, Peacock, USA Network, beIN SPORTS, SuperSport and other territory rights holders, including local-language commentary feeds. The source feed sets the distribution ceiling for the clip, so a clip from one territory's feed is not automatically clearable for global use. If the clip stitches together footage from several international broadcasters or territories, answer mixed_international. Only name a broadcaster you can actually see (a bug, scorebug branding, mic flag) or hear named. If game action shows no broadcaster bug and no scorebug, answer unknown. Do not infer the broadcaster from the clubs or stadium.",
+      "id": "broadcast_source",
+      "label": "Which broadcaster or production source does the match footage come from?",
+      "options": [
+        {
+          "id": "pl_world_feed",
+          "label": "Premier League world feed / league or club produced (no third-party bug)",
+          "weight": 0
+        },
+        {
+          "id": "no_match_footage",
+          "label": "No match broadcast footage",
+          "weight": 0
+        },
+        {
+          "id": "domestic_broadcaster",
+          "label": "Domestic broadcaster branding (Sky Sports, TNT Sports, BBC)",
+          "weight": 10
+        },
+        {
+          "id": "international_broadcaster",
+          "label": "International broadcaster (single territory)",
+          "weight": 20
+        },
+        {
+          "id": "mixed_international",
+          "label": "Several broadcasters / territories stitched together",
+          "weight": 25
+        },
+        {
+          "id": "unknown",
+          "label": "Match footage with no identifiable source",
+          "weight": 20
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Distribution rights (RIGHTS-01)",
+      "type": "single_select"
+    },
+    {
+      "id": "networks_seen",
+      "label": "List every broadcaster logo / bug seen, with when it appears.",
+      "requiresCitations": true,
+      "section": "Distribution rights (RIGHTS-01)",
+      "type": "list"
+    },
+    {
+      "description": "A scorebug is an ON-SCREEN graphic overlay added by the broadcaster, normally a score / match clock bar along the top or bottom edge of the frame, plus a broadcaster or Premier League bug. Physical stadium scoreboards, big screens and pitchside LED perimeter boards are part of the venue and are NOT a scorebug. Clean feed = a match-highlight clip whose live action carries no on-screen score/clock overlay and no broadcaster watermark, typically because the graphics were cropped or removed. Clean clips obscure rights provenance and are normally for internal or editorial use only. If the original graphics were removed but the distributor's own compliant score, clock and sponsor package is shown in their place, answer replaced_graphics. League- or club-produced features (behind-the-scenes, documentary, tunnel cam, training ground pieces) are not expected to carry broadcast graphics, so answer produced_feature. Replays and close-ups without the bar inside an otherwise badged clip are normal; judge the clip as a whole.",
+      "id": "scorebug_watermark",
+      "label": "Is the match action shown with its broadcast scorebug / watermark, or as a clean feed?",
+      "options": [
+        {
+          "id": "present",
+          "label": "Scorebug / watermark present",
+          "weight": 0
+        },
+        {
+          "id": "no_game_action",
+          "label": "No live match action",
+          "weight": 0
+        },
+        {
+          "id": "produced_feature",
+          "label": "League / club-produced feature (no broadcast graphics expected)",
+          "weight": 0
+        },
+        {
+          "id": "replaced_graphics",
+          "label": "Original graphics removed and replaced with the distributor's own compliant package",
+          "weight": 0
+        },
+        {
+          "id": "partially_removed",
+          "label": "Graphics partly cropped or cut off",
+          "weight": 30
+        },
+        {
+          "id": "clean_feed",
+          "label": "Clean feed: match highlight with no on-screen scorebug or watermark",
+          "weight": 40
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Provenance graphics (RIGHTS-02)",
+      "type": "single_select"
+    },
+    {
+      "description": "Premier League rights cover Premier League matches only. Other competitions belong to other rights holders: UEFA Champions League, Europa League and Conference League (UEFA starball, UEFA graphics, competition anthem), FA Cup and Women's FA Cup (FA branding), EFL Cup and EFL competitions, Community Shield, international fixtures, pre-season friendlies, and the Women's Super League. Identify the competition from competition logos on the scorebug, match ball, pitch and board branding, trophy or banner graphics, and commentary naming the competition. If the match is clearly a Premier League fixture, answer premier_league. If the competition cannot be determined, answer unclear.",
+      "id": "competition_source",
+      "label": "Which competition does the match footage belong to?",
+      "options": [
+        {
+          "id": "premier_league",
+          "label": "Premier League match",
+          "weight": 0
+        },
+        {
+          "id": "no_match_footage",
+          "label": "No match footage",
+          "weight": 0
+        },
+        {
+          "id": "unclear",
+          "label": "Competition cannot be identified",
+          "weight": 20
+        },
+        {
+          "id": "other_competition",
+          "label": "Other competition (UEFA, FA Cup, EFL, international, friendly, WSL)",
+          "weight": 70
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Competition rights (RIGHTS-04, supplementary)",
+      "type": "single_select"
+    },
+    {
+      "description": "Judge how the match action was captured. Broadcast or league camera = the angle and quality of an official broadcast, league or club production camera, with or without graphics. Non-broadcast capture = game action filmed from the stands, a phone or handheld camera, a screen recording of a TV, or an angle that matches no broadcast camera position. Only game action counts. Press conferences, interviews, training and fan-cam footage are not game action. Credentialed non-broadcast personnel are generally not cleared to record game action for distribution.",
+      "id": "game_action_capture",
+      "label": "Is the live match action from a broadcast / league camera or from a non-broadcast capture?",
+      "options": [
+        {
+          "id": "broadcast_camera",
+          "label": "Broadcast / league / club production camera",
+          "weight": 0
+        },
+        {
+          "id": "no_game_action",
+          "label": "No live match action",
+          "weight": 0
+        },
+        {
+          "id": "non_broadcast",
+          "label": "Match action captured from a non-broadcast source",
+          "weight": 40
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Credentialed capture (VENUE-01)",
+      "type": "single_select"
+    },
+    {
+      "description": "Legacy identities include: 'FA Premier League', 'Carling Premiership', 'Barclaycard Premiership' and 'Barclays Premier League' title-sponsor era branding, historic Premier League logos and match balls, retired club crests, and kits from past eras with sponsors that no longer exist. Clubs that relocated, rebranded or folded, such as Wimbledon FC (relocated and became MK Dons), Bury and Macclesfield Town, can leave archive ownership unclear because the surviving league entity may hold the footage rights. Defunct or rebranded identities need chain-of-title review before reuse. Current club crests, current kits and the current Premier League logo are fine.",
+      "id": "legacy_identity",
+      "label": "Does any crest, logo, kit or league branding belong to an identity that is no longer current?",
+      "options": [
+        {
+          "id": "current_only",
+          "label": "Current identities only",
+          "weight": 0
+        },
+        {
+          "id": "legacy_identity",
+          "label": "Legacy / defunct / rebranded identity shown",
+          "weight": 25
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Archive & legacy rights (PLAYER-03)",
+      "type": "single_select"
+    },
+    {
+      "description": "Archival footage on its own (an 'on this day' retrospective, a historical top-10 goals piece) is editorial and fine. Flag when old footage is wrapped in a current commercial package: a 'presented by' card, a sponsor bug or partner logo added as an overlay, a 'shop now' / promo-code call to action. Flag at the highest level when an older sponsor's logo (past shirt or sleeve sponsor, past stadium naming) appears in the same frame, card or thumbnail as current sponsor branding, because this implies a false co-endorsement. Sponsor graphics that were part of the original broadcast (e.g. a 'Goal of the Month sponsored by ...' bug from that season) are part of the historical record, not a new package.",
+      "id": "archival_sponsored",
+      "label": "Is archival footage (from past seasons) packaged in a present-day sponsored or branded context?",
+      "options": [
+        {
+          "id": "current_footage",
+          "label": "Current-season footage",
+          "weight": 0
+        },
+        {
+          "id": "archival_editorial",
+          "label": "Archival, editorial context",
+          "weight": 0
+        },
+        {
+          "id": "archival_sponsored",
+          "label": "Archival footage in a present-day sponsored package",
+          "weight": 50
+        },
+        {
+          "id": "archival_mixed_branding",
+          "label": "Older sponsor logo shown together with current sponsor branding",
+          "weight": 65
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Sponsor conflicts (MEDIA-01)",
+      "type": "single_select"
+    },
+    {
+      "id": "sponsors_seen",
+      "label": "List the sponsor brands seen in broadcast graphics, overlays, pitchside LED boards and prominent stadium signage, noting which are added overlays.",
+      "requiresCitations": true,
+      "section": "Sponsor conflicts (MEDIA-01)",
+      "type": "list"
+    },
+    {
+      "description": "Team-controlled surfaces: shirt body, sleeves, shorts, socks, training kit, warm-up tops. Expected and fine: the kit manufacturer mark, the club crest, the Premier League sleeve badge, and the club's front-of-shirt, sleeve and back-of-shirt sponsors. Boots and gloves are carved-out personal surfaces: never flag a boot or glove brand. Flag only a brand on the shirt/shorts/socks that is neither the manufacturer nor an official club sponsor position, or a brand overlaid onto the kit.",
+      "id": "uniform_logo",
+      "label": "Does a brand logo appear on a team-controlled surface that should not be there?",
+      "options": [
+        {
+          "id": "expected_only",
+          "label": "Only manufacturer / official club sponsor positions (boots and gloves ignored)",
+          "weight": 0
+        },
+        {
+          "id": "no_uniforms",
+          "label": "No kits visible",
+          "weight": 0
+        },
+        {
+          "id": "unexpected_brand",
+          "label": "Unexpected brand on a team-controlled surface",
+          "weight": 40
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Uniform branding (MEDIA-02)",
+      "type": "single_select"
+    },
+    {
+      "description": "Remedies for an unclearable logo are reframing, blurring, digital replacement and blackout. Evidence of a remedy: blurred or pixelated patches over logos, a cropped frame that cuts a logo off, a logo that looks pasted on, mismatched perspective or lighting on a board or kit, or visible seams around a sponsor mark. Virtual advertising boards that were part of the original broadcast feed are normal and are NOT digital replacement. Flag replacement only when a sponsor mark appears to have been swapped in during editing. Replacement needs a sponsor approval record, so route it to manual review.",
+      "id": "logo_remediation",
+      "label": "Has any logo been blurred, cropped out or digitally replaced in the edit?",
+      "options": [
+        {
+          "id": "none",
+          "label": "No visible logo remediation",
+          "weight": 0
+        },
+        {
+          "id": "blur_or_crop",
+          "label": "Logo blurred or cropped out",
+          "weight": 0
+        },
+        {
+          "id": "replacement_detected",
+          "label": "Digital replacement of a logo detected",
+          "weight": 30
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Logo obstruction (MEDIA-03)",
+      "type": "single_select"
+    },
+    {
+      "description": "Gambling brands include bookmakers, betting exchanges, casino and online gaming operators, and betting-data or odds partners, whether on a kit, pitchside LED board, stadium signage, broadcast overlay or social card. Incidental = a gambling brand that is part of the live match picture (club sponsor on the shirt, perimeter board) and not highlighted by the edit. Promotional = a gambling brand or odds, bonus offer or 'bet now' call to action added to the clip as an overlay, caption, end card or audio read. If no gambling brand is visible or audible, answer none.",
+      "id": "gambling_brand",
+      "label": "Is a gambling or betting brand shown, and is it part of the live picture or promoted by the edit?",
+      "options": [
+        {
+          "id": "none",
+          "label": "No gambling brand visible or audible",
+          "weight": 0
+        },
+        {
+          "id": "incidental",
+          "label": "Incidental, part of the live match picture (kit or perimeter board)",
+          "weight": 20
+        },
+        {
+          "id": "promotional",
+          "label": "Promoted by the edit (overlay, odds, offer or call to action)",
+          "weight": 60
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Gambling & restricted categories (MEDIA-04, supplementary)",
+      "type": "single_select"
+    },
+    {
+      "description": "No Premier League group-licensing headcount is confirmed, so do NOT assume a minimum number of players makes a clip safe. Treat any commercial framing of an identifiable player as a flag, regardless of how many players appear. Editorial = match action, highlights, news or retrospective content with no brand, product or call to action. Single-player focus = the clip is about one named player (solo goals, player feature, player of the month). Commercial = any identifiable player or players foregrounded alongside a brand, product, collaboration title, shop / buy call to action, or a player's personal sponsor logo shown together with club or Premier League marks in one branded asset.",
+      "id": "player_focus",
+      "label": "Are identifiable players shown in a commercial or endorsement framing?",
+      "options": [
+        {
+          "id": "editorial",
+          "label": "Editorial content (any number of players, no brand or call to action)",
+          "weight": 0
+        },
+        {
+          "id": "no_players",
+          "label": "No identifiable players",
+          "weight": 0
+        },
+        {
+          "id": "single_player",
+          "label": "Single-player focus, editorial",
+          "weight": 10
+        },
+        {
+          "id": "commercial_players",
+          "label": "Identifiable player(s) tied to a brand / call to action",
+          "weight": 60
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Player rights (PLAYER-02)",
+      "type": "single_select"
+    },
+    {
+      "id": "players_named",
+      "label": "Which players are identifiable (by name graphic, shirt name/number or commentary)?",
+      "section": "Player rights (PLAYER-02)",
+      "type": "list"
+    },
+    {
+      "description": "Restricted: dressing room, players' tunnel interior, training-ground medical room, team huddle or technical-area conversation shot from inside, VAR hub or referee communication room, and players, managers or match officials mic'd up. Public: match action, crowd, pre-match press-conference podium, stadium concourse, pitchside interviews, and the walk-out from the tunnel mouth. Access to these areas is set club by club, so treat restricted footage as needing a team clearance record.",
+      "id": "restricted_zone",
+      "label": "Is any footage from a restricted-access area?",
+      "options": [
+        {
+          "id": "none",
+          "label": "No restricted areas",
+          "weight": 0
+        },
+        {
+          "id": "restricted",
+          "label": "Dressing room / tunnel / technical-area huddle / VAR hub / mic'd up",
+          "weight": 30
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Restricted access (VENUE-02)",
+      "type": "single_select"
+    },
+    {
+      "description": "Judge ONLY audio captured from players, managers, coaches, staff or match officials themselves: mic'd-up audio, technical-area, huddle, tunnel, dressing-room or VAR-communication sound. Broadcast commentators and studio pundits discussing tactics NEVER count, however detailed. Strategy = a specific, identifiable instruction such as a set-piece routine, pressing trigger, marking assignment, formation change or substitution plan (e.g. 'short corner, near post', 'go to a back three', 'man-mark him', 'press on the pass back'). Generic encouragement and shouting ('push up', 'keep going', 'well done', 'talk to each other') is NOT strategy. Medical = discussion of an injury, pain, treatment or fitness test. Banter, celebration and complaints to the referee are not sensitive.",
+      "id": "sensitive_audio",
+      "label": "Does the audio contain identifiable strategy or medical / injury discussion?",
+      "options": [
+        {
+          "id": "none",
+          "label": "Nothing sensitive",
+          "weight": 0
+        },
+        {
+          "id": "strategy",
+          "label": "Tactics / set-piece calls audible",
+          "weight": 40
+        },
+        {
+          "id": "medical",
+          "label": "Medical / injury discussion audible",
+          "weight": 60
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Restricted access (VENUE-02)",
+      "type": "single_select"
+    },
+    {
+      "id": "summary",
+      "label": "One paragraph for the rights reviewer: what the clip is, and which rights questions it raises.",
+      "section": "Summary",
+      "type": "text"
+    }
+  ],
+  "ratingBands": [
+    {
+      "colour": "#22c55e",
+      "description": "No rights flags found in the footage",
+      "id": "clear",
+      "label": "Clear to publish",
+      "order": 0,
+      "shortLabel": "Clear"
+    },
+    {
+      "colour": "#f59e0b",
+      "description": "Ambiguous or context-dependent rights flag, route to rights ops / legal",
+      "id": "hold",
+      "label": "Hold for rights review",
+      "order": 1,
+      "shortLabel": "Hold"
+    },
+    {
+      "colour": "#ef4444",
+      "description": "High-confidence rights conflict, do not publish without a clearance record",
+      "id": "block",
+      "label": "Block: clearance required",
+      "order": 2,
+      "shortLabel": "Block"
+    }
+  ],
+  "regionLabel": "Premier League: Media rights & clip clearance (league channels)",
+  "reviewedDate": "2026-10-21",
+  "scoreThresholds": [
+    {
+      "bandId": "clear",
+      "minScore": 85
+    },
+    {
+      "bandId": "hold",
+      "minScore": 40
+    },
+    {
+      "bandId": "block",
+      "minScore": 0
+    }
+  ],
+  "sourceDocumentRef": "Rules MEDIA-01/02/03, PLAYER-02/03, RIGHTS-01/02, VENUE-01/02 from the Sports Media Rights & Clip Clearance AI Audit Rulebook. Supplementary rules added for Premier League (not in the rulebook): RIGHTS-04 competition ownership, MEDIA-04 gambling brands. Assumed destination: league-owned global digital channels. Metadata-driven triggers (territory, UK same-day highlight timing, clip-length caps and embargo windows under RIGHTS-03, destination, roster and retirement status, current and lapsed sponsor lists, club-specific access deals, sponsor approval and clearance records) are out of scope for a video-only pass. Premier League group-licensing thresholds are unconfirmed, so PLAYER-02 uses conservative individual-clearance logic. Broadcaster lists and sponsor positions are assumptions to confirm against current Premier League agreements.",
+  "sourceUrl": "",
+  "status": "draft",
+  "type": "brand_safety",
+  "version": "1.0.0"
+}

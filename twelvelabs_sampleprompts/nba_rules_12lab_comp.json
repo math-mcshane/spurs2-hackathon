@@ -1,0 +1,301 @@
+{
+  "approvals": [],
+  "authority": "Sports Media Rights & Clip Clearance — AI Audit Rulebook (demo draft)",
+  "effectiveDate": null,
+  "id": "nba-media-rights-audit",
+  "questions": [
+    {
+      "description": "Read the network bug, scorebug branding and on-screen network graphics. National: ESPN, ABC, TNT, NBC, Peacock, Prime Video, NBA TV. Regional sports networks (RSNs): FanDuel Sports Network, YES, NBC Sports regional, Comcast SportsNet (CSN), Spectrum SportsNet, MSG, Sun Sports, TSN, Sportsnet, and other team-market networks. League/team produced: NBA or team-branded graphics with no network bug. If the clip stitches together footage from several regional networks, answer mixed_regional. Only name a network you can actually see (a bug, scorebug branding, mic flag) or hear named. If game action shows no network bug and no scorebug, answer unknown — do not infer the network from the teams or arena.",
+      "id": "broadcast_source",
+      "label": "Which broadcast network or production source does the game footage come from?",
+      "options": [
+        {
+          "id": "national",
+          "label": "National network",
+          "weight": 0
+        },
+        {
+          "id": "league_produced",
+          "label": "League / team produced (no network bug)",
+          "weight": 0
+        },
+        {
+          "id": "no_game_footage",
+          "label": "No game broadcast footage",
+          "weight": 0
+        },
+        {
+          "id": "regional",
+          "label": "Regional sports network (single market)",
+          "weight": 20
+        },
+        {
+          "id": "mixed_regional",
+          "label": "Several regional networks / markets stitched together",
+          "weight": 25
+        },
+        {
+          "id": "unknown",
+          "label": "Game footage with no identifiable source",
+          "weight": 20
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Distribution rights (RIGHTS-01)",
+      "type": "single_select"
+    },
+    {
+      "id": "networks_seen",
+      "label": "List every network or broadcaster logo / bug seen, with when it appears.",
+      "requiresCitations": true,
+      "section": "Distribution rights (RIGHTS-01)",
+      "type": "list"
+    },
+    {
+      "description": "A scorebug is an ON-SCREEN graphic overlay added by the broadcaster — normally a score / clock / shot-clock bar along the bottom or top edge of the frame, plus a network bug. Physical arena scoreboards, shot clocks above the basket, jumbotrons and courtside LED boards are part of the venue and are NOT a scorebug. Clean feed = a game-highlight clip whose live action carries no on-screen score/clock overlay and no network watermark, typically because the graphics were cropped or removed. League- or team-produced features (mic'd up, documentary, locker-room or behind-the-scenes pieces) are not expected to carry broadcast graphics — answer produced_feature. Replays and close-ups without the bar inside an otherwise badged clip are normal; judge the clip as a whole.",
+      "id": "scorebug_watermark",
+      "label": "Is the game action shown with its broadcast scorebug / network watermark, or as a clean feed?",
+      "options": [
+        {
+          "id": "present",
+          "label": "Scorebug / watermark present",
+          "weight": 0
+        },
+        {
+          "id": "no_game_action",
+          "label": "No live game action",
+          "weight": 0
+        },
+        {
+          "id": "produced_feature",
+          "label": "League / team-produced feature (no broadcast graphics expected)",
+          "weight": 0
+        },
+        {
+          "id": "partially_removed",
+          "label": "Graphics partly cropped or cut off",
+          "weight": 30
+        },
+        {
+          "id": "clean_feed",
+          "label": "Clean feed — game highlight with no on-screen scorebug or watermark",
+          "weight": 40
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Provenance graphics (RIGHTS-02)",
+      "type": "single_select"
+    },
+    {
+      "description": "Former NBA identities include: Seattle SuperSonics, Charlotte Bobcats, New Jersey Nets, Vancouver Grizzlies, New Orleans Hornets, New Orleans/Oklahoma City Hornets, Washington Bullets, Kansas City Kings, San Diego Clippers. A defunct, relocated or rebranded identity needs chain-of-title review before reuse.",
+      "id": "franchise_identity",
+      "label": "Does any team name, logo or uniform belong to a franchise identity that no longer exists?",
+      "options": [
+        {
+          "id": "current_only",
+          "label": "Current franchises only",
+          "weight": 0
+        },
+        {
+          "id": "former_identity",
+          "label": "Former / relocated / rebranded franchise shown",
+          "weight": 25
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Archive & legacy rights (PLAYER-03)",
+      "type": "single_select"
+    },
+    {
+      "description": "Archival footage on its own (an 'on this day' retrospective, a historical top-10) is editorial and fine. Flag when old footage is wrapped in a current commercial package: a 'presented by' card, a sponsor bug or partner logo added as an overlay, a 'shop now' / promo-code call to action. Sponsor graphics that were part of the original broadcast (e.g. a 'Play of the Game presented by …' bug from that season) are part of the historical record, not a new package.",
+      "id": "archival_sponsored",
+      "label": "Is archival footage (from past seasons) packaged in a present-day sponsored or branded context?",
+      "options": [
+        {
+          "id": "current_footage",
+          "label": "Current-season footage",
+          "weight": 0
+        },
+        {
+          "id": "archival_editorial",
+          "label": "Archival, editorial context",
+          "weight": 0
+        },
+        {
+          "id": "archival_sponsored",
+          "label": "Archival footage in a present-day sponsored package",
+          "weight": 50
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Sponsor conflicts (MEDIA-01)",
+      "type": "single_select"
+    },
+    {
+      "id": "sponsors_seen",
+      "label": "List the sponsor brands seen in broadcast graphics, overlays and prominent arena signage, noting which are added overlays.",
+      "requiresCitations": true,
+      "section": "Sponsor conflicts (MEDIA-01)",
+      "type": "list"
+    },
+    {
+      "description": "Team-controlled surfaces: jersey body, shorts, warm-ups. Expected and fine: the uniform manufacturer mark (Nike, Jordan, adidas, Reebok, Champion depending on era) and the team's jersey-patch sponsor. Sneakers are a carved-out personal surface in the NBA — never flag a sneaker brand. Flag only a brand on the jersey/shorts that is neither the manufacturer nor a jersey patch, or a brand overlaid onto the uniform.",
+      "id": "uniform_logo",
+      "label": "Does a brand logo appear on a team-controlled surface that should not be there?",
+      "options": [
+        {
+          "id": "expected_only",
+          "label": "Only manufacturer / patch sponsor (sneakers ignored)",
+          "weight": 0
+        },
+        {
+          "id": "no_uniforms",
+          "label": "No uniforms visible",
+          "weight": 0
+        },
+        {
+          "id": "unexpected_brand",
+          "label": "Unexpected brand on a team-controlled surface",
+          "weight": 40
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Uniform branding (MEDIA-02)",
+      "type": "single_select"
+    },
+    {
+      "description": "The NBA group-licensing threshold is 3 or more players. Group = game action or team content with 3+ identifiable players and no single star. Single-player focus = the clip is about one named player (solo highlights, player feature). Single-player commercial = one player is foregrounded alongside a brand, product, 'x' collaboration title or shop / buy call to action.",
+      "id": "player_focus",
+      "label": "Is one player the clear focus, and is the clip framed as that player's endorsement?",
+      "options": [
+        {
+          "id": "group",
+          "label": "Group / team content (3+ players)",
+          "weight": 0
+        },
+        {
+          "id": "no_players",
+          "label": "No identifiable players",
+          "weight": 0
+        },
+        {
+          "id": "single_player",
+          "label": "Single-player focus, editorial",
+          "weight": 10
+        },
+        {
+          "id": "single_player_commercial",
+          "label": "Single player tied to a brand / call to action",
+          "weight": 60
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Group licensing (PLAYER-02)",
+      "type": "single_select"
+    },
+    {
+      "id": "players_named",
+      "label": "Which players are identifiable (by name graphic, jersey name/number or commentary)?",
+      "section": "Group licensing (PLAYER-02)",
+      "type": "list"
+    },
+    {
+      "description": "Restricted: locker room, tunnel, training / medical room, team bench huddle or timeout huddle shot from inside, or players/coaches mic'd up. Public: game action, courtside crowd, press-conference podium, arena concourse.",
+      "id": "restricted_zone",
+      "label": "Is any footage from a restricted-access area?",
+      "options": [
+        {
+          "id": "none",
+          "label": "No restricted areas",
+          "weight": 0
+        },
+        {
+          "id": "restricted",
+          "label": "Locker room / tunnel / bench huddle / mic'd up",
+          "weight": 30
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Restricted access (VENUE-02)",
+      "type": "single_select"
+    },
+    {
+      "description": "Judge ONLY audio captured from players, coaches or staff themselves — mic'd-up audio, bench, huddle, tunnel or locker-room sound. Broadcast commentators and studio analysts discussing tactics NEVER count, however detailed. Strategy = a specific, identifiable play call, coverage, matchup assignment or game-plan instruction (e.g. 'switch everything', 'run Spain', 'ice the pick and roll', 'put him on Curry'). Generic coaching and encouragement ('box out', 'play hard', 'talk', 'great job') is NOT strategy. Medical = discussion of an injury, pain or treatment. Banter, celebration and trash talk are not sensitive.",
+      "id": "sensitive_audio",
+      "label": "Does the audio contain identifiable strategy or medical / injury discussion?",
+      "options": [
+        {
+          "id": "none",
+          "label": "Nothing sensitive",
+          "weight": 0
+        },
+        {
+          "id": "strategy",
+          "label": "Strategy / play calls audible",
+          "weight": 40
+        },
+        {
+          "id": "medical",
+          "label": "Medical / injury discussion audible",
+          "weight": 60
+        }
+      ],
+      "requiresCitations": true,
+      "section": "Restricted access (VENUE-02)",
+      "type": "single_select"
+    },
+    {
+      "id": "summary",
+      "label": "One paragraph for the rights reviewer: what the clip is, and which rights questions it raises.",
+      "section": "Summary",
+      "type": "text"
+    }
+  ],
+  "ratingBands": [
+    {
+      "colour": "#22c55e",
+      "description": "No rights flags found in the footage",
+      "id": "clear",
+      "label": "Clear to publish",
+      "order": 0,
+      "shortLabel": "Clear"
+    },
+    {
+      "colour": "#f59e0b",
+      "description": "Ambiguous or context-dependent rights flag — route to rights ops / legal",
+      "id": "hold",
+      "label": "Hold for rights review",
+      "order": 1,
+      "shortLabel": "Hold"
+    },
+    {
+      "colour": "#ef4444",
+      "description": "High-confidence rights conflict — do not publish without a clearance record",
+      "id": "block",
+      "label": "Block — clearance required",
+      "order": 2,
+      "shortLabel": "Block"
+    }
+  ],
+  "regionLabel": "NBA — Media rights & clip clearance (league channels)",
+  "reviewedDate": "2026-10-19",
+  "scoreThresholds": [
+    {
+      "bandId": "clear",
+      "minScore": 85
+    },
+    {
+      "bandId": "hold",
+      "minScore": 40
+    },
+    {
+      "bandId": "block",
+      "minScore": 0
+    }
+  ],
+  "sourceDocumentRef": "Rules MEDIA-01/02/03, PLAYER-02/03, RIGHTS-01/02, VENUE-02. Assumed destination: league-owned national/global digital channels. Metadata-driven triggers (destination, embargo windows, roster status, clearance records) are out of scope for a video-only pass.",
+  "sourceUrl": "",
+  "status": "draft",
+  "type": "brand_safety",
+  "version": "1.0.0"
+}

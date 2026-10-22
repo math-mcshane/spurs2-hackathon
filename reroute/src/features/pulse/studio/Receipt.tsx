@@ -71,7 +71,12 @@ export function ReceiptView({
           <span className="font-mono text-[11px] text-zinc-400">#{receipt.id}</span>
           <RightsPill state={d.verdict} clearance={d.clearance} />
         </header>
-        {d.policyFictional && <DemoPolicyBadge />}
+        <p className="text-sm text-zinc-200">
+          REROUTE decided <strong className="text-zinc-50">{d.verdict.replace("_", " ")}</strong> for {uses.length} channel × territory use{uses.length === 1 ? "" : "s"} of{" "}
+          {receipt.edit.segments.length} ScorePlay clip{receipt.edit.segments.length === 1 ? "" : "s"} under policy {d.policyId}. Human review:{" "}
+          <strong className="text-zinc-50">{receipt.humanReviewStatus.replace("_", " ").toLowerCase()}</strong>.
+        </p>
+        {d.policyFictional && <DemoPolicyBadge className="w-full justify-center" />}
         <dl className="grid grid-cols-[minmax(5.5rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-1.5 [&_dd]:break-words">
           <dt className="text-zinc-500">Decision</dt>
           <dd className="text-zinc-100">

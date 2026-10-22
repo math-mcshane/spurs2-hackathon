@@ -46,29 +46,35 @@ function exactDurationSec(m: ScorePlayMedia): number | undefined {
 
 /** Every video in a TwelveLabs index (paginated, via PULSE's catalog loader). */
 export async function listTwelveLabsCatalog(sdk: TwelveLabsSdk, indexId: string, fresh = false): Promise<TwelveLabsCatalogEntry[]> {
-  if (fresh) invalidateCatalog(indexId);
+  if (fresh) invalidateCatalog(sdk, indexId);
   const catalog = await loadCatalog(sdk, indexId);
   return catalog.entries.map((e) => ({ twelvelabsVideoId: e.videoId, filename: e.filename, durationSec: e.durationSec, claimedScoreplayId: e.claimedScoreplayId }));
 }
 
-const resolvers = new Map<string, CatalogMediaResolver>();
+/** Per SDK (= per TwelveLabs API key, see `createTwelveLabsSdk`), then per index id. */
+const resolvers = new WeakMap<TwelveLabsSdk, Map<string, CatalogMediaResolver>>();
 
-/** One resolver (and catalog cache) per index id. `source` is used only when none exists yet. */
-export function resolverForIndex(indexId: string, source: () => CatalogSource): CatalogMediaResolver {
-  let r = resolvers.get(indexId);
+/** One resolver (and catalog cache) per (API key, index id). `source` is used only when none exists yet. */
+export function resolverForIndex(sdk: TwelveLabsSdk, indexId: string, source: () => CatalogSource): CatalogMediaResolver {
+  let byIndex = resolvers.get(sdk);
+  if (!byIndex) {
+    byIndex = new Map();
+    resolvers.set(sdk, byIndex);
+  }
+  let r = byIndex.get(indexId);
   if (!r) {
     r = new CatalogMediaResolver(source());
-    resolvers.set(indexId, r);
+    byIndex.set(indexId, r);
   }
   return r;
 }
 
-/** The resolver for a club's index (per-club override, else the shared index). Throws NOT_CONFIGURED. */
+/** The resolver for a club's index and key (per-club overrides, else the shared ones). Throws NOT_CONFIGURED. */
 export function getMediaResolver(club?: string): CatalogMediaResolver {
   const config = readTwelveLabsConfig({ club });
-  return resolverForIndex(config.indexId, () => {
+  const sdk = createTwelveLabsSdk(config.apiKey);
+  return resolverForIndex(sdk, config.indexId, () => {
     const http = defaultScorePlayHttp();
-    const sdk = createTwelveLabsSdk(config.apiKey);
     return {
       indexId: config.indexId,
       scoreplay: (tl) => listScorePlayCatalog(http, tl),

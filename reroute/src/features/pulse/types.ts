@@ -444,6 +444,8 @@ export const CampaignDraftSchema = z.object({
     market: z.object({ code: MarketCodeSchema, label: z.string() }).optional(),
     cohort: z.string(),
     language: LanguageSchema,
+    /** BCP 47 locale the copy is written for (e.g. es-MX for Mexico); absent on older drafts. */
+    locale: z.string().optional(),
     basis: z.string(),
   }),
   media: z.object({
@@ -690,9 +692,9 @@ export type Recommendation = z.infer<typeof RecommendationSchema>;
 
 /**
  * The REROUTE usage of the whole campaign: COMMERCIAL when the objective sells something
- * (merchandise, tickets…), EDITORIAL for reach/engagement content.
+ * (merchandise, tickets…), SPONSORED for a partner activation, EDITORIAL for reach/engagement content.
  */
-export const GoalUsageSchema = UsageSchema.extract(["COMMERCIAL", "EDITORIAL"]);
+export const GoalUsageSchema = UsageSchema.extract(["COMMERCIAL", "SPONSORED", "EDITORIAL"]);
 export type GoalUsage = z.infer<typeof GoalUsageSchema>;
 
 /** What PULSE will ask REROUTE about — derived from the objective and the selected club, never guessed. */
@@ -796,6 +798,10 @@ export const GoalCampaignSchema = CampaignDraftSchema.extend({
 });
 export type GoalCampaign = z.infer<typeof GoalCampaignSchema>;
 
+/** Where a run's upstream data came from (`RunProvenance` of lib/media/provenance): LIVE, demo recording or both. */
+export const RunProvenanceSchema = z.object({ origin: z.enum(["LIVE", "CACHED", "MIXED"]), recordedAt: z.string().optional() });
+export type RunProvenance = z.infer<typeof RunProvenanceSchema>;
+
 export const GoalRunSchema = z.object({
   id: z.string(),
   schemaVersion: z.literal(2),
@@ -831,6 +837,8 @@ export const GoalRunSchema = z.object({
   evaluations: z.array(GoalEvaluationSchema).default([]),
   alternatives: z.array(GoalAlternativesSchema).default([]),
   review: z.object({ receiptId: z.string(), submittedAt: iso, campaignVersion: z.number().int().positive(), evaluationId: z.string() }).optional(),
+  /** Merged provenance of every upstream read made by this run's actions; absent until one made a read. */
+  dataOrigin: RunProvenanceSchema.optional(),
 });
 export type GoalRun = z.infer<typeof GoalRunSchema>;
 
@@ -932,6 +940,18 @@ export const GoalViewSchema = z.object({
       usage: UsageSchema.optional(),
     })
     .optional(),
+  /**
+   * CAMPAIGN blocker whose licensed subset within the campaign is EMPTY (e.g. a Mexico campaign under a
+   * policy that does not license MX): there is no remedy to apply — the next step is a licence request.
+   */
+  licenceGap: z
+    .object({
+      label: z.string(),
+      description: z.string(),
+      territories: z.array(z.string()),
+      platforms: z.array(z.string()),
+    })
+    .optional(),
   /** Audit trail of every recorded evaluation, oldest first. */
   evaluations: z.array(
     z.object({
@@ -957,10 +977,15 @@ export const GoalViewSchema = z.object({
   publishable: z.boolean(),
   publishNote: z.string(),
   nextStep: z.string(),
-  /** The objective's primary KPI. `value` stays null until a verified source is connected. */
-  kpi: z.object({ label: z.string(), value: z.null(), status: MeasurementSchema.shape.status, note: z.string() }),
+  /**
+   * The objective's primary KPI. `value` stays null until a verified source is connected; `valueText`
+   * says so in one line (e.g. "Sales attribution not connected.").
+   */
+  kpi: z.object({ label: z.string(), value: z.null(), valueText: z.string(), status: MeasurementSchema.shape.status, note: z.string() }),
   /** Measured server-side from goal submission. `toProposalSec` = first proposal createdAt − submittedAt. */
   timing: z.object({ toRecommendationsSec: z.number(), toProposalSec: z.number().optional() }),
+  /** Where the run's TwelveLabs/ScorePlay data came from (LIVE, CACHED demo recording, or MIXED); absent = no upstream read recorded. */
+  dataOrigin: RunProvenanceSchema.optional(),
 });
 export type GoalView = z.infer<typeof GoalViewSchema>;
 

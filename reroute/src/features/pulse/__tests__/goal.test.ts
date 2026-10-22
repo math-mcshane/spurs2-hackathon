@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_CLEARANCE_LABEL, type Asset, type Blocker, type Candidate, type Decision, type EditPlan, type MediaRef, type PublishIntent, type Verdict } from "@/lib/contracts";
 import type { Repositories } from "@/lib/server/repositories";
+import { classifyBlocker } from "@/lib/rights/blocker";
 import { resetRepositoriesForTests, useMemoryRepositoriesForTests } from "@/lib/server/repositories/testing";
 import { getReceipt, recordReview } from "@/lib/server/store";
 import { buildGoalCampaign } from "../goal-campaign";
@@ -240,18 +241,30 @@ describe("search result → three real moments", () => {
     for (const r of pool) expect(r.why.opportunity && r.why.media && r.why.action).toBeTruthy();
   });
 
-  it("A and B produce different recommendations, copy and KPI", async () => {
+  it("A and B produce different intents, top-3 ranking, angle/copy and KPI from the same library", async () => {
     const d = deps();
     const a = await goals.runGoal(A, "tottenham", d);
     const b = await goals.runGoal(B, "tottenham", d);
-    expect(a.recommendations.map((r) => r.key)).not.toEqual(b.recommendations.map((r) => r.key));
+    // Different questions asked of the same index…
+    expect(a.run.intents.map((i) => i.key)).toEqual(["kit", "fans-colours", "player-fan-bond", "celebration"]);
+    expect(b.run.intents.map((i) => i.key)).toEqual(["score", "near-miss", "save", "celebration", "atmosphere"]);
+    // …so a different top three, in a different order.
+    expect(a.recommendations.map((r) => r.candidate.scoreplayAssetId)).toEqual(["901", "903", "902"]);
+    expect(b.recommendations.map((r) => r.candidate.scoreplayAssetId)).toEqual(["904", "902", "903"]);
     expect(a.recommendations[0].headline).not.toBe(b.recommendations[0].headline);
     expect(a.recommendations[0].why.action).toMatch(/store/);
     expect(b.recommendations[0].why.action).toMatch(/comments and shares/);
+    expect(a.campaign!.creative.angle).not.toBe(b.campaign!.creative.angle);
     expect(a.campaign!.channels[0].copy).not.toBe(b.campaign!.channels[0].copy);
-    expect(a.kpi.label).toMatch(/Merchandise sales/);
-    expect(b.kpi.label).toMatch(/Engagement/);
-    expect(a.kpi.value).toBeNull();
+    expect(a.campaign!.plan.usage).toBe("COMMERCIAL");
+    expect(b.campaign!.plan.usage).toBe("EDITORIAL");
+    // KPI: different label, never a value; honest one-line text while nothing is connected.
+    expect(a.kpi).toMatchObject({ label: "Merchandise sales in United Kingdom", value: null, valueText: "Sales attribution not connected.", status: "NOT_CONNECTED" });
+    expect(b.kpi).toMatchObject({ label: "Engagement (likes, comments, shares, saves) globally", value: null, valueText: "Engagement measurement not connected." });
+    for (const v of [a, b]) {
+      expect(JSON.stringify(v.kpi)).not.toMatch(/\d+\s*%|uplift|saved|hours/i);
+      expect(v.timing.toProposalSec).toBeGreaterThanOrEqual(0);
+    }
   });
 });
 
@@ -476,5 +489,146 @@ describe("goal → campaign → rights → alternative → review", () => {
     const switched = await goals.selectMoment(at(submitted), v.recommendations[1].key, d);
     expect(switched).toMatchObject({ reviewStatus: "NOT_SUBMITTED", canSubmit: false, rights: { state: "NOT_CHECKED" }, campaign: { version: 2, origin: "SELECTED" } });
     await expect(goals.submitForReview(at(switched), d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+// ---------- More goals: Mexico jerseys, tickets, sponsor activation ----------
+
+const MX = "Sell more Spurs jerseys in Mexico";
+const TICKETS = "Sell tickets for the next home game";
+const SPONSOR = "Activate our sleeve sponsor with fans in the UK";
+
+/** The demo Tottenham policy's licensed territories (THFC-3), decided per use like REROUTE does. */
+const LICENSED = ["GB", "IE", "US", "CA", "AU", "NZ"];
+const SELECTION = { policyId: "demo-tottenham-pl", kind: "DEMO" as const, considered: [] };
+function territoryDecision(intent: PublishIntent): Decision {
+  const ok = LICENSED.includes(intent.territory);
+  return {
+    ...decision(ok ? "ALLOWED" : "NEEDS_REVIEW"),
+    reasons: [
+      {
+        ruleId: "THFC-3-licensed-territories",
+        dimension: "territory",
+        outcome: ok ? "PERMIT" : "MISSING",
+        explanation: ok ? "Licensed territory" : `territory ${intent.territory} is not licensed (licensed: ${LICENSED.join(", ")})`,
+        basis: "LEGAL_ENTITLEMENT",
+      },
+    ],
+    policySelection: SELECTION,
+  };
+}
+const territoryDecider: GoalDeps["decideCampaign"] = vi.fn(async ({ edit, intents }: { edit: EditPlan; intents: PublishIntent[] }) => {
+  const perIntent = intents.map((intent) => {
+    const d = territoryDecision(intent);
+    return { intent, decision: { edit, decision: d, segments: [{ segment: edit.segments[0], decision: d }] } };
+  });
+  const overall = { ...territoryDecision(perIntent.find((p) => p.decision.decision.verdict !== "ALLOWED")?.intent ?? intents[0]), policySelection: SELECTION };
+  return { overall, perIntent, media: [decidedRef(edit.segments[0].scoreplayMediaId)], notes: [] };
+});
+/** REROUTE's real blocker classification over every use, against the bundled demo policy. */
+const realClassifier: GoalDeps["resolve"] = vi.fn(async (input: Parameters<GoalDeps["resolve"]>[0]) => ({
+  query: input.query ?? "q",
+  candidates: [],
+  ...classifyBlocker((input.intents ?? [input.intent as PublishIntent]).map((intent) => ({ intent, decision: territoryDecision(intent) }))),
+}));
+
+describe("more goals at plan level", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("Mexico: “Sell more Spurs jerseys in Mexico” with Tottenham selected → MX, jerseys, COMMERCIAL, Spanish (es-MX) copy", async () => {
+    const o = parseObjective(MX, NOW);
+    expect(o).toMatchObject({ scope: "MARKET", market: { code: "MX", label: "Mexico", matched: "mexico" }, product: { key: "jersey", matched: "jerseys" }, kpi: "Jersey sales in Mexico" });
+    expect(o.club).toBeUndefined(); // bare "Spurs": the selected club decides
+    const v = await goals.runGoal(MX, "tottenham", deps());
+    expect(v.run.plan).toMatchObject({ club: "tottenham", territories: ["MX"], usage: "COMMERCIAL", channels: ["instagram", "facebook", "x"] });
+    expect(v.campaign!.audience).toMatchObject({ market: { code: "MX" }, language: "es", locale: "es-MX", cohort: "Tottenham Hotspur supporters in Mexico" });
+    expect(v.campaign!.creative.hookLanguage).toBe("es");
+    expect(v.campaign!.channels[0].copy).toContain("Lleva los colores de Tottenham Hotspur.");
+    expect(v.campaign!.cta).toMatchObject({ text: "Ver camisetas", status: "NOT_CONFIGURED" });
+    expect(v.campaign!.checklist.find((c) => c.item === "Localized copy")).toMatchObject({ status: "DONE", note: "Written in es-MX." });
+    expect(v.kpi).toMatchObject({ label: "Jersey sales in Mexico", value: null, valueText: "Sales attribution not connected." });
+
+    vi.stubEnv("PULSE_COMMERCE_DESTINATIONS", "tottenham:jersey:MX=https://shop.tottenhamhotspur.com/es-mx/camisetas");
+    const configured = await goals.runGoal(MX, "tottenham", deps());
+    expect(configured.campaign!.cta).toMatchObject({ status: "READY", destination: { source: "CONFIGURED", url: "https://shop.tottenhamhotspur.com/es-mx/camisetas" } });
+    expect(configured.campaign!.channels.find((c) => c.channel === "x")!.copy).toContain("Ver camisetas: https://shop.tottenhamhotspur.com/es-mx/camisetas");
+  });
+
+  it("Mexico not licensed: CAMPAIGN blocker, no clip swaps, NO remedy (never re-targeted to other countries) — request a licence", async () => {
+    const d = deps({ decideCampaign: territoryDecider, resolve: realClassifier });
+    let v = await goals.runGoal(MX, "tottenham", d);
+    v = await goals.checkGoalRights(at(v), d);
+    expect(v.rights).toMatchObject({ state: "NEEDS_REVIEW", current: true });
+    expect(v.rights.perIntent.every((p) => p.territory === "MX" && p.verdict === "NEEDS_REVIEW")).toBe(true);
+    v = await goals.findAlternatives(at(v), d);
+    expect(v.blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
+    expect(v.blocker!.explanation).toMatch(/Not licensed in MX/);
+    expect(v.alternatives!.candidates).toEqual([]);
+    // REROUTE's raw remedy lists the policy's territories elsewhere; it stays in the audit record only.
+    expect(v.alternatives!.remedy).toEqual({ territories: LICENSED });
+    expect(v.remedy).toBeUndefined();
+    expect(v.licenceGap).toMatchObject({ label: "No licensed path in Mexico (MX)", territories: ["MX"], platforms: [] });
+    expect(v.licenceGap!.description).toMatch(/demo-tottenham-pl \(DEMO\).*request a licence for MX/);
+    expect(v.nextStep).toMatch(/^No licence covers Mexico \(MX\) — request a licence before review\./);
+    // A human reviewer cannot grant a missing licence: NEEDS_REVIEW, yet not submittable.
+    expect(v.canSubmit).toBe(false);
+    await expect(goals.submitForReview(at(v), d)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "No licence covers Mexico (MX) — request a licence before review.",
+    });
+    await expect(goals.applyRemedy(at(v), d)).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/request a licence/) });
+    const stored = (await goals.getGoal(v.run.id, d))!;
+    expect(stored.campaign).toMatchObject({ version: 1, plan: { territories: ["MX"] } });
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(v))).success).toBe(true);
+  });
+
+  it("the same classifier still offers a remedy when part of the campaign is licensed (Scenario B: GB, US)", async () => {
+    const d = deps({ decideCampaign: territoryDecider, resolve: realClassifier });
+    let v = await goals.runGoal(B, "tottenham", d);
+    v = await goals.checkGoalRights(at(v), d);
+    v = await goals.findAlternatives(at(v), d);
+    expect(v.licenceGap).toBeUndefined();
+    expect(v.remedy).toMatchObject({ label: "Limit to licensed territories: GB, US", territories: ["GB", "US"] });
+    const remedied = await goals.checkGoalRights(at(await goals.applyRemedy(at(v), d)), d);
+    expect(remedied.rights).toMatchObject({ state: "ALLOWED", clearance: "DEMO", clearanceLabel: DEMO_CLEARANCE_LABEL });
+    expect(remedied.rights.perIntent).toHaveLength(6);
+  });
+
+  it("tickets: home territory, commercial, ticketing CTA only via a configured or club-domain link, sales KPI not connected", async () => {
+    const o = parseObjective(TICKETS, NOW);
+    expect(o).toMatchObject({ scope: "UNSPECIFIED", product: { key: "tickets" }, kpi: "Ticket sales" });
+    expect(parseMatch(TICKETS)).toBeUndefined(); // "the next home game" is not a fixture name
+    const d = deps();
+    const v = await goals.runGoal(TICKETS, "tottenham", d);
+    expect(v.run.plan).toMatchObject({ territories: ["GB"], usage: "COMMERCIAL" });
+    expect(v.run.intents[0]).toMatchObject({ key: "atmosphere" });
+    expect(v.campaign!.cta).toMatchObject({ text: "View ticket options", status: "NOT_CONFIGURED" });
+    expect(v.campaign!.channels[0].copy).toContain("Be there next time.");
+    expect(v.campaign!.channels[0].copy).not.toMatch(/View ticket options|on sale|available|\d{1,2}\s*(?:Oct|Nov|Dec)/i);
+    expect(v.nextStep).toMatch(/ticketing link is not configured/);
+    expect(v.kpi).toMatchObject({ label: "Ticket sales", value: null, valueText: "Sales attribution not connected." });
+    await expect(goals.draftGoalCampaign(at(v), "https://tickets.example.com/spurs", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const linked = await goals.draftGoalCampaign(at(v), "https://www.tottenhamhotspur.com/tickets/", d);
+    expect(linked.campaign!.cta).toMatchObject({ status: "READY", destination: { kind: "ticketing", source: "PRODUCER_ENTERED" } });
+
+    vi.stubEnv("PULSE_COMMERCE_DESTINATIONS", "tottenham:tickets:*=https://www.tottenhamhotspur.com/tickets/");
+    const configured = await goals.runGoal(TICKETS, "tottenham", d);
+    expect(configured.campaign!.cta).toMatchObject({ status: "READY", destination: { kind: "ticketing", source: "CONFIGURED" } });
+    expect(configured.campaign!.channels.find((c) => c.channel === "facebook")!.copy).toContain("View ticket options: https://www.tottenhamhotspur.com/tickets/");
+  });
+
+  it("sponsor activation: SPONSORED use in GB, no sponsor ever named by PULSE, partner credit missing, tracking not connected", async () => {
+    const o = parseObjective(SPONSOR, NOW);
+    expect(o).toMatchObject({ market: { code: "GB" }, product: { key: "sponsor" } });
+    const v = await goals.runGoal(SPONSOR, "tottenham", deps());
+    expect(v.run.plan).toMatchObject({ territories: ["GB"], usage: "SPONSORED" });
+    expect(v.campaign!.intents.every((i) => i.usage === "SPONSORED")).toBe(true);
+    expect(v.campaign!.cta.status).toBe("NOT_APPLICABLE");
+    const copy = v.campaign!.channels.map((c) => c.copy).join("\n");
+    expect(copy).toContain("[Partner credit exactly as specified in the brief]");
+    expect(copy).not.toMatch(/AIA|Nike|cinch|sleeve/i);
+    expect(v.campaign!.checklist.find((c) => c.item === "Partner credit")).toMatchObject({ status: "MISSING" });
+    expect(v.kpi).toMatchObject({ label: "Sponsor deliverables in United Kingdom", value: null, valueText: "Sponsor delivery tracking not connected.", status: "NOT_CONNECTED" });
+    expect(v.kpi.note).not.toMatch(/ledger/);
   });
 });

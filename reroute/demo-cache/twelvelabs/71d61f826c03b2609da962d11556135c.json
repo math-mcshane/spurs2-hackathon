@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-22T23:36:54.313Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "analyze",
+    "modelKey": "pegasus1.6:d98df822a16038614d116aa864379da5",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911fd2cc348c0bd20125c"
+  },
+  "value": {
+    "data": "{\"observations\":[{\"category\":\"sponsor_brand\",\"confidence\":0.95,\"description\":\"The Tottenham Hotspur club crest (cockerel and ball logo) is visible on a white banner held by fans in the foreground, reading 'DA15 ON TOUR TOTTENHAM'. This is part of the live picture, displayed on fan merchandise.\",\"end_time\":7.0,\"entity\":\"Tottenham Hotspur\",\"start_time\":0.0},{\"category\":\"onscreen_graphic\",\"confidence\":0.98,\"description\":\"A broadcast overlay is present with 'MUNTOT' in the top left, 'AWAY END' in the top right, 'FULL-TIME' and score '1-1' in the bottom left, and a small Tottenham crest logo in the bottom right corner. These are added by the edit/broadcast graphics.\",\"end_time\":7.0,\"entity\":\"Scorebug/Overlay\",\"start_time\":0.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"no_players\",\"scorebug_watermark\":\"present\"},\"summary\":\"This 7-second clip shows a crowd of spectators in a stadium stand, likely the away end, clapping and cheering after a match. The footage includes broadcast overlays indicating 'MUNTOT', 'AWAY END', 'FULL-TIME', and a 1-1 score. A prominent Tottenham Hotspur banner is visible in the foreground held by fans. No specific players or coaches are identifiable by name or number. The clip contains broadcast graphics but no identifiable network bug or scorebug branding beyond the generic match info. Rights questions may arise regarding the use of the club crest on fan banners and the broadcast overlay graphics.\"}",
+    "finishReason": "stop"
+  }
+}

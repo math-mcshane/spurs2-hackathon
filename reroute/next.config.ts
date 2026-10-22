@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
+  // Recorded, CACHED-labelled replay data (JSON metadata only) read via fs by API routes.
+  outputFileTracingIncludes: { "/api/**": ["./demo-cache/**/*"] },
   turbopack: {
     rules: {
       "*.css": {

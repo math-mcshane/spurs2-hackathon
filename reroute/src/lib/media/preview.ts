@@ -5,6 +5,7 @@ import type { Preview } from "@/features/pulse/types";
 import { isEvidenceLinkable, type MediaRef } from "@/lib/contracts";
 import { mapMediaToAsset } from "@/lib/scoreplay/map";
 import { readTwelveLabsConfig } from "@/lib/twelvelabs/config";
+import { demoReplayEnabled } from "./replay";
 
 /** Stream URLs may be signed; resolve them at view time and keep them in memory only, briefly. */
 export const PREVIEW_TTL_MS = 5 * 60_000;
@@ -46,11 +47,12 @@ async function resolve(ref: MediaRef, deps: PreviewDeps): Promise<Preview | unde
 
 /**
  * Authorized playable reference for a MediaRef — the ScorePlay proxy when it is https, else the TwelveLabs
- * HLS stream of a linkable ref — or undefined (also when PULSE_VIDEO_PREVIEW=off). Never persisted:
- * cached in memory for PREVIEW_TTL_MS. Nothing is downloaded.
+ * HLS stream of a linkable ref — or undefined (also when PULSE_VIDEO_PREVIEW=off, and always under
+ * DEMO_REPLAY: previews are never recorded). Never persisted: cached in memory for PREVIEW_TTL_MS.
+ * Nothing is downloaded.
  */
 export function previewFor(ref: MediaRef, opts: { club?: string; deps?: PreviewDeps } = {}): Promise<Preview | undefined> {
-  if (!isVideoPreviewEnabled()) return Promise.resolve(undefined);
+  if (!isVideoPreviewEnabled() || demoReplayEnabled()) return Promise.resolve(undefined);
   const deps = opts.deps ?? defaultDeps(opts.club);
   const now = (deps.now ?? Date.now)();
   const key = `${ref.twelvelabsIndexId ?? ""}|${ref.scoreplayMediaId ?? ""}|${isEvidenceLinkable(ref) ? ref.twelvelabsVideoId : ""}`;

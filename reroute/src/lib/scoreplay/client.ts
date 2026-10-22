@@ -8,6 +8,9 @@ import { extname } from "node:path";
 import type { z } from "zod";
 import { DEMO_CLEARANCE_LABEL, canPublish, type Asset, type RightsReceipt, type ScorePlayClient } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
+import { trackProvenance } from "@/lib/media/provenance";
+import { ReplayMissError } from "@/lib/media/replay";
+import { ScorePlayHttpError, ScorePlayInvalidResponseError, readScorePlayJson, scorePlayReadMessage } from "@/lib/media/scoreplay-read";
 import { mapMediaToAsset, toSquad, type ScorePlaySquad } from "./map";
 import {
   DeleteVideoLogsResultSchema,
@@ -44,7 +47,8 @@ const TAG_FILTER_TTL_MS = 5 * 60_000;
 const TAG_SEARCH_MAX_CHARS = 60;
 
 type Query = Record<string, string | number | boolean | undefined>;
-type RequestOptions = { query?: Query; body?: unknown };
+/** `replay`: a rights/catalog READ that may use the demo recording + 429 retry (lib/media/scoreplay-read). Never set on writeback paths. */
+type RequestOptions = { query?: Query; body?: unknown; replay?: boolean };
 
 let tagFilterCache: { at: number; filters: ScorePlayTagFilter[] } | undefined;
 let squadCache: { at: number; squads: ScorePlaySquad[] } | undefined;
@@ -59,6 +63,7 @@ export class ScorePlayHttpClient implements ScorePlayClient {
       // Docs pattern: resolve labels → IDs with GET /tag/search, then POST /media/search with those IDs.
       const found = await this.request("GET", "/tag/search", TagSearchResultSchema, {
         query: { query: q.slice(0, TAG_SEARCH_MAX_CHARS) },
+        replay: true,
       });
       const ids = (list: { ID: number }[] | null | undefined) => (list ?? []).map((x) => x.ID);
       Object.assign(body, {
@@ -74,13 +79,18 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     const result = await this.request("POST", "/media/search", MediaSearchResultSchema, {
       query: { page: 1, per_page: limit },
       body,
+      replay: true,
     });
     const [filters, squads] = await Promise.all([this.tagFilters(), this.squads()]);
     return (result.media ?? []).slice(0, limit).map((m) => mapMediaToAsset(m, filters, squads));
   }
 
   async getAsset(id: string): Promise<Asset> {
-    const [media, filters, squads] = await Promise.all([this.getMedia(id), this.tagFilters(), this.squads()]);
+    const [media, filters, squads] = await Promise.all([
+      this.request("GET", `/media/${mediaIdPath(id)}`, MediaSchema, { replay: true }),
+      this.tagFilters(),
+      this.squads(),
+    ]);
     return mapMediaToAsset(media, filters, squads);
   }
 
@@ -208,37 +218,46 @@ export class ScorePlayHttpClient implements ScorePlayClient {
 
   // ---------- Internals ----------
 
+  /** Cached only when read LIVE, so recorded data is re-reported to the run's provenance on every use. */
   private async tagFilters(): Promise<ScorePlayTagFilter[]> {
     if (tagFilterCache && Date.now() - tagFilterCache.at < TAG_FILTER_TTL_MS) return tagFilterCache.filters;
-    const filters: ScorePlayTagFilter[] = [];
-    for (let page = 1; ; page++) {
-      const res = await this.request("GET", "/tag/filters", TagFilterListSchema, { query: { page, limit: 250 } });
-      const items = res.items ?? [];
-      filters.push(...items);
-      if (items.length < 250 || (res.total ?? 0) <= filters.length) break;
-    }
-    tagFilterCache = { at: Date.now(), filters };
+    const { value: filters, provenance } = await trackProvenance(async () => {
+      const all: ScorePlayTagFilter[] = [];
+      for (let page = 1; ; page++) {
+        const res = await this.request("GET", "/tag/filters", TagFilterListSchema, { query: { page, limit: 250 }, replay: true });
+        const items = res.items ?? [];
+        all.push(...items);
+        if (items.length < 250 || (res.total ?? 0) <= all.length) break;
+      }
+      return all;
+    });
+    if (provenance?.origin === "LIVE") tagFilterCache = { at: Date.now(), filters };
     return filters;
   }
 
-  /** Squad registrations (`GET /team-seasons`, then `GET /players?team_season_id=` per season); same TTL as tag groups. */
+  /** Squad registrations (`GET /team-seasons`, then `GET /players?team_season_id=` per season); same TTL and LIVE-only caching as tag groups. */
   private async squads(): Promise<ScorePlaySquad[]> {
     if (squadCache && Date.now() - squadCache.at < TAG_FILTER_TTL_MS) return squadCache.squads;
-    const seasons: ScorePlayTeamSeason[] = [];
-    for (let page = 1; ; page++) {
-      const res = await this.request("GET", "/team-seasons", TeamSeasonListSchema, { query: { page, limit: 100 } });
-      const items = res.items ?? [];
-      seasons.push(...items);
-      if (items.length < 100 || (res.total ?? 0) <= seasons.length) break;
-    }
-    const squads = (
-      await Promise.all(
-        seasons.map(async (season) =>
-          toSquad(season, await this.request("GET", "/players", PlayerListSchema, { query: { team_season_id: season.id, limit: 500 } })),
-        ),
-      )
-    ).filter((s): s is ScorePlaySquad => s !== undefined);
-    squadCache = { at: Date.now(), squads };
+    const { value: squads, provenance } = await trackProvenance(async () => {
+      const seasons: ScorePlayTeamSeason[] = [];
+      for (let page = 1; ; page++) {
+        const res = await this.request("GET", "/team-seasons", TeamSeasonListSchema, { query: { page, limit: 100 }, replay: true });
+        const items = res.items ?? [];
+        seasons.push(...items);
+        if (items.length < 100 || (res.total ?? 0) <= seasons.length) break;
+      }
+      return (
+        await Promise.all(
+          seasons.map(async (season) =>
+            toSquad(
+              season,
+              await this.request("GET", "/players", PlayerListSchema, { query: { team_season_id: season.id, limit: 500 }, replay: true }),
+            ),
+          ),
+        )
+      ).filter((s): s is ScorePlaySquad => s !== undefined);
+    });
+    if (provenance?.origin === "LIVE") squadCache = { at: Date.now(), squads };
     return squads;
   }
 
@@ -248,13 +267,11 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     schema: S,
     opts: RequestOptions = {},
   ): Promise<S extends z.ZodType ? z.output<S> : unknown> {
-    const { apiKey, baseUrl } = readConfig();
-    const url = new URL(`${baseUrl}${path}`);
-    for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
-
-    const res = await fetchWithTimeout(
-      url,
-      {
+    const build = () => {
+      const { apiKey, baseUrl } = readConfig();
+      const url = new URL(`${baseUrl}${path}`);
+      for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
+      const init: RequestInit = {
         method,
         headers: {
           "X-ScorePlay-Api-Key": apiKey,
@@ -263,10 +280,27 @@ export class ScorePlayHttpClient implements ScorePlayClient {
         },
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
         cache: "no-store",
-      },
-      REQUEST_TIMEOUT_MS,
-      `${method} ${path}`,
-    );
+      };
+      return { url, init };
+    };
+
+    if (opts.replay && schema && (method === "GET" || method === "POST")) {
+      let replayed: unknown;
+      try {
+        ({ value: replayed } = await readScorePlayJson({ method, path, query: opts.query, body: opts.body }, () => {
+          const { url, init } = build();
+          return fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+        }));
+      } catch (err) {
+        throw readError(err, `${method} ${path}`);
+      }
+      const parsed = schema.safeParse(replayed);
+      if (!parsed.success) throw new AppError("UPSTREAM", `ScorePlay ${method} ${path}: unexpected response shape`);
+      return parsed.data as never;
+    }
+
+    const { url, init } = build();
+    const res = await fetchWithTimeout(url, init, REQUEST_TIMEOUT_MS, `${method} ${path}`);
 
     const text = await res.text();
     if (!res.ok) {
@@ -288,6 +322,24 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     }
     return parsed.data as never;
   }
+}
+
+/** User-facing error for a failed replayable read: operation + status, never the upstream body. */
+function readError(err: unknown, operation: string): AppError {
+  if (err instanceof AppError) return err;
+  if (err instanceof ScorePlayHttpError) {
+    if (err.statusCode === 404) return new AppError("NOT_FOUND", `ScorePlay ${operation}: not found`, { cause: err });
+    if (err.statusCode === 429) {
+      const headers = err.retryAfterSec ? { "Retry-After": String(err.retryAfterSec) } : undefined;
+      return new AppError("RATE_LIMITED", scorePlayReadMessage(err), { cause: err, headers });
+    }
+    const hint = err.statusCode === 401 ? " — invalid API key or missing permission" : "";
+    return new AppError("UPSTREAM", `${scorePlayReadMessage(err)}${hint}`, { cause: err });
+  }
+  if (err instanceof ReplayMissError) return new AppError("UPSTREAM", `ScorePlay ${operation}: not in the demo recording (DEMO_REPLAY=true)`, { cause: err });
+  if (err instanceof ScorePlayInvalidResponseError) return new AppError("UPSTREAM", err.message, { cause: err });
+  const timedOut = err instanceof Error && err.name === "TimeoutError";
+  return new AppError("UPSTREAM", `ScorePlay ${operation}: ${timedOut ? `timed out after ${REQUEST_TIMEOUT_MS} ms` : "network error"}`, { cause: err });
 }
 
 function readConfig(): { apiKey: string; baseUrl: string } {

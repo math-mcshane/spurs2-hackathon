@@ -1,5 +1,6 @@
 import type { MediaRef, MediaResolver } from "@/lib/contracts";
 import { linkCatalogs, type LinkedCatalogs, type ScorePlayCatalogEntry, type TwelveLabsCatalogEntry } from "./link";
+import { reportProvenance, trackProvenance, type RunProvenance } from "./provenance";
 
 export const CATALOG_TTL_MS = 10 * 60_000;
 
@@ -32,9 +33,12 @@ function build(indexId: string, sp: ScorePlayCatalogEntry[], tl: TwelveLabsCatal
   return { ...linked, indexId, loadedAt: now.toISOString(), scoreplayVideos: sp.length, twelvelabsVideos: tl.length, bySp, byTl };
 }
 
-/** MediaResolver over both catalogs, cached in memory for `CATALOG_TTL_MS`. Unknown ids resolve to UNMAPPED. */
+/**
+ * MediaResolver over both catalogs, cached in memory for `CATALOG_TTL_MS`. Unknown ids resolve to UNMAPPED.
+ * The origin of the catalog reads (live or demo recording) is re-reported to the run's provenance on every use.
+ */
 export class CatalogMediaResolver implements MediaResolver {
-  private cached?: { at: number; catalog: Promise<MediaCatalog> };
+  private cached?: { at: number; loaded: Promise<{ catalog: MediaCatalog; provenance?: RunProvenance }> };
 
   constructor(
     private readonly source: CatalogSource,
@@ -46,7 +50,7 @@ export class CatalogMediaResolver implements MediaResolver {
   }
 
   catalog(): Promise<MediaCatalog> {
-    if (this.cached && this.clock() - this.cached.at < CATALOG_TTL_MS) return this.cached.catalog;
+    if (this.cached && this.clock() - this.cached.at < CATALOG_TTL_MS) return this.use(this.cached.loaded);
     return this.load(false);
   }
 
@@ -55,18 +59,25 @@ export class CatalogMediaResolver implements MediaResolver {
     return this.load(true);
   }
 
+  private use(loaded: Promise<{ catalog: MediaCatalog; provenance?: RunProvenance }>): Promise<MediaCatalog> {
+    return loaded.then(({ catalog, provenance }) => {
+      reportProvenance(provenance);
+      return catalog;
+    });
+  }
+
   private load(fresh: boolean): Promise<MediaCatalog> {
     const at = this.clock();
     // TwelveLabs first: the ScorePlay loader uses its filenames to decide which assets need exact durations.
-    const catalog = this.source
-      .twelvelabs({ fresh })
-      .then(async (tl) => build(this.source.indexId, await this.source.scoreplay(tl), tl, new Date(at)));
-    const entry = { at, catalog };
+    const loaded = trackProvenance(() =>
+      this.source.twelvelabs({ fresh }).then(async (tl) => build(this.source.indexId, await this.source.scoreplay(tl), tl, new Date(at))),
+    ).then(({ value, provenance }) => ({ catalog: value, provenance }));
+    const entry = { at, loaded };
     this.cached = entry;
-    catalog.catch(() => {
+    loaded.catch(() => {
       if (this.cached === entry) this.cached = undefined;
     });
-    return catalog;
+    return this.use(loaded);
   }
 
   async forScoreplay(scoreplayMediaId: string): Promise<MediaRef> {

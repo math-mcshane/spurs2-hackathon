@@ -38,7 +38,7 @@ export type OpenIndex = { sdk: TwelveLabsSdk; indexId: string; catalog: IndexCat
 export async function openIndex(deps: MediaDeps): Promise<OpenIndex> {
   const { sdk, indexId } = deps.twelvelabs();
   const catalog = await loadCatalog(sdk, indexId);
-  const resolver = resolverForIndex(indexId, () => ({
+  const resolver = resolverForIndex(sdk, indexId, () => ({
     indexId,
     scoreplay: (tl) => listScorePlayCatalog(deps.scoreplay, tl),
     twelvelabs: ({ fresh }) => listTwelveLabsCatalog(sdk, indexId, fresh),
@@ -191,7 +191,7 @@ export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = de
         rank: m.rank,
         query: m.query,
         foundBy: "TWELVELABS",
-        origin: "LIVE",
+        origin: m.origin,
         mapping: candidateMapping(link),
       });
     }

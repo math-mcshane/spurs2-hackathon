@@ -6,9 +6,11 @@ import type {
   ChannelRights,
   GoalAlternatives,
   GoalEvaluation,
+  GoalPlan,
   GoalRun,
   GoalView,
   Preview,
+  Product,
   Recommendation,
   RecommendationView,
   ReviewStatus,
@@ -39,6 +41,90 @@ export function describeUse(intent: PublishIntent): string {
   const market = MarketCodeSchema.safeParse(intent.territory);
   const country = market.success ? MARKETS[market.data].label : intent.territory;
   return `${USAGE[intent.usage]} ${PLATFORM[intent.platform] ?? intent.platform} post in ${country} (${intent.territory}) · ${intent.competition}`;
+}
+
+const countryOf = (territory: string) => {
+  const market = MarketCodeSchema.safeParse(territory);
+  return market.success ? `${MARKETS[market.data].label} (${territory})` : territory;
+};
+
+type Remedy = NonNullable<GoalAlternatives["remedy"]>;
+
+/**
+ * REROUTE's remedy for a CAMPAIGN blocker, kept inside the campaign's own uses. When no requested
+ * territory (or channel) is licensed, REROUTE lists what the policy licenses ELSEWHERE — that would
+ * re-target the goal, not fix it — so PULSE offers no remedy and reports a licence gap instead.
+ */
+export function scopeRemedy(found: Pick<GoalAlternatives, "blocker" | "remedy">, plan: Pick<GoalPlan, "territories" | "channels">): { remedy?: Remedy; gap?: { territories: string[]; platforms: string[] } } {
+  if (found.blocker.scope !== "CAMPAIGN") return {};
+  const r = found.remedy ?? {};
+  const territories = r.territories?.filter((t) => plan.territories.includes(t));
+  const platforms = r.platforms?.filter((p) => (plan.channels as string[]).includes(p));
+  const gap = {
+    territories: found.blocker.dimensions.includes("territory") && !territories?.length ? [...plan.territories] : [],
+    platforms: found.blocker.dimensions.includes("platform") && !platforms?.length ? [...plan.channels] : [],
+  };
+  if (gap.territories.length || gap.platforms.length) return { gap };
+  const remedy: Remedy = {
+    ...(territories?.length ? { territories } : {}),
+    ...(platforms?.length ? { platforms } : {}),
+    ...(r.usage ? { usage: r.usage } : {}),
+  };
+  return Object.keys(remedy).length ? { remedy } : {};
+}
+
+/** Why a licence gap cannot go to review: a human reviewer cannot grant a missing licence. */
+export function noLicenceReason(gap: { territories: string[]; platforms: string[] }): string {
+  const what = [...gap.territories.map(countryOf), ...gap.platforms.map((p) => PLATFORM[p] ?? p)].join(", ");
+  return `No licence covers ${what} — request a licence before review`;
+}
+
+/** Plain-English licence gap: no licensed path for the campaign's market(s) — request a licence, no remedy. */
+function licenceGap(gap: { territories: string[]; platforms: string[] }, policy: Pick<Decision, "policyId" | "policyFictional">): NonNullable<GoalView["licenceGap"]> {
+  const where = gap.territories.map(countryOf).join(", ");
+  const channels = gap.platforms.map((p) => PLATFORM[p] ?? p).join(", ");
+  const what = [gap.territories.length && `in ${where}`, gap.platforms.length && `on ${channels}`].filter(Boolean).join(" or ");
+  const ask = [gap.territories.length && gap.territories.join(", "), gap.platforms.length && channels].filter(Boolean).join(" / ");
+  return {
+    label: `No licensed path ${what}`,
+    description:
+      `REROUTE's policy ${policy.policyId}${policy.policyFictional ? " (DEMO)" : ""} licenses none of this campaign's uses ${what}. ` +
+      `Another clip would hit the same restriction and no remedy exists inside this goal — PULSE will not re-target it to other markets. ` +
+      `Next step: request a licence for ${ask} from the rights holder.`,
+    territories: gap.territories,
+    platforms: gap.platforms,
+  };
+}
+
+/** One-line KPI value while no commerce or analytics integration is connected (always, today). */
+const KPI_NOT_CONNECTED: Record<Product | "default", string> = {
+  jersey: "Sales attribution not connected.",
+  merch: "Sales attribution not connected.",
+  tickets: "Sales attribution not connected.",
+  subscriptions: "Sales attribution not connected.",
+  engagement: "Engagement measurement not connected.",
+  followers: "Engagement measurement not connected.",
+  sponsor: "Sponsor delivery tracking not connected.",
+  default: "Business results not connected.",
+};
+
+/**
+ * The goal's KPI: label from the objective, no value. The goal flow has no deliverable ledger, so a
+ * sponsor objective is NOT_CONNECTED here (the board's ledger is a different flow).
+ */
+export function goalKpi(objective: GoalRun["objective"]): GoalView["kpi"] {
+  const product = objective.product?.key;
+  const measurement =
+    product === "sponsor"
+      ? { status: "NOT_CONNECTED" as const, note: "Sponsor deliverables are not tracked in the goal flow — nothing is counted, predicted or claimed." }
+      : objective.measurement;
+  return {
+    label: objective.kpi,
+    value: null,
+    valueText: KPI_NOT_CONNECTED[product ?? "default"],
+    status: measurement.status,
+    note: `${measurement.note} No value is shown until a verified source is connected.`,
+  };
 }
 
 /**
@@ -156,10 +242,20 @@ export function remedyLabel(remedy: NonNullable<GoalAlternatives["remedy"]>): st
     .join(" · ");
 }
 
-function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSubmit: boolean, publishable: boolean, remedy: boolean): string {
+function nextStep(
+  run: GoalRun,
+  rights: RightsView,
+  review: ReviewStatus,
+  canSubmit: boolean,
+  publishable: boolean,
+  remedy: boolean,
+  gap: GoalView["licenceGap"],
+): string {
   if (!run.campaign) return run.pool.length ? "Pick one of the three moments to build its campaign." : "No usable moment was found — refine the goal or index more footage.";
-  if (run.campaign.cta.status === "NOT_CONFIGURED" && review === "NOT_SUBMITTED" && rights.state === "NOT_CHECKED")
-    return "Check rights with REROUTE. The store link is not configured — add an https link on the club's domain (optional before review).";
+  if (run.campaign.cta.status === "NOT_CONFIGURED" && review === "NOT_SUBMITTED" && rights.state === "NOT_CHECKED") {
+    const link = run.objective.product && PRODUCTS[run.objective.product.key].commerce === "ticketing" ? "ticketing link" : "store link";
+    return `Check rights with REROUTE. The ${link} is not configured — add an https link on the club's domain (optional before review).`;
+  }
   if (rights.state === "NOT_CHECKED" || !rights.current) return "Check rights with REROUTE for every proposed channel and territory.";
   if (review === "APPROVED")
     return publishable
@@ -167,6 +263,7 @@ function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSub
       : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Run the ScorePlay writeback (dry-run) to record the decision.`;
   if (review === "REJECTED") return "The reviewer rejected this version. Find another way or change the proposal, then submit again.";
   if (review === "PENDING") return "Waiting for a reviewer to approve or reject the receipt.";
+  if (gap) return `${noLicenceReason(gap)}. PULSE offers no remedy and never re-targets the goal to other markets.`;
   if (remedy) return "The restriction is tied to where or how the campaign runs, not to the clip: apply REROUTE's remedy, then check rights again.";
   if (rights.state === "BLOCKED") return "Restricted. Find another way: REROUTE searches comparable footage and re-checks it independently.";
   if (canSubmit)
@@ -191,7 +288,6 @@ export function buildGoalView(
   const submitted = run.review && latest && run.review.evaluationId === latest.id && rights.current ? run.review : undefined;
   const liveReceipt = submitted && opts.receipt?.id === submitted.receiptId ? opts.receipt : undefined;
   const reviewStatus: ReviewStatus = submitted ? (liveReceipt?.humanReviewStatus ?? "PENDING") : "NOT_SUBMITTED";
-  const canSubmit = !!latest && rights.current && latest.overall.verdict !== "BLOCKED" && !submitted;
   const publishable = !!liveReceipt && canPublish(liveReceipt);
   const lastWrite = liveReceipt?.writeback.at(-1);
 
@@ -201,10 +297,17 @@ export function buildGoalView(
     ...found,
     candidates: found.candidates.map((c) => ({ ...c, preview: previews.get(c.key) })),
   };
-  const remedy =
-    found?.blocker.scope === "CAMPAIGN" && found.remedy && remedyLabel(found.remedy)
-      ? { label: remedyLabel(found.remedy), description: found.blocker.suggestion ?? found.blocker.explanation, ...found.remedy }
-      : undefined;
+  // REROUTE's remedy, kept inside the campaign's own uses; an empty licensed subset is a licence gap, not a remedy.
+  const scoped = found ? scopeRemedy(found, draft?.plan ?? run.plan) : {};
+  const remedy = scoped.remedy && {
+    label: remedyLabel(scoped.remedy),
+    description: found!.blocker.suggestion ?? found!.blocker.explanation,
+    ...scoped.remedy,
+  };
+  const gap = scoped.gap && latest ? licenceGap(scoped.gap, latest.overall) : undefined;
+  // A reviewer cannot grant a missing licence: a licence gap is never submittable.
+  const canSubmit = !!latest && rights.current && latest.overall.verdict !== "BLOCKED" && !submitted && !gap;
+  const kpi = goalKpi(run.objective);
 
   const commerce = run.objective.product && PRODUCTS[run.objective.product.key].commerce;
   const notLocalized = draft?.evidenceLabels.find((l) => l.startsWith("Copy not localized"));
@@ -214,7 +317,11 @@ export function buildGoalView(
       { item: "Media and exact timestamps", status: "DONE" as const, note: `TwelveLabs moment on ScorePlay asset ${draft.mediaRef.scoreplayMediaId} (${draft.mediaRef.method}).` },
       notLocalized
         ? { item: "Localized copy", status: "MISSING" as const, note: notLocalized }
-        : { item: "Localized copy", status: "DONE" as const, note: `Written in ${draft.audience.language.toUpperCase()}.` },
+        : {
+            item: "Localized copy",
+            status: "DONE" as const,
+            note: `Written in ${draft.audience.locale ?? draft.audience.language.toUpperCase()}.`,
+          },
       ...(commerce
         ? [
             draft.cta.destination
@@ -223,10 +330,19 @@ export function buildGoalView(
             { item: "Product inventory", status: "NOT_CONNECTED" as const, note: "No product feed: the copy makes no stock, price or availability claim." },
           ]
         : []),
+      ...(run.objective.product?.key === "sponsor"
+        ? [
+            {
+              item: "Partner credit",
+              status: "MISSING" as const,
+              note: "PULSE never names a sponsor: add the partner credit exactly as contracted. Only ScorePlay sponsor data or the rights policy's partner list can name one — neither designates which partner this activation is for.",
+            },
+          ]
+        : []),
       rights.state === "NOT_CHECKED" || !rights.current
         ? { item: "Rights evaluation", status: "MISSING" as const, note: "Not checked for this version." }
         : { item: "Rights evaluation", status: "DONE" as const, note: `${rights.headline}. ${rights.clearanceLabel ?? ""}`.trim() },
-      { item: "Performance tracking", status: "NOT_CONNECTED" as const, note: run.objective.measurement.note },
+      { item: "Performance tracking", status: "NOT_CONNECTED" as const, note: `${kpi.valueText} ${kpi.note}` },
       reviewStatus === "APPROVED" || reviewStatus === "REJECTED"
         ? { item: "Human review", status: "DONE" as const, note: `Reviewer decision: ${reviewStatus}.` }
         : { item: "Human review", status: "MISSING" as const, note: reviewStatus === "PENDING" ? "Waiting for a reviewer." : "Not submitted." },
@@ -259,6 +375,7 @@ export function buildGoalView(
     blocker: found?.blocker,
     alternatives,
     remedy,
+    licenceGap: gap,
     evaluations: run.evaluations.map((e) => ({
       id: e.id,
       kind: e.kind,
@@ -278,13 +395,9 @@ export function buildGoalView(
       : rights.clearanceLabel
         ? `${rights.clearanceLabel} — never publishable, even after approval.`
         : "Publishable only with a verified REROUTE clearance AND human approval.",
-    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable, !!remedy),
-    kpi: {
-      label: run.objective.kpi,
-      value: null,
-      status: run.objective.measurement.status,
-      note: `${run.objective.measurement.note} No value is shown until a verified source is connected.`,
-    },
+    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable, !!remedy, gap),
+    kpi,
     timing: { toRecommendationsSec: seconds(run.resultsAt), toProposalSec: run.proposalAt ? seconds(run.proposalAt) : undefined },
+    dataOrigin: run.dataOrigin,
   };
 }

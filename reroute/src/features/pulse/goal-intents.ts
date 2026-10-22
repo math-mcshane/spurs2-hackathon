@@ -108,21 +108,24 @@ export function goalIntents(objective: ParsedObjective, sport: Sport): GoalInten
  */
 export const GLOBAL_TERRITORIES = ["GB", "US", "FR", "ES", "DE", "IN", "NG"] as const;
 
-/** Objectives that sell something are commercial use; reach/engagement objectives are editorial. */
-const COMMERCIAL: Record<Product, boolean> = {
-  merch: true,
-  jersey: true,
-  tickets: true,
-  subscriptions: true,
-  sponsor: true,
-  engagement: false,
-  followers: false,
+/**
+ * Objectives that sell something are commercial use; a sponsor activation is a partner post (SPONSORED);
+ * reach/engagement objectives are editorial.
+ */
+const USAGE: Record<Product, GoalUsage> = {
+  merch: "COMMERCIAL",
+  jersey: "COMMERCIAL",
+  tickets: "COMMERCIAL",
+  subscriptions: "COMMERCIAL",
+  sponsor: "SPONSORED",
+  engagement: "EDITORIAL",
+  followers: "EDITORIAL",
 };
 
 /** What REROUTE will be asked: every proposed channel × territory, for the selected club's competition. */
 export function goalPlan(objective: ParsedObjective, club: Club): GoalPlan {
   const c = CLUBS[club];
-  const usage: GoalUsage = objective.product && COMMERCIAL[objective.product.key] ? "COMMERCIAL" : "EDITORIAL";
+  const usage: GoalUsage = objective.product ? USAGE[objective.product.key] : "EDITORIAL";
   const [territories, territoryBasis] =
     objective.scope === "MARKET" && objective.market
       ? [[objective.market.code], `${objective.market.label}, as stated in the objective (“${objective.market.matched}”).`]

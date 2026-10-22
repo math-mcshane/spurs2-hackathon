@@ -37,6 +37,7 @@ export function VerdictPanel({
   const tone = TONE[rightsTone(rights.state, rights.clearance)];
   const restricted = rights.current && (rights.state === "BLOCKED" || rights.state === "NEEDS_REVIEW");
   const demo = checked ? demoLabel(rights) : null;
+  const allowedUses = rights.perIntent.filter((p) => p.verdict === "ALLOWED").length;
 
   if (!checked) {
     return (
@@ -62,6 +63,12 @@ export function VerdictPanel({
             <div className="text-[10px] font-semibold tracking-[0.18em] text-zinc-400 uppercase">Rights verdict · REROUTE</div>
             <p className={cn("font-mono text-2xl leading-tight font-black tracking-wider sm:text-3xl", tone.text)}>{VERDICT_WORD[rights.state]}</p>
             <p className="text-sm font-medium text-zinc-100">{rights.headline}</p>
+            {rights.perIntent.length > 0 && (
+              <p className="mt-0.5 font-mono text-xs text-zinc-300">
+                {allowedUses} of {rights.perIntent.length} channel × territory uses allowed
+                {demo && allowedUses > 0 ? " (demo policy)" : ""}
+              </p>
+            )}
           </div>
         </div>
         {rights.evaluatedAt && (
@@ -91,7 +98,7 @@ export function VerdictPanel({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {!rights.current ? (
           <Button size="lg" disabled={disabled} onClick={onCheck}>
             {busy === "rights" ? <Loader2Icon className="animate-spin" /> : <ShieldQuestionIcon />} Check rights again
@@ -99,11 +106,16 @@ export function VerdictPanel({
         ) : (
           <>
             {restricted && (
-              <Button size="lg" disabled={disabled} onClick={onFindAnotherWay}>
+              <Button
+                size="lg"
+                disabled={disabled}
+                onClick={onFindAnotherWay}
+                className="h-11 bg-sky-400 px-5 text-base font-semibold text-sky-950 shadow-[0_0_24px_rgba(56,189,248,0.35)] hover:bg-sky-300"
+              >
                 {busy === "alternatives" ? <Loader2Icon className="animate-spin" /> : <RouteIcon />} Find another way
               </Button>
             )}
-            <Button size="lg" variant="outline" disabled={disabled} onClick={onCheck}>
+            <Button size={restricted ? "default" : "lg"} variant={restricted ? "ghost" : "outline"} disabled={disabled} onClick={onCheck} className={cn(restricted && "sm:self-center")}>
               {busy === "rights" ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />} Check again
             </Button>
           </>
@@ -202,9 +214,16 @@ export function AnotherWay({
       {blocker.scope === "CAMPAIGN" ? (
         <div role="note" className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-50">
           <p className="flex items-center gap-2 font-medium">
-            <LightbulbIcon className="size-4 shrink-0 text-amber-300" aria-hidden /> Another clip would hit the same restriction — change the use instead.
+            <LightbulbIcon className="size-4 shrink-0 text-amber-300" aria-hidden /> Another clip would hit the same restriction
+            {goal.licenceGap ? "." : " — change the use instead."}
           </p>
-          {goal.remedy ? (
+          {goal.licenceGap ? (
+            // No licensed subset inside this campaign: REROUTE's suggestion would re-target the goal, so it is not shown.
+            <>
+              <p className="font-semibold text-amber-50">{goal.licenceGap.label}</p>
+              <p className="text-amber-100">{goal.licenceGap.description}</p>
+            </>
+          ) : goal.remedy ? (
             <>
               <p className="text-amber-100">{goal.remedy.description}</p>
               <Button className="h-auto min-h-8 whitespace-normal" disabled={disabled} onClick={onApplyRemedy}>

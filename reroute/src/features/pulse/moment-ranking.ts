@@ -1,5 +1,5 @@
 import type { GoalIntent, MediaCandidate, MomentMatch, ParsedObjective, Preview, Recommendation } from "./types";
-import { isEvidenceLinkable, type Asset, type MediaRef } from "@/lib/contracts";
+import { isEvidenceLinkable, type Asset, type DataOrigin, type MediaRef } from "@/lib/contracts";
 
 /**
  * Ranks live TwelveLabs moments against a business objective. Pure: the server passes in what the
@@ -16,8 +16,8 @@ import { isEvidenceLinkable, type Asset, type MediaRef } from "@/lib/contracts";
 
 export const RANKING = { relevance: 0.85, readiness: 0.15, k: 5, earlierSeason: 0.6 } as const;
 
-/** One hit as returned by the TwelveLabs adapter. */
-export type RawMoment = { videoId: string; start: number; end: number; rank: number; thumbnailUrl?: string };
+/** One hit as returned by the TwelveLabs adapter (`origin` CACHED when served from a recorded response). */
+export type RawMoment = { videoId: string; start: number; end: number; rank: number; thumbnailUrl?: string; origin?: DataOrigin };
 
 /** A TwelveLabs video tied to a ScorePlay asset by the canonical MediaResolver (`linkCatalogs`). */
 export type LinkedVideo = {
@@ -75,7 +75,11 @@ const ACTION: Record<NonNullable<ParsedObjective["product"]>["key"] | "default",
   default: (w) => `Post it on club channels${w}.`,
 };
 
-type Cluster = { videoId: string; link: LinkedVideo; matches: (MomentMatch & { weight: number; why: string; thumbnailUrl?: string })[] };
+type Cluster = {
+  videoId: string;
+  link: LinkedVideo;
+  matches: (MomentMatch & { weight: number; why: string; thumbnailUrl?: string; origin: DataOrigin })[];
+};
 
 /**
  * Turns per-intent TwelveLabs results into ranked recommendations. Hits on the same video whose
@@ -92,7 +96,18 @@ export function rankMoments(
       const link = links.get(m.videoId);
       // Only a canonical 1:1 link may carry TwelveLabs evidence onto a ScorePlay asset.
       if (!link || !isEvidenceLinkable(link.media) || !(m.end > m.start)) continue;
-      const match = { intent: intent.key, label: intent.label, query: intent.query, rank: m.rank, start: m.start, end: m.end, weight: intent.weight, why: intent.why, thumbnailUrl: m.thumbnailUrl };
+      const match = {
+        intent: intent.key,
+        label: intent.label,
+        query: intent.query,
+        rank: m.rank,
+        start: m.start,
+        end: m.end,
+        weight: intent.weight,
+        why: intent.why,
+        thumbnailUrl: m.thumbnailUrl,
+        origin: m.origin ?? "LIVE",
+      };
       const home = clusters.find((c) => c.videoId === m.videoId && c.matches.some((x) => overlaps(x, m)));
       if (home) home.matches.push(match);
       else clusters.push({ videoId: m.videoId, link, matches: [match] });
@@ -139,7 +154,8 @@ export function rankMoments(
       discoveredBy: c.link.discoveredBy,
       rank: primary.rank,
       query: primary.query,
-      origin: "LIVE",
+      // Never present a recorded (cached) search result as live.
+      origin: supporting.some((m) => m.origin !== "LIVE") ? "CACHED" : "LIVE",
       mapping: { via: c.link.media.method as "AUTHORITATIVE_ID" | "FILENAME_DURATION", filename: c.link.media.match?.twelvelabsFilename ?? asset.title },
     };
     return {

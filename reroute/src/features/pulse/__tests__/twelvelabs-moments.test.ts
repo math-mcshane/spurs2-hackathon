@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { readTwelveLabsConfig } from "@/lib/twelvelabs/config";
-import { classifyTwelveLabsError, loadCatalog, searchMoments, type AssetPage, type TwelveLabsSdk } from "../server/twelvelabs-moments";
+import { classifyTwelveLabsError, createTwelveLabsSdk, loadCatalog, searchMoments, type AssetPage, type TwelveLabsSdk } from "../server/twelvelabs-moments";
 
 /** Shape of twelvelabs-js `TwelvelabsApiError`. */
 const apiError = (statusCode: number, code = "", message = "error") => Object.assign(new Error(message), { statusCode, body: { code, message } });
@@ -79,6 +79,18 @@ describe("TwelveLabs index catalog", () => {
     ]);
     expect(c.searchOptions).toEqual(["visual", "audio"]);
   });
+
+  it("caches per (API key, index): one SDK per key, and another key's SDK never gets the cached catalog", async () => {
+    expect(createTwelveLabsSdk("key-a")).toBe(createTwelveLabsSdk("key-a"));
+    expect(createTwelveLabsSdk("key-a")).not.toBe(createTwelveLabsSdk("key-b"));
+    const a = fakeSdk();
+    const b = fakeSdk();
+    await loadCatalog(a, "idx-shared");
+    await loadCatalog(a, "idx-shared");
+    await loadCatalog(b, "idx-shared");
+    expect(a.indexes.indexedAssets.list).toHaveBeenCalledTimes(1);
+    expect(b.indexes.indexedAssets.list).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("TwelveLabs moment search", () => {
@@ -94,8 +106,8 @@ describe("TwelveLabs moment search", () => {
     );
     expect(retrieve).toHaveBeenCalledWith("t-1", { includeUserMetadata: true });
     expect(moments).toEqual([
-      { videoId: "v1", start: 903.7666, end: 912.6331, rank: 1, thumbnailUrl: undefined, query: "defender block" },
-      { videoId: "v2", start: 0, end: 7.87, rank: 2, thumbnailUrl: undefined, query: "defender block" },
+      { videoId: "v1", start: 903.7666, end: 912.6331, rank: 1, thumbnailUrl: undefined, query: "defender block", origin: "LIVE" },
+      { videoId: "v2", start: 0, end: 7.87, rank: 2, thumbnailUrl: undefined, query: "defender block", origin: "LIVE" },
     ]);
   });
 

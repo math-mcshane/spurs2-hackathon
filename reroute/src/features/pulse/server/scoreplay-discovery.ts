@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { Asset } from "@/lib/contracts";
+import { ReplayMissError } from "@/lib/media/replay";
+import { ScorePlayHttpError, ScorePlayInvalidResponseError, readScorePlayJson, scorePlayReadMessage } from "@/lib/media/scoreplay-read";
 import { mapMediaToAsset } from "@/lib/scoreplay/map";
 import { MediaSchema, MediaSearchResultSchema, TagSearchResultSchema, type ScorePlayMedia } from "@/lib/scoreplay/schemas";
 import type { MediaDiscoverySpec } from "../types";
@@ -44,6 +46,18 @@ export const defaultScorePlayHttp = (): ScorePlayHttp => ({
   baseUrl: process.env.SCOREPLAY_API_BASE_URL?.trim() || SCOREPLAY_BASE_URL,
 });
 
+/** HTTP status → PULSE issue code. */
+function issueFor(status: number): ScorePlayIssue {
+  if (status === 401 || status === 403) return "UNAUTHORIZED";
+  if (status === 429) return "RATE_LIMITED";
+  if (status === 400 || status === 422) return "BAD_REQUEST";
+  return "UPSTREAM_UNAVAILABLE";
+}
+
+/**
+ * One read via lib/media's shared ScorePlay read path (429 Retry-After retry, demo recording when the
+ * upstream is unavailable or DEMO_REPLAY=true). Messages carry method, path and status only.
+ */
 async function call<S extends z.ZodType>(
   http: ScorePlayHttp,
   method: "GET" | "POST",
@@ -51,12 +65,11 @@ async function call<S extends z.ZodType>(
   schema: S,
   opts: { query?: Record<string, string | number>; body?: unknown } = {},
 ): Promise<z.output<S>> {
-  if (!http.apiKey) throw new ScorePlayDiscoveryError("MISSING_API_KEY", "SCOREPLAY_API_KEY is not set");
-  const url = new URL(`${(http.baseUrl ?? SCOREPLAY_BASE_URL).replace(/\/+$/, "")}${path}`);
-  for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, String(v));
-  let res: Response;
-  try {
-    res = await http.fetch(url, {
+  const send = () => {
+    if (!http.apiKey) throw new ScorePlayDiscoveryError("MISSING_API_KEY", "SCOREPLAY_API_KEY is not set");
+    const url = new URL(`${(http.baseUrl ?? SCOREPLAY_BASE_URL).replace(/\/+$/, "")}${path}`);
+    for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, String(v));
+    return http.fetch(url, {
       method,
       headers: {
         "X-ScorePlay-Api-Key": http.apiKey,
@@ -67,23 +80,19 @@ async function call<S extends z.ZodType>(
       cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+  };
+  let json: unknown;
+  try {
+    ({ value: json } = await readScorePlayJson({ method, path, query: opts.query, body: opts.body }, send));
   } catch (err) {
-    throw new ScorePlayDiscoveryError("UPSTREAM_UNAVAILABLE", `ScorePlay ${method} ${path}: ${err instanceof Error ? err.message : "network error"}`);
+    if (err instanceof ScorePlayDiscoveryError) throw err;
+    if (err instanceof ScorePlayHttpError) throw new ScorePlayDiscoveryError(issueFor(err.statusCode), scorePlayReadMessage(err));
+    if (err instanceof ReplayMissError) throw new ScorePlayDiscoveryError("UPSTREAM_UNAVAILABLE", `ScorePlay ${method} ${path}: not in the demo recording (DEMO_REPLAY=true)`);
+    if (err instanceof ScorePlayInvalidResponseError) throw new ScorePlayDiscoveryError("INVALID_RESPONSE", err.message);
+    console.warn(`[pulse] ScorePlay ${method} ${path} failed:`, err instanceof Error ? err.message : err);
+    throw new ScorePlayDiscoveryError("UPSTREAM_UNAVAILABLE", `ScorePlay ${method} ${path}: network error`);
   }
-  if (!res.ok) {
-    // The response body stays in server logs; the user-visible message carries only method, path and status.
-    console.warn(`[pulse] ScorePlay ${method} ${path} → HTTP ${res.status}:`, (await res.text().catch(() => "")).slice(0, 200));
-    const code: ScorePlayIssue =
-      res.status === 401 || res.status === 403
-        ? "UNAUTHORIZED"
-        : res.status === 429
-          ? "RATE_LIMITED"
-          : res.status === 400 || res.status === 422
-            ? "BAD_REQUEST"
-            : "UPSTREAM_UNAVAILABLE";
-    throw new ScorePlayDiscoveryError(code, `ScorePlay ${method} ${path} → HTTP ${res.status}`);
-  }
-  const parsed = schema.safeParse(await res.json().catch(() => undefined));
+  const parsed = schema.safeParse(json);
   if (!parsed.success) throw new ScorePlayDiscoveryError("INVALID_RESPONSE", `ScorePlay ${method} ${path}: unexpected response shape`);
   return parsed.data;
 }

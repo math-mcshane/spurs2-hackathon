@@ -27,7 +27,7 @@ Adapted from `twelvelabs_sampleprompts` (NBA + PL rulebooks): `broadcast_source`
 - Observations are facts only; they never grant permission.
 
 ## Record / replay
-Every live response → `.cache/twelvelabs/<sha256>.json` (request + value; analyze keyed by TL video id + model/prompt key). `TWELVELABS_REPLAY=true` or a network error (no HTTP response) → recorded value with `origin: "CACHED"`; cache miss → `UPSTREAM` error. HTTP errors are never masked by cache. Pegasus output is also stored durably via Persistence's `observationCache` (falls back to memory when unavailable) and served as `CACHED`.
+Shared demo record/replay in `lib/media/replay.ts` (also used for ScorePlay reads): `scripts/record-demo-cache.ts` records real responses (redacted: URLs with a query string/fragment and token-like values removed) into the committed `demo-cache/`. `DEMO_REPLAY=true` → every read from the recording (origin `CACHED`, run-level provenance via `lib/media/provenance.ts`), a miss is an `UPSTREAM` error; otherwise live, and a network error / HTTP 429 / 5xx serves the recording of the same request when one exists. Other HTTP errors are never masked. Pegasus output is also stored durably via Persistence's `observationCache` (falls back to memory when unavailable) and served as `CACHED`. Videos longer than 60 min are refused before analyze (`TECHNICAL_LIMITATION`, cached for the process lifetime).
 
 ## Open questions for TwelveLabs staff / organizers
 1. Do the index's videos have an `asset_id` (needed for `/analyze` in SDK 1.3.6), or is legacy `video_id` analyze still accepted? (Live 2026-10-22: Pegasus analyze succeeded for video `6ad911f2960d8ea7bdd04cfe`.)

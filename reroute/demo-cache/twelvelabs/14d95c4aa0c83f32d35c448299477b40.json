@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-10-22T23:37:19.823Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "video",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911f15411fa6e602f45e4"
+  },
+  "value": {
+    "id": "6ad911f15411fa6e602f45e4",
+    "assetId": "6ad9109a4a68f3b40321d107",
+    "filename": "Slide 5 - Savio to Camera.mov",
+    "durationSec": 5.204,
+    "userMetadata": {
+      "scoreplay_event_id": "1536106",
+      "scoreplay_id": "130850887",
+      "scoreplay_rendition": "video_large",
+      "scoreplay_type": "video"
+    }
+  }
+}

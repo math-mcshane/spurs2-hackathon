@@ -1,9 +1,10 @@
 "use client";
 
-import { CheckIcon, OctagonXIcon, ShieldAlertIcon, ShieldCheckIcon, ShieldQuestionIcon, TriangleAlertIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckIcon, DatabaseIcon, Loader2Icon, OctagonXIcon, RadioIcon, ShieldAlertIcon, ShieldCheckIcon, ShieldQuestionIcon, TriangleAlertIcon } from "lucide-react";
 import { DEMO_CLEARANCE_LABEL, type Clearance } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
-import type { RightsState } from "../types";
+import type { RightsState, RunProvenance } from "../types";
 
 type Tone = "neutral" | "review" | "blocked" | "cleared" | "demo";
 
@@ -135,3 +136,74 @@ export function duration(sec: number): string {
 }
 
 export const CHANNEL_LABEL: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", x: "X" };
+
+// ---------- Long operations ----------
+
+/** One step of a long server operation, expected to start `after` seconds in (an estimate, never a server signal). */
+export type Stage = { after: number; text: string };
+
+/** Whole seconds since the calling component mounted (render it only while the operation runs). */
+function useElapsed(): number {
+  const [start] = useState(() => Date.now());
+  const [sec, setSec] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSec(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [start]);
+  return sec;
+}
+
+/**
+ * Staged progress for operations that can take 20–70 s on a cold cache: the pipeline in order, the step we
+ * expect it to be in (by elapsed time — labeled as an estimate) and the elapsed seconds.
+ */
+export function StagedProgress({ stages, note, className }: { stages: Stage[]; note?: string; className?: string }) {
+  const sec = useElapsed();
+  const current = stages.reduce((at, s, i) => (sec >= s.after ? i : at), 0);
+  return (
+    <div role="status" aria-live="polite" className={cn("space-y-1.5 rounded-lg border border-sky-500/30 bg-sky-500/[0.06] px-3 py-2.5 text-xs", className)}>
+      <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        {stages.map((s, i) => (
+          <li key={s.text} className="flex items-center gap-1.5">
+            {i > 0 && (
+              <span className="text-zinc-600" aria-hidden>
+                →
+              </span>
+            )}
+            <span className={cn("inline-flex items-center gap-1", i === current ? "font-medium text-sky-100" : i < current ? "text-zinc-400" : "text-zinc-600")}>
+              {i === current && <Loader2Icon className="size-3 animate-spin" aria-hidden />}
+              {s.text}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="font-mono text-[10px] text-zinc-500">
+        {sec} s elapsed · step shown is an estimate{note ? ` · ${note}` : ""}
+      </p>
+    </div>
+  );
+}
+
+// ---------- Data provenance ----------
+
+/** LIVE / CACHED — recorded <date> / partly cached badge for the run's `dataOrigin`. (Simulated signals never reach the Studio.) */
+export function ProvenanceBadge({ origin, className }: { origin: RunProvenance; className?: string }) {
+  const base = "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider uppercase";
+  if (origin.origin === "LIVE")
+    return (
+      <span className={cn(base, "border-sky-500/50 bg-sky-500/10 text-sky-300", className)} title="Fetched live from ScorePlay and TwelveLabs for this run">
+        <RadioIcon className="size-3" aria-hidden /> Live data
+      </span>
+    );
+  const when = origin.recordedAt
+    ? ` — recorded ${new Date(origin.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}`
+    : "";
+  return (
+    <span
+      className={cn(base, "border-zinc-500/60 bg-zinc-500/10 text-zinc-200", className)}
+      title="Replayed from a recorded ScorePlay / TwelveLabs response, not fetched live for this run"
+    >
+      <DatabaseIcon className="size-3" aria-hidden /> {origin.origin === "MIXED" ? `Partly cached${when}` : `Cached${when}`}
+    </span>
+  );
+}

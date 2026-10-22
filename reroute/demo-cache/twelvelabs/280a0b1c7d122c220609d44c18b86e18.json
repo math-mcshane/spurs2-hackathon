@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-22T23:36:54.314Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "analyze",
+    "modelKey": "pegasus1.6:d98df822a16038614d116aa864379da5",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911f765b4aff96dc7bb5e"
+  },
+  "value": {
+    "data": "{\"observations\":[{\"category\":\"sponsor_brand\",\"confidence\":0.95,\"description\":\"The text 'COYS' appears in the bottom left corner of the frame as part of the edited overlay.\",\"end_time\":13.8,\"entity\":\"COYS\",\"start_time\":0.0},{\"category\":\"onscreen_graphic\",\"confidence\":0.95,\"description\":\"A small Tottenham Hotspur cockerel logo watermark is visible in the bottom right corner of the frame.\",\"end_time\":13.8,\"entity\":\"Spurs logo watermark\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.9,\"description\":\"A player wearing jersey number 17 is visible in the huddle on the left side of the split screen.\",\"end_time\":13.8,\"entity\":\"Player #17\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.9,\"description\":\"A player wearing jersey number 3 is visible in the huddle on the left side of the split screen.\",\"end_time\":13.8,\"entity\":\"Player #3\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.85,\"description\":\"A player wearing jersey number 8 is partially visible in the huddle on the left side of the split screen.\",\"end_time\":13.8,\"entity\":\"Player #8\",\"start_time\":0.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"group\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"This 13.8-second clip shows a split-screen view of a football match. On the left, a group of players in dark blue kits are huddled together on the pitch; jersey numbers 17, 3, and 8 are visible. On the right, a crowd of spectators is shown in the stands. The clip contains no live broadcast scorebug or network bug, presenting as a clean feed. However, it includes edited overlays: the text 'COYS' in the bottom left and a small Tottenham Hotspur logo watermark in the bottom right. No gambling brands are visible. Rights questions arise regarding the edited graphics ('COYS' and the Spurs logo) which are not part of the original live broadcast feed, and the identification of players by jersey number only.\"}",
+    "finishReason": "stop"
+  }
+}

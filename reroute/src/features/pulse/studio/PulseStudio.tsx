@@ -19,15 +19,58 @@ import { Proposal } from "./Proposal";
 import { ReceiptView } from "./Receipt";
 import { ReviewStage } from "./Review";
 import { AnotherWay, VerdictPanel, type VerdictBusy } from "./Verdict";
-import { STEPS, StepHeading, Stepper, type StepKey, type StepState } from "./parts";
+import { CHANNEL_LABEL, ProvenanceBadge, STEPS, StagedProgress, StepHeading, Stepper, type Stage, type StepKey, type StepState } from "./parts";
 
-/** The two hackathon scenarios, one click each. */
+/** The product promise, shown until a goal is run. */
+const PROMISE = "Turn business objectives into actionable, rights-aware sports media campaigns.";
+
+/** One-click demo goals per club: the two flagship scenarios + a market the demo policy does not license. */
 const EXAMPLES: Record<Club, string[]> = {
-  tottenham: ["Promote Tottenham merchandise to UK supporters", "Maximize global engagement from the Manchester United game"],
+  tottenham: [
+    "Promote Tottenham merchandise to UK supporters",
+    "Maximize global engagement from the Manchester United game",
+    "Sell more Spurs jerseys in Mexico",
+  ],
   spurs: ["Sell Spurs jerseys in Mexico using the best moments from the Kings game"],
 };
 
 type Busy = null | "load" | "run" | "draft" | "rights" | "alternatives" | "remedy" | "submit" | `select:${string}` | `alt:${string}`;
+
+/** What a long action is doing, in order (shown with elapsed seconds; cold caches take 20–70 s). */
+const PROGRESS: Partial<Record<string, { stages: Stage[]; note?: string }>> = {
+  run: {
+    stages: [
+      { after: 0, text: "Reading the goal" },
+      { after: 1, text: "Searching the ScorePlay library" },
+      { after: 3, text: "Asking TwelveLabs for matching moments" },
+      { after: 8, text: "Ranking moments & drafting the proposal" },
+    ],
+  },
+  rights: {
+    stages: [
+      { after: 0, text: "Reading ScorePlay metadata" },
+      { after: 2, text: "Analysing the clip with TwelveLabs" },
+      { after: 20, text: "Applying the rights policy to every channel × territory" },
+    ],
+    note: "a first analysis of a clip can take up to ~70 s; recorded results return in seconds",
+  },
+  alternatives: {
+    stages: [
+      { after: 0, text: "Classifying what blocks the campaign" },
+      { after: 2, text: "Searching comparable footage" },
+      { after: 8, text: "Re-checking each candidate independently" },
+    ],
+    note: "each candidate gets its own REROUTE check; this can take up to ~70 s",
+  },
+  alt: {
+    stages: [
+      { after: 0, text: "Saving a new campaign version" },
+      { after: 1, text: "Re-checking the replacement with REROUTE" },
+    ],
+  },
+  remedy: { stages: [{ after: 0, text: "Limiting the campaign to its licensed uses" }, { after: 1, text: "Saving a new campaign version" }] },
+  submit: { stages: [{ after: 0, text: "Creating the audit receipt" }, { after: 1, text: "Recording the audit event" }] },
+};
 
 /** Optimistic-concurrency rejection: the run changed elsewhere (another tab/reviewer). Retrying would fail again. */
 function isConflict(error: unknown): boolean {
@@ -77,6 +120,8 @@ export function PulseStudio() {
   const [signInOpen, setSignInOpen] = useState(false);
   const { session, setSession, error: sessionError, refresh: refreshSession } = useReviewerSession();
   const scrollTo = useRef<StepKey | null>(null);
+  /** Synchronous lock: a second click before the disabled state renders must not send a second request. */
+  const inflight = useRef(false);
 
   useEffect(() => {
     if (!scrollTo.current) return;
@@ -115,6 +160,8 @@ export function PulseStudio() {
   }, [load]);
 
   async function act(body: GoalAction, kind: Exclude<Busy, null>, done?: (g: GoalView) => void) {
+    if (inflight.current) return;
+    inflight.current = true;
     setBusy(kind);
     setFailure(null);
     try {
@@ -133,6 +180,7 @@ export function PulseStudio() {
       // A refused action may still have recorded something (e.g. a fresh verdict): show the server's state.
       if (goal && body.action !== "run") await pulseApi.goal(goal.run.id).then((g) => g && setGoal(g), () => undefined);
     } finally {
+      inflight.current = false;
       setBusy(null);
     }
   }
@@ -155,16 +203,18 @@ export function PulseStudio() {
   const at = currentStep(goal);
   const states = Object.fromEntries(STEPS.map((s, i) => [s.key, (i < at ? "done" : i === at ? "current" : "todo") as StepState])) as Record<StepKey, StepState>;
   const locked = busy !== null;
+  const progress = busy ? PROGRESS[busy.startsWith("alt:") ? "alt" : busy] : undefined;
+  const rightsBusy = busy === "rights" || busy === "alternatives" || busy === "remedy" || busy?.startsWith("alt:");
 
   return (
     <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.08),transparent_60%)]">
       <header className="sticky top-0 z-30 border-b border-white/8 bg-zinc-950/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
-          <div className="flex items-baseline gap-3">
+          <div className="flex min-w-0 items-baseline gap-3">
             <span className="font-mono text-base font-black tracking-[0.25em] text-zinc-50">
               PU<span className="text-sky-400">●</span>LSE <span className="text-zinc-600">×</span> RE<span className="text-red-500">●</span>ROUTE
             </span>
-            <span className="hidden text-xs text-zinc-400 lg:inline">From a business goal to a rights-checked campaign.</span>
+            <span className="hidden truncate text-xs text-zinc-400 lg:inline">{PROMISE}</span>
           </div>
           <div className="flex items-center gap-3">
             <ReviewerControl session={session} onSignIn={() => setSignInOpen(true)} onSignedOut={setSession} />
@@ -217,6 +267,7 @@ export function PulseStudio() {
 
         {/* 1 · Goal */}
         <section aria-labelledby="s-goal-title" className="space-y-3">
+          {!goal && busy !== "load" && <PromiseHero />}
           <StepHeading id="s-goal" n={1} active={at === 0} title="What do you want to achieve?" sub="Describe the business objective — market, product, match. PULSE finds real footage for it." />
           <form
             className="space-y-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4"
@@ -241,15 +292,16 @@ export function PulseStudio() {
               className="w-full resize-none rounded-lg border border-input bg-input/30 px-3 py-2 text-base text-zinc-50 outline-none placeholder:text-zinc-600 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Example objectives">
-              <span className="text-[11px] text-zinc-500">Try:</span>
+              <span className="text-[11px] text-zinc-500">Try one:</span>
               {EXAMPLES[club].map((ex) => (
                 <button
                   key={ex}
                   type="button"
+                  disabled={locked}
                   onClick={() => setText(ex)}
                   aria-pressed={text === ex}
                   className={cn(
-                    "max-w-full rounded-full border px-3 py-1 text-left text-xs transition-colors",
+                    "max-w-full rounded-full border px-3 py-1 text-left text-xs transition-colors disabled:opacity-50",
                     text === ex ? "border-sky-400 bg-sky-500/15 text-sky-100" : "border-white/15 text-zinc-300 hover:border-sky-500/50 hover:text-sky-200",
                   )}
                 >
@@ -265,6 +317,7 @@ export function PulseStudio() {
                 <select
                   id="goal-club"
                   value={club}
+                  disabled={locked}
                   onChange={(e) => setClub(e.target.value === "spurs" ? "spurs" : "tottenham")}
                   className="h-8 rounded-lg border border-input bg-input/30 px-2 text-xs"
                 >
@@ -275,15 +328,17 @@ export function PulseStudio() {
                   ))}
                 </select>
               </div>
-              <Button type="submit" size="lg" className="sm:ml-auto" disabled={locked || text.trim().length < 3}>
+              <Button
+                type="submit"
+                size="lg"
+                className="sm:ml-auto"
+                disabled={locked || text.trim().length < 3}
+                title={text.trim().length < 3 ? "Type a business objective or pick an example first" : undefined}
+              >
                 {busy === "run" ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />} Find the best moments
               </Button>
             </div>
-            {busy === "run" && (
-              <p role="status" className="text-xs text-sky-300">
-                Searching the {CLUBS[club].label} library in ScorePlay and asking TwelveLabs for moments that serve this goal…
-              </p>
-            )}
+            {busy === "run" && progress && <StagedProgress stages={progress.stages} note={progress.note} />}
           </form>
           {goal && <Understood goal={goal} />}
         </section>
@@ -311,7 +366,16 @@ export function PulseStudio() {
               n={2}
               active={at === 1}
               title={goal.recommendations.length ? `${goal.recommendations.length} real moments for this goal` : "No moment found"}
-              sub={goal.recommendations.length ? "Each preview plays the exact TwelveLabs timestamp from the authorized stream. Pick the one to build on." : goal.run.search.message}
+              sub={
+                goal.recommendations.length ? (
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span>Each preview plays the exact TwelveLabs timestamp from the authorized stream. Pick the one to build on.</span>
+                    {goal.dataOrigin && <ProvenanceBadge origin={goal.dataOrigin} />}
+                  </span>
+                ) : (
+                  goal.run.search.message
+                )
+              }
             />
             {goal.recommendations.length === 0 ? (
               <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
@@ -370,7 +434,18 @@ export function PulseStudio() {
         {/* 4 · Rights */}
         {goal?.campaign && id && (
           <section aria-labelledby="s-rights" className="space-y-4">
-            <StepHeading id="s-rights" n={4} active={at === 3} title="Rights" sub="Decided by REROUTE from ScorePlay metadata and the applicable policy. AI observations are evidence, never a licence." />
+            <StepHeading
+              id="s-rights"
+              n={4}
+              active={at === 3}
+              title="Rights"
+              sub={
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>Decided by REROUTE from ScorePlay metadata and the applicable policy. AI observations are evidence, never a licence.</span>
+                  {goal.dataOrigin && <ProvenanceBadge origin={goal.dataOrigin} />}
+                </span>
+              }
+            />
             <VerdictPanel
               rights={goal.rights}
               busy={busy === "rights" || busy === "alternatives" ? busy : null}
@@ -378,6 +453,7 @@ export function PulseStudio() {
               onCheck={() => void act({ action: "checkRights", id, expectedVersion: v }, "rights")}
               onFindAnotherWay={() => void act({ action: "findAlternatives", id, expectedVersion: v }, "alternatives")}
             />
+            {rightsBusy && progress && <StagedProgress stages={progress.stages} note={progress.note} />}
             <AnotherWay
               goal={goal}
               busy={busy === "remedy" || busy?.startsWith("alt:") ? (busy as VerdictBusy) : null}
@@ -405,6 +481,7 @@ export function PulseStudio() {
               onSignIn={() => setSignInOpen(true)}
               onReviewed={refresh}
             />
+            {busy === "submit" && progress && <StagedProgress stages={progress.stages} />}
           </section>
         )}
 
@@ -446,6 +523,29 @@ export function PulseStudio() {
   );
 }
 
+/** Empty state: the product promise and the journey in one line each, so nobody needs instructions. */
+function PromiseHero() {
+  return (
+    <div className="space-y-2 pb-2">
+      <h1 className="max-w-3xl text-2xl leading-tight font-semibold text-balance text-zinc-50 sm:text-3xl">{PROMISE}</h1>
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-400 sm:text-sm">
+        <li>
+          <span className="font-medium text-sky-200">One goal</span>
+        </li>
+        <li aria-hidden>→</li>
+        <li>
+          <span className="font-medium text-sky-200">three real moments</span> from the ScorePlay library, found by TwelveLabs
+        </li>
+        <li aria-hidden>→</li>
+        <li>
+          <span className="font-medium text-sky-200">one campaign</span> checked by REROUTE for every channel × territory
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+/** What PULSE read from the goal and what REROUTE will be asked — unknowns are shown, never guessed. */
 function Understood({ goal }: { goal: GoalView }) {
   const o = goal.run.objective;
   const p = goal.run.plan;
@@ -457,13 +557,22 @@ function Understood({ goal }: { goal: GoalView }) {
     ["KPI", o.kpi],
   ];
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <span className="text-[11px] text-zinc-500">PULSE understood:</span>
-      {chips.map(([label, value]) => (
-        <span key={label} className={cn("rounded-full border px-2.5 py-0.5", value ? "border-white/10 text-zinc-200" : "border-amber-500/40 text-amber-300")}>
-          <span className="text-zinc-500">{label}:</span> {value ?? "not stated"}
-        </span>
-      ))}
+    <div className="space-y-2 rounded-xl border border-white/8 bg-zinc-950/40 px-4 py-3 text-xs">
+      <div className="text-[10px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">What PULSE understood</div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {chips.map(([label, value]) => (
+          <span key={label} className={cn("max-w-full rounded-full border px-2.5 py-0.5 break-words", value ? "border-white/10 text-zinc-200" : "border-amber-500/40 text-amber-300")}>
+            <span className="text-zinc-500">{label}:</span> {value ?? "not stated"}
+          </span>
+        ))}
+      </div>
+      <p className="text-zinc-400">
+        REROUTE will check{" "}
+        <span className="text-zinc-200">
+          {p.usage.toLowerCase()} use on {p.channels.map((ch) => CHANNEL_LABEL[ch] ?? ch).join(", ")} × {p.territories.join(", ")}
+        </span>{" "}
+        — {p.channels.length * p.territories.length} uses, each decided separately.
+      </p>
     </div>
   );
 }

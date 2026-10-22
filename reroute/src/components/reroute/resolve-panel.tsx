@@ -1,14 +1,16 @@
 "use client";
 
-import { FilmIcon, Loader2Icon, RouteIcon, Undo2Icon } from "lucide-react";
-import type { Candidate, ResolveResponseSchema } from "@/lib/contracts";
-import type { z } from "zod";
+import { FilmIcon, Loader2Icon, RouteIcon, Undo2Icon, WandSparklesIcon } from "lucide-react";
+import type { Candidate, Usage } from "@/lib/contracts";
+import type { ResolveView } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ErrorState, OriginBadge, VerdictBadge, tcRange } from "./shared";
 
-export type ResolveResult = z.infer<typeof ResolveResponseSchema>;
+export type ResolveResult = ResolveView;
+/** The single-intent change the desk applies for a remedy: the first licensed value of each restricted field. */
+export type RemedyPatch = { territory?: string; platform?: string; usage?: Usage };
 export type ResolveState =
   | { status: "idle" }
   | { status: "loading"; segmentIndex: number }
@@ -21,6 +23,7 @@ export function ResolvePanel({
   appliedEditId,
   onResolve,
   onApply,
+  onApplyRemedy,
   onRevert,
 }: {
   /** Index of the first BLOCKED or NEEDS_REVIEW segment of the active edit, or null when every segment is ALLOWED. */
@@ -29,11 +32,12 @@ export function ResolvePanel({
   appliedEditId: string | null;
   onResolve: (segmentIndex: number) => void;
   onApply: (c: Candidate) => void;
+  onApplyRemedy: (patch: RemedyPatch) => void;
   onRevert: () => void;
 }) {
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           size="sm"
@@ -56,6 +60,12 @@ export function ResolvePanel({
         )}
       </div>
 
+      {state.status === "loading" && (
+        <p role="status" className="text-[11px] text-sky-200">
+          Classifying the blocker → searching comparable footage in TwelveLabs → re-checking each candidate independently… (up to ~70 s on a cold cache)
+        </p>
+      )}
+
       {state.status === "error" && <ErrorState error={state.error} service="TwelveLabs" />}
 
       {state.status === "done" && (
@@ -64,10 +74,7 @@ export function ResolvePanel({
             <span className="font-mono text-[10px] text-zinc-500">{state.res.blocker.scope} restriction</span> · {state.res.blocker.explanation}
           </p>
           {state.res.blocker.scope === "CAMPAIGN" ? (
-            <p role="note" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              Another clip would hit the same restriction — change the intent instead.
-              {state.res.blocker.suggestion && <strong className="block">{state.res.blocker.suggestion}</strong>}
-            </p>
+            <CampaignRemedy res={state.res} onApply={onApplyRemedy} />
           ) : (
             <>
               <p className="font-mono text-[10px] text-zinc-500">
@@ -92,6 +99,35 @@ export function ResolvePanel({
             ))}
           </ul>
         </>
+      )}
+    </div>
+  );
+}
+
+/** CAMPAIGN blocker: another clip fails the same way. Shows REROUTE's licensed subset and applies it to the intent. */
+function CampaignRemedy({ res, onApply }: { res: ResolveResult; onApply: (patch: RemedyPatch) => void }) {
+  const r = res.remedy;
+  const patch: RemedyPatch = { territory: r?.territories?.[0], platform: r?.platforms?.[0], usage: r?.usage };
+  const parts = [
+    r?.territories?.length && `territory ${r.territories.join(" / ")}`,
+    r?.platforms?.length && `channel ${r.platforms.join(" / ")}`,
+    r?.usage && `${r.usage.toLowerCase()} use`,
+  ].filter(Boolean);
+  return (
+    <div role="note" className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+      <p>Another clip would hit the same restriction — change the intent instead.</p>
+      {res.blocker.suggestion && <p className="font-medium">{res.blocker.suggestion}</p>}
+      {parts.length > 0 ? (
+        <>
+          <p>
+            REROUTE&apos;s licensed path: <strong>{parts.join(" · ")}</strong>
+          </p>
+          <Button type="button" size="sm" onClick={() => onApply(patch)}>
+            <WandSparklesIcon /> Apply to intent &amp; re-check
+          </Button>
+        </>
+      ) : (
+        <p className="font-medium">No licensed path for this intent — request a licence.</p>
       )}
     </div>
   );

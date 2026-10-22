@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaRef, MediaResolver } from "@/lib/contracts";
+import type * as Replay from "@/lib/media/replay";
 import { TwelveLabsVideoIntelligence, memoryObservationStore } from "./client";
 
 const sdk = vi.hoisted(() => ({
@@ -15,11 +16,12 @@ vi.mock("twelvelabs-js", () => ({
     analyze = sdk.analyze;
   },
 }));
-// Pass-through record/replay cache: no disk I/O in unit tests.
-vi.mock("./cache", () => ({
-  cacheKey: () => "k",
-  recorded: async <T>(_req: unknown, live: () => Promise<T>) => ({ value: await live(), origin: "LIVE" as const }),
-}));
+// Pass-through demo replay: no disk I/O in unit tests (lib/media/replay.test.ts covers replay itself).
+vi.mock("@/lib/media/replay", async (importOriginal) => {
+  const actual = await importOriginal<typeof Replay>();
+  const replayable = async (_source: string, _req: unknown, live: () => Promise<unknown>) => ({ value: await live(), origin: "LIVE" as const });
+  return { ...actual, replayable };
+});
 
 const ref = (sp: string | null, tl: string | undefined, method: MediaRef["method"]): MediaRef => ({
   scoreplayMediaId: sp,
@@ -114,5 +116,21 @@ describe("TwelveLabsVideoIntelligence.observations", () => {
     const again = await c.observations(ref("130851417", "tl-1", "FILENAME_DURATION"));
     expect(sdk.analyze).toHaveBeenCalledTimes(1);
     expect(again.every((e) => e.origin === "CACHED")).toBe(true);
+  });
+
+  it("refuses videos over 60 min up front (TECHNICAL_LIMITATION), permanently, without calling analyze", async () => {
+    const c = client();
+    const full = { ...ref("130851361", "tl-full", "FILENAME_DURATION"), match: { twelvelabsDurationSec: 6335 } };
+    const limitation = { code: "UPSTREAM", message: expect.stringMatching(/^TECHNICAL_LIMITATION: video too long for analysis \(>60 min; 6335 s\)/) };
+    await expect(c.observations(full)).rejects.toMatchObject(limitation);
+    expect(sdk.videoRetrieve).not.toHaveBeenCalled();
+
+    // Duration unknown on the ref: read from the video, then never asked again.
+    sdk.videoRetrieve.mockResolvedValue({ id: "tl-long", assetId: "asset-long", systemMetadata: { duration: 6335 } });
+    const long = ref("130851999", "tl-long", "FILENAME_DURATION");
+    await expect(c.observations(long)).rejects.toMatchObject(limitation);
+    await expect(c.observations(long)).rejects.toMatchObject(limitation);
+    expect(sdk.videoRetrieve).toHaveBeenCalledTimes(1);
+    expect(sdk.analyze).not.toHaveBeenCalled();
   });
 });

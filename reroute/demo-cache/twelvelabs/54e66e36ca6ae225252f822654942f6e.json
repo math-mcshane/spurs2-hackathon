@@ -1,0 +1,159 @@
+{
+  "recordedAt": "2026-10-22T23:37:18.190Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "moments",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "query": "fans in the stands celebrating in football shirts and scarves",
+    "limit": 12,
+    "searchOptions": [
+      "visual"
+    ],
+    "videoIds": [
+      "6ad911e00ca748ea3c0aa5dc",
+      "6ad911e09c038876f358af94",
+      "6ad911e165b4aff96dc7bac4",
+      "6ad911e24a68f3b40321d5f2",
+      "6ad911e365b4aff96dc7bacd",
+      "6ad911e40ca748ea3c0aa5f2",
+      "6ad911e5500e82756f2eb4d6",
+      "6ad911e59c038876f358afb4",
+      "6ad911e60ca748ea3c0aa5fd",
+      "6ad911e6960d8ea7bdd04cba",
+      "6ad911e765b4aff96dc7baeb",
+      "6ad911e865b4aff96dc7baf2",
+      "6ad911e9500e82756f2eb4eb",
+      "6ad911ea030b76724d136dfb",
+      "6ad911ea9c038876f358afcf",
+      "6ad911eb500e82756f2eb4ff",
+      "6ad911ec2cc348c0bd2011ef",
+      "6ad911ec960d8ea7bdd04cd3",
+      "6ad911ed2cc348c0bd2011f2",
+      "6ad911ee2cc348c0bd2011f7",
+      "6ad911ef500e82756f2eb512",
+      "6ad911ef65b4aff96dc7bb23",
+      "6ad911f0960d8ea7bdd04ced",
+      "6ad911f15411fa6e602f45e4",
+      "6ad911f165b4aff96dc7bb2f",
+      "6ad911f2960d8ea7bdd04cfe",
+      "6ad911f32cc348c0bd20121c",
+      "6ad911f365b4aff96dc7bb3e",
+      "6ad911f4968fe117efe70655",
+      "6ad911f49c038876f358b01a",
+      "6ad911f55411fa6e602f45f7",
+      "6ad911f60ca748ea3c0aa65d",
+      "6ad911f665b4aff96dc7bb4b",
+      "6ad911f765b4aff96dc7bb5e",
+      "6ad911f79c038876f358b02f",
+      "6ad911f85411fa6e602f4610",
+      "6ad911f8960d8ea7bdd04d32",
+      "6ad911f95411fa6e602f4621",
+      "6ad911f9960d8ea7bdd04d3e",
+      "6ad911fa4a68f3b40321d6aa",
+      "6ad911fa65b4aff96dc7bb70",
+      "6ad911fb500e82756f2eb574",
+      "6ad911fb65b4aff96dc7bb78",
+      "6ad911fc0ca748ea3c0aa687",
+      "6ad911fd2cc348c0bd20125c",
+      "6ad911fd968fe117efe70691",
+      "6ad911fe0ca748ea3c0aa69a",
+      "6ad911fe5411fa6e602f4640",
+      "6ad911ff0ca748ea3c0aa69d",
+      "6ad91200968fe117efe706a5",
+      "6ad912012cc348c0bd201279",
+      "6ad9120265b4aff96dc7bbb2",
+      "6ad91202968fe117efe706ae",
+      "6ad912039c038876f358b092",
+      "6ad912040ca748ea3c0aa6bd",
+      "6ad912052cc348c0bd201298",
+      "6ad912059c038876f358b09a",
+      "6ad91206968fe117efe706d1"
+    ]
+  },
+  "value": [
+    {
+      "videoId": "6ad911f2960d8ea7bdd04cfe",
+      "start": 0,
+      "end": 5.732999801635742,
+      "rank": 1,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911fd2cc348c0bd20125c",
+      "start": 0,
+      "end": 6.933000087738037,
+      "rank": 2,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911ea030b76724d136dfb",
+      "start": 13.39992618560791,
+      "end": 19.06656265258789,
+      "rank": 3,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 10.53327465057373,
+      "end": 16.999906539916992,
+      "rank": 4,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 39.399784088134766,
+      "end": 45.13308334350586,
+      "rank": 5,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911f0960d8ea7bdd04ced",
+      "start": 0,
+      "end": 10.065999984741211,
+      "rank": 6,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 53.066375732421875,
+      "end": 60.0333251953125,
+      "rank": 7,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911f765b4aff96dc7bb5e",
+      "start": 0,
+      "end": 13.866000175476074,
+      "rank": 8,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911e365b4aff96dc7bacd",
+      "start": 6.86651611328125,
+      "end": 14.666345596313477,
+      "rank": 9,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911e365b4aff96dc7bacd",
+      "start": 22.799501419067383,
+      "end": 30.465999603271484,
+      "rank": 10,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911f60ca748ea3c0aa65d",
+      "start": 0,
+      "end": 13.665871620178223,
+      "rank": 11,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    },
+    {
+      "videoId": "6ad911ee2cc348c0bd2011f7",
+      "start": 9.999500274658203,
+      "end": 19.999000549316406,
+      "rank": 12,
+      "query": "fans in the stands celebrating in football shirts and scarves"
+    }
+  ]
+}

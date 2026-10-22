@@ -22,7 +22,7 @@ import { ObservationForm, SegmentEditor } from "./edit-controls";
 import { IntentForm, type IntentDraft } from "./intent-form";
 import { ReceiptPanel } from "./receipt-panel";
 import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "./reviewer";
-import { ResolvePanel, type ResolveState } from "./resolve-panel";
+import { ResolvePanel, type RemedyPatch, type ResolveState } from "./resolve-panel";
 import { ErrorState, OriginBadge, Panel, PanelTitle, VerdictBadge, tc } from "./shared";
 import { VerdictCard, type AccessState } from "./verdict-card";
 
@@ -228,6 +228,17 @@ export function RerouteApp() {
   function patchIntent(patch: Partial<IntentDraft>) {
     invalidate();
     setIntent((i) => ({ ...i, ...patch }));
+  }
+
+  /** Apply REROUTE's CAMPAIGN remedy to the intent; the verdict re-runs for the new intent. */
+  function applyRemedy(patch: RemedyPatch) {
+    const next: Partial<IntentDraft> = {};
+    if (patch.territory) next.territory = patch.territory;
+    if (patch.platform) next.platform = patch.platform;
+    if (patch.usage) next.usage = patch.usage;
+    patchIntent(next);
+    setResolve({ status: "idle" });
+    toast.info("Intent limited to REROUTE's licensed path — re-checking.");
   }
 
   function patchSegment(index: number, patch: { start?: number; end?: number }) {
@@ -530,6 +541,7 @@ export function RerouteApp() {
               appliedEditId={proposed?.id ?? null}
               onResolve={runResolve}
               onApply={applyCandidate}
+              onApplyRemedy={applyRemedy}
               onRevert={revert}
             />
           </Panel>

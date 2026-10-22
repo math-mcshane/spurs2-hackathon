@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-10-22T23:37:19.846Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "video",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911ef500e82756f2eb512"
+  },
+  "value": {
+    "id": "6ad911ef500e82756f2eb512",
+    "assetId": "6ad9109b968fe117efe7009f",
+    "filename": "Slide 2 -Players Out for Warm Ups.mov",
+    "durationSec": 9.577,
+    "userMetadata": {
+      "scoreplay_event_id": "1536106",
+      "scoreplay_id": "130850884",
+      "scoreplay_rendition": "video_large",
+      "scoreplay_type": "video"
+    }
+  }
+}

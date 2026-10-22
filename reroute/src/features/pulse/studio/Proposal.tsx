@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLinkIcon, GaugeIcon, Loader2Icon, TimerIcon, TriangleAlertIcon } from "lucide-react";
+import { ExternalLinkIcon, GaugeIcon, Loader2Icon, PlugZapIcon, TimerIcon, TriangleAlertIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,7 +136,7 @@ function Cta({ campaign: c, busy, onSetDestination }: { campaign: Campaign; busy
             Club-approved destination link (https)
           </Label>
           <Input id="cta-url" type="url" pattern="https://.*" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://… club store link" />
-          <Button type="submit" variant="outline" disabled={busy || !url.trim()}>
+          <Button type="submit" variant="outline" disabled={busy || !url.trim()} title={!url.trim() ? "Paste a club-approved https link first" : undefined}>
             {busy && <Loader2Icon className="animate-spin" />}
             {c.cta.destination ? "Replace link" : "Add link"}
           </Button>
@@ -154,10 +154,10 @@ function Metrics({ goal }: { goal: GoalView }) {
           <GaugeIcon className="size-3.5" aria-hidden /> Primary KPI
         </div>
         <div className="mt-1 text-sm font-medium text-zinc-100">{goal.kpi.label}</div>
-        <div className="mt-1 font-mono text-2xl text-zinc-500" aria-label="No measured value yet">
-          —
-        </div>
-        <p className="text-[11px] text-zinc-500">{goal.kpi.note}</p>
+        <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-800/40 px-2 py-1 text-sm font-medium text-zinc-200">
+          <PlugZapIcon className="size-4 shrink-0 text-zinc-400" aria-hidden /> {goal.kpi.valueText}
+        </p>
+        <p className="mt-1 text-[11px] text-zinc-500">{goal.kpi.note}</p>
       </div>
       <div className="rounded-xl border border-white/10 bg-zinc-950/60 p-4">
         <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.16em] text-zinc-500 uppercase">

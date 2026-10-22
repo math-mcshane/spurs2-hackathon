@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { isEvidenceLinkable, type EditPlan, type MediaRef, type PublishIntent, type ResolveRequestSchema, type ResolveResponseSchema } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { getMediaResolver, previewFor } from "@/lib/media";
+import { mergeProvenance, trackProvenance } from "@/lib/media/provenance";
 import { decideCampaign, type CampaignDecision } from "@/lib/server/decide";
 import { alternatives, campaigns, evaluations, events, goalRuns } from "@/lib/server/repositories";
 import { resolve } from "@/lib/server/resolver";
@@ -11,7 +12,7 @@ import { CLUBS } from "../clubs";
 import { configuredDestination, onClubDomain } from "../commerce";
 import { buildGoalCampaign, editFor, proposedPublishAt } from "../goal-campaign";
 import { goalPlan, parseMatch } from "../goal-intents";
-import { buildGoalView, latestEvaluation } from "../goal-view";
+import { buildGoalView, latestEvaluation, noLicenceReason, scopeRemedy } from "../goal-view";
 import { clock } from "../moment-ranking";
 import { PRODUCTS, parseObjective } from "../objective-parser";
 import type {
@@ -26,6 +27,7 @@ import type {
   GoalView,
   Preview,
   Recommendation,
+  RunProvenance,
 } from "../types";
 import { searchGoal, type GoalSearch } from "./goal-search";
 
@@ -78,9 +80,19 @@ async function load(target: GoalTarget): Promise<GoalRun> {
   return run;
 }
 
-/** Writes only if nobody else wrote since `version` was read; returns the run and its new version. */
-async function save(id: string, version: number, mutate: (run: GoalRun) => void): Promise<{ run: GoalRun; version: number }> {
-  const run = await goalRuns.update(id, mutate, version);
+/**
+ * Writes only if nobody else wrote since `version` was read; returns the run and its new version.
+ * `provenance` = where the upstream reads of this action came from (merged into the run's `dataOrigin`).
+ */
+async function save(id: string, version: number, mutate: (run: GoalRun) => void, provenance?: RunProvenance): Promise<{ run: GoalRun; version: number }> {
+  const run = await goalRuns.update(
+    id,
+    (r) => {
+      mutate(r);
+      if (provenance) r.dataOrigin = mergeProvenance(r.dataOrigin, provenance);
+    },
+    version,
+  );
   return { run, version: version + 1 };
 }
 
@@ -212,7 +224,7 @@ export async function runGoal(goal: string, club: Club, deps: GoalDeps = default
     );
   }
   const match = parseMatch(goal);
-  const found = await deps.search({ club, objective, match });
+  const { value: found, provenance } = await trackProvenance(() => deps.search({ club, objective, match }));
   const run: GoalRun = {
     id: `goal-${randomUUID()}`,
     schemaVersion: 2,
@@ -226,6 +238,7 @@ export async function runGoal(goal: string, club: Club, deps: GoalDeps = default
     adopted: [],
     evaluations: [],
     alternatives: [],
+    ...(provenance ? { dataOrigin: provenance } : {}),
   };
   await goalRuns.create(run);
   await events.append({
@@ -293,10 +306,15 @@ export async function draftGoalCampaign(target: GoalTarget, commerceUrl: string 
 export async function checkGoalRights(target: GoalTarget, deps: GoalDeps = defaultDeps): Promise<GoalView> {
   const run = await load(target);
   const campaign = currentCampaign(run);
-  const evaluation = await evaluate(run, campaign, campaign.origin === "ALTERNATIVE" ? "ALTERNATIVE" : "ORIGINAL", deps);
-  const saved = await save(run.id, target.expectedVersion, (r) => {
-    r.evaluations.push(evaluation);
-  });
+  const { value: evaluation, provenance } = await trackProvenance(() => evaluate(run, campaign, campaign.origin === "ALTERNATIVE" ? "ALTERNATIVE" : "ORIGINAL", deps));
+  const saved = await save(
+    run.id,
+    target.expectedVersion,
+    (r) => {
+      r.evaluations.push(evaluation);
+    },
+    provenance,
+  );
   return present(saved.run, saved.version, deps);
 }
 
@@ -314,35 +332,42 @@ export async function findAlternatives(target: GoalTarget, deps: GoalDeps = defa
 
   const rec = momentOf(run, latest.key);
   const use = blockingUse(latest);
-  const result = await deps.resolve({
-    edit: latest.edit,
-    intent: use.intent,
-    intents: latest.perIntent.map((p) => p.intent),
-    segmentIndex: 0,
-    query: rec.matches[0]?.query,
-    limit: ALTERNATIVES,
+  const {
+    value: { result, candidates },
+    provenance,
+  } = await trackProvenance(async () => {
+    const result = await deps.resolve({
+      edit: latest.edit,
+      intent: use.intent,
+      intents: latest.perIntent.map((p) => p.intent),
+      segmentIndex: 0,
+      query: rec.matches[0]?.query,
+      limit: ALTERNATIVES,
+    });
+    const candidates: AlternativeCandidate[] =
+      result.blocker.scope === "CAMPAIGN"
+        ? []
+        : await Promise.all(
+            result.candidates.map(async (c) => {
+              const seg = c.proposedEdit.segments[0];
+              const media = await deps.resolveMedia(seg.scoreplayMediaId, run.club);
+              return {
+                key: `${seg.scoreplayMediaId}@${seg.start}-${seg.end}`,
+                hit: c.hit,
+                segment: seg,
+                verdict: c.editDecision.decision.verdict,
+                clearance: c.editDecision.decision.clearance,
+                eligible: c.eligible,
+                reasons: c.editDecision.decision.reasons.filter((r) => r.outcome !== "PERMIT").map(({ dimension, outcome, explanation }) => ({ dimension, outcome, explanation })),
+                title: media.match?.scoreplayFilename ?? `ScorePlay asset ${seg.scoreplayMediaId}`,
+                media,
+                thumbnailUrl: c.hit.thumbnailUrl,
+              };
+            }),
+          );
+    return { result, candidates };
   });
   const campaignScoped = result.blocker.scope === "CAMPAIGN";
-  const candidates: AlternativeCandidate[] = campaignScoped
-    ? []
-    : await Promise.all(
-        result.candidates.map(async (c) => {
-          const seg = c.proposedEdit.segments[0];
-          const media = await deps.resolveMedia(seg.scoreplayMediaId, run.club);
-          return {
-            key: `${seg.scoreplayMediaId}@${seg.start}-${seg.end}`,
-            hit: c.hit,
-            segment: seg,
-            verdict: c.editDecision.decision.verdict,
-            clearance: c.editDecision.decision.clearance,
-            eligible: c.eligible,
-            reasons: c.editDecision.decision.reasons.filter((r) => r.outcome !== "PERMIT").map(({ dimension, outcome, explanation }) => ({ dimension, outcome, explanation })),
-            title: media.match?.scoreplayFilename ?? `ScorePlay asset ${seg.scoreplayMediaId}`,
-            media,
-            thumbnailUrl: c.hit.thumbnailUrl,
-          };
-        }),
-      );
   const record = await alternatives.record({ evaluationId: latest.id, blocker: result.blocker, candidates });
   const found: GoalAlternatives = {
     id: record.id,
@@ -362,9 +387,14 @@ export async function findAlternatives(target: GoalTarget, deps: GoalDeps = defa
     actor: ACTOR,
     payload: { goalRunId: run.id, evaluationId: latest.id, blocker: result.blocker.scope, remedy: found.remedy ?? null, candidates: candidates.map((c) => `${c.key}:${c.verdict}`) },
   });
-  const saved = await save(run.id, target.expectedVersion, (r) => {
-    r.alternatives.push(found);
-  });
+  const saved = await save(
+    run.id,
+    target.expectedVersion,
+    (r) => {
+      r.alternatives.push(found);
+    },
+    provenance,
+  );
   return present(saved.run, saved.version, deps);
 }
 
@@ -430,43 +460,56 @@ export async function useAlternative(target: GoalTarget, key: string, deps: Goal
   const candidate = from?.candidates.find((c) => c.key === key);
   if (!from || !candidate) throw new AppError("BAD_REQUEST", "That alternative is not one REROUTE proposed for the current check of this campaign.");
   if (candidate.verdict === "BLOCKED") throw new AppError("BAD_REQUEST", "REROUTE blocked this alternative too; pick another one.");
-  const media = await deps.resolveMedia(candidate.segment.scoreplayMediaId, run.club);
-  if (!isEvidenceLinkable(media)) {
-    throw new AppError("BAD_REQUEST", `ScorePlay asset ${candidate.segment.scoreplayMediaId} has no unique TwelveLabs link (${media.method}); it cannot be used.`);
-  }
-  const rec = adoptedMoment(run, from, candidate, media);
-  const withMoment: GoalRun = { ...run, adopted: [...run.adopted.filter((r) => r.key !== rec.key), rec] };
-  const campaign = await newVersion(withMoment, rec, "ALTERNATIVE", deps.now());
-  const evaluation = await evaluate(withMoment, campaign, "ALTERNATIVE", deps);
-  const saved = await save(run.id, target.expectedVersion, (r) => {
-    r.adopted = [...r.adopted.filter((x) => x.key !== rec.key), rec];
-    setCampaign(r, campaign);
-    r.selectedKey = rec.key;
-    r.evaluations.push(evaluation);
+  const { value, provenance } = await trackProvenance(async () => {
+    const media = await deps.resolveMedia(candidate.segment.scoreplayMediaId, run.club);
+    if (!isEvidenceLinkable(media)) {
+      throw new AppError("BAD_REQUEST", `ScorePlay asset ${candidate.segment.scoreplayMediaId} has no unique TwelveLabs link (${media.method}); it cannot be used.`);
+    }
+    const rec = adoptedMoment(run, from, candidate, media);
+    const withMoment: GoalRun = { ...run, adopted: [...run.adopted.filter((r) => r.key !== rec.key), rec] };
+    const campaign = await newVersion(withMoment, rec, "ALTERNATIVE", deps.now());
+    const evaluation = await evaluate(withMoment, campaign, "ALTERNATIVE", deps);
+    return { rec, campaign, evaluation };
   });
+  const { rec, campaign, evaluation } = value;
+  const saved = await save(
+    run.id,
+    target.expectedVersion,
+    (r) => {
+      r.adopted = [...r.adopted.filter((x) => x.key !== rec.key), rec];
+      setCampaign(r, campaign);
+      r.selectedKey = rec.key;
+      r.evaluations.push(evaluation);
+    },
+    provenance,
+  );
   return present(saved.run, saved.version, deps);
 }
 
 /**
- * CAMPAIGN-scoped restriction: restrict the campaign to the licensed subset REROUTE proposed (new
- * version). Nothing is re-checked here — the user checks rights again for the new version.
+ * CAMPAIGN-scoped restriction: restrict the campaign to the licensed subset REROUTE proposed, within
+ * the campaign's own uses (new version). Nothing is re-checked here — the user checks rights again for
+ * the new version. An empty licensed subset is a licence gap: refused, never re-targeted elsewhere.
  */
 export async function applyRemedy(target: GoalTarget, deps: GoalDeps = defaultDeps): Promise<GoalView> {
   const run = await load(target);
   const campaign = currentCampaign(run);
   const latest = currentEvaluation(run);
-  const remedy = currentAlternatives(run, latest)?.remedy;
-  if (!remedy) throw new AppError("BAD_REQUEST", "REROUTE proposed no remedy for the current check. Find another way first.");
+  const found = currentAlternatives(run, latest);
   const plan = campaign.plan;
-  const territories = remedy.territories?.length ? remedy.territories : plan.territories;
-  const channels = remedy.platforms?.length ? plan.channels.filter((c) => remedy.platforms!.includes(c)) : plan.channels;
-  if (!channels.length) throw new AppError("BAD_REQUEST", "None of the campaign's channels is licensed; the remedy cannot be applied.");
+  const { remedy, gap } = found ? scopeRemedy(found, plan) : {};
+  if (gap) {
+    throw new AppError("BAD_REQUEST", `No licensed path for ${[...gap.territories, ...gap.platforms].join(", ")} in this campaign: request a licence from the rights holder; there is no remedy to apply.`);
+  }
+  if (!remedy) throw new AppError("BAD_REQUEST", "REROUTE proposed no remedy for the current check. Find another way first.");
+  const territories = remedy.territories ?? plan.territories;
+  const channels = remedy.platforms ? plan.channels.filter((c) => remedy.platforms!.includes(c)) : plan.channels;
   const remedied: GoalPlan = {
     ...plan,
     territories,
     channels,
     usage: remedy.usage ?? plan.usage,
-    territoryBasis: remedy.territories?.length ? `Limited by REROUTE's remedy to licensed territories: ${territories.join(", ")}.` : plan.territoryBasis,
+    territoryBasis: remedy.territories ? `Limited by REROUTE's remedy to licensed territories: ${territories.join(", ")}.` : plan.territoryBasis,
   };
   const next = await newVersion(run, momentOf(run, campaign.key), "REMEDY", deps.now(), { plan: remedied });
   await events.append({ subjectType: "campaign", subjectId: campaign.campaignId, type: "REMEDY_APPLIED", actor: ACTOR, payload: { goalRunId: run.id, evaluationId: latest.id, remedy, version: next.version } });
@@ -485,6 +528,9 @@ export async function submitForReview(target: GoalTarget, deps: GoalDeps = defau
   const latest = currentEvaluation(run);
   if (latest.overall.verdict === "BLOCKED") throw new AppError("BAD_REQUEST", "REROUTE blocked this campaign; a blocked campaign cannot be submitted. Find another way first.");
   if (run.review?.evaluationId === latest.id) return present(run, target.expectedVersion, deps);
+  const found = currentAlternatives(run, latest);
+  const gap = found && scopeRemedy(found, campaign.plan).gap;
+  if (gap) throw new AppError("BAD_REQUEST", `${noLicenceReason(gap)}.`);
 
   const receipt = await createReceipt({
     edit: latest.edit,

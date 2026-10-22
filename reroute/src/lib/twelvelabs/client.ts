@@ -6,7 +6,7 @@ import { TwelveLabs } from "twelvelabs-js";
 import { isEvidenceLinkable, type DataOrigin, type Evidence, type MediaRef, type MediaResolver, type SearchHit, type VideoIntelligence } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { getMediaResolver } from "@/lib/media";
-import { cacheKey, recorded } from "./cache";
+import { ReplayMissError, replayable, requestKey } from "@/lib/media/replay";
 import { readTwelveLabsConfig, type TwelveLabsConfig } from "./config";
 import {
   mapSearchClips,
@@ -23,7 +23,9 @@ if (typeof window !== "undefined") throw new Error("twelvelabs client is server-
 const API_BASE = "https://api.twelvelabs.io/v1.3";
 const PEGASUS_MODEL = "pegasus1.6";
 /** Durable observation-cache key: model + prompt + schema (a prompt change invalidates old results). */
-const PEGASUS_MODEL_KEY = `${PEGASUS_MODEL}:${cacheKey({ prompt: PEGASUS_PROMPT, schema: PEGASUS_JSON_SCHEMA })}`;
+const PEGASUS_MODEL_KEY = `${PEGASUS_MODEL}:${requestKey({ prompt: PEGASUS_PROMPT, schema: PEGASUS_JSON_SCHEMA })}`;
+/** Pegasus analyzes videos up to 60 min; longer ones are refused up front (never sent to analyze). */
+export const PEGASUS_MAX_DURATION_SEC = 60 * 60;
 const MAX_PAGE_LIMIT = 50;
 /** Marengo `queryText` limit is 500 tokens; capped in characters at the client boundary. */
 const MAX_QUERY_CHARS = 500;
@@ -80,6 +82,7 @@ const isPegasusOutput = (v: unknown): v is PegasusOutput => !!v && typeof v === 
 /** User-visible error: operation + HTTP status only. The upstream body/message is logged server-side, never returned. */
 function upstream(what: string, err: unknown): AppError {
   if (err instanceof AppError) return err;
+  if (err instanceof ReplayMissError) return new AppError("UPSTREAM", `TwelveLabs ${what} is not in the demo recording (DEMO_REPLAY=true)`, { cause: err });
   const status = err instanceof Error && "statusCode" in err ? ` (HTTP ${String(err.statusCode)})` : "";
   console.warn(`[twelvelabs] ${what} failed${status}:`, err instanceof Error ? err.message : String(err));
   return new AppError("UPSTREAM", `TwelveLabs ${what} failed${status}`, { cause: err });
@@ -112,6 +115,8 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
   private readonly inflight = new Map<string, Promise<{ value: PegasusOutput; origin: DataOrigin }>>();
   /** Recent analysis failures, replayed for FAILURE_TTL_MS so repeated requests don't re-pay. */
   private readonly failures = new Map<string, { at: number; error: AppError }>();
+  /** Videos longer than PEGASUS_MAX_DURATION_SEC: a permanent technical limitation, never retried. */
+  private readonly tooLong = new Map<string, AppError>();
 
   constructor(opts: { club?: string; config?: TwelveLabsConfig; resolver?: MediaResolver; observationStore?: ObservationStore } = {}) {
     const config = opts.config ?? readTwelveLabsConfig({ club: opts.club });
@@ -124,7 +129,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
 
   async describeIndex(): Promise<{ index: IndexSummary; origin: DataOrigin }> {
     try {
-      const { value, origin } = await recorded({ op: "index", indexId: this.indexId }, async () => {
+      const { value, origin } = await replayable("twelvelabs", { op: "index", indexId: this.indexId }, async () => {
         const idx = await this.sdk.indexes.retrieve(this.indexId);
         return {
           id: idx.id ?? this.indexId,
@@ -141,7 +146,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
 
   async listVideos(pageLimit = 10): Promise<{ videos: VideoInfo[]; origin: DataOrigin }> {
     try {
-      const { value, origin } = await recorded({ op: "listVideos", indexId: this.indexId, pageLimit }, async () => {
+      const { value, origin } = await replayable("twelvelabs", { op: "listVideos", indexId: this.indexId, pageLimit }, async () => {
         const page = await this.sdk.indexes.videos.list(this.indexId, { pageLimit });
         return page.data.map(
           (v): VideoInfo => ({
@@ -161,7 +166,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
 
   async getVideo(videoId: string): Promise<VideoInfo> {
     try {
-      const { value } = await recorded({ op: "video", indexId: this.indexId, videoId }, async () => {
+      const { value } = await replayable("twelvelabs", { op: "video", indexId: this.indexId, videoId }, async () => {
         const v = await this.sdk.indexes.videos.retrieve(this.indexId, videoId);
         return {
           id: v.id ?? videoId,
@@ -185,7 +190,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
     const pageLimit = Math.min(MAX_PAGE_LIMIT, limit * 4 + (opts.excludeMediaIds?.length ?? 0));
     let result: { value: RawSearchClip[]; origin: DataOrigin };
     try {
-      result = await recorded({ op: "search", indexId: this.indexId, query, pageLimit }, async () => {
+      result = await replayable("twelvelabs", { op: "search", indexId: this.indexId, query, pageLimit }, async () => {
         const res = await this.sdk.search.create({ indexId: this.indexId, queryText: query, searchOptions: ["visual"], groupBy: "clip", pageLimit });
         return (res.data ?? []).map((c): RawSearchClip => ({ videoId: c.videoId, start: c.start, end: c.end, rank: c.rank, thumbnailUrl: c.thumbnailUrl }));
       });
@@ -217,7 +222,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
     }
     const videoId = ref.twelvelabsVideoId!;
     const scoreplayMediaId = ref.scoreplayMediaId!;
-    const out = await this.pegasus(videoId);
+    const out = await this.pegasus(videoId, ref.match?.twelvelabsDurationSec);
     if (out.value.finishReason === "length") {
       throw new AppError("UPSTREAM", "Pegasus output truncated (finish_reason=length); not using partial observations");
     }
@@ -231,23 +236,49 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
     }
   }
 
-  /** Stored result, else one shared live analysis per video; failures are replayed for FAILURE_TTL_MS. */
-  private async pegasus(videoId: string): Promise<{ value: PegasusOutput; origin: DataOrigin }> {
+  /** Permanent TECHNICAL limitation (cached forever) when the video exceeds Pegasus' maximum duration. */
+  private checkDuration(videoId: string, durationSec: number | undefined): void {
+    if (durationSec === undefined || durationSec <= PEGASUS_MAX_DURATION_SEC) return;
+    const error = new AppError(
+      "UPSTREAM",
+      `TECHNICAL_LIMITATION: video too long for analysis (>60 min; ${Math.round(durationSec)} s) — no Pegasus observations for this asset`,
+    );
+    this.tooLong.set(videoId, error);
+    throw error;
+  }
+
+  /**
+   * Stored result, else one shared analysis per video (live, or the demo recording); failures are replayed
+   * for FAILURE_TTL_MS, videos over the Pegasus limit fail fast forever without calling analyze.
+   */
+  private async pegasus(videoId: string, durationSec?: number): Promise<{ value: PegasusOutput; origin: DataOrigin }> {
+    const request = { op: "analyze", modelKey: PEGASUS_MODEL_KEY, indexId: this.indexId, videoId };
     const stored = await this.store.get(videoId, PEGASUS_MODEL_KEY);
-    if (isPegasusOutput(stored)) return { value: stored, origin: "CACHED" };
+    if (isPegasusOutput(stored)) {
+      // The recorder also captures results already in the durable store, so replay does not depend on it.
+      if (process.env.DEMO_RECORD === "true") await replayable("twelvelabs", request, async () => stored);
+      return { value: stored, origin: "CACHED" };
+    }
+    const limited = this.tooLong.get(videoId);
+    if (limited) throw limited;
+    this.checkDuration(videoId, durationSec);
     const failed = this.failures.get(videoId);
     if (failed && Date.now() - failed.at < FAILURE_TTL_MS) throw failed.error;
     let running = this.inflight.get(videoId);
     if (!running) {
       running = (async () => {
         try {
-          const out = await recorded({ op: "analyze", modelKey: PEGASUS_MODEL_KEY, indexId: this.indexId, videoId }, () => this.analyze(videoId));
+          const out = await replayable("twelvelabs", request, async () => {
+            const video = await this.getVideo(videoId);
+            this.checkDuration(videoId, video.durationSec);
+            return this.analyze(video);
+          });
           if (out.value.finishReason !== "length") await this.store.put(videoId, PEGASUS_MODEL_KEY, out.value);
           this.failures.delete(videoId);
           return out;
         } catch (err) {
           const error = upstream("Pegasus analyze", err);
-          this.failures.set(videoId, { at: Date.now(), error });
+          if (!this.tooLong.has(videoId)) this.failures.set(videoId, { at: Date.now(), error });
           throw error;
         } finally {
           this.inflight.delete(videoId);
@@ -258,8 +289,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
     return running;
   }
 
-  private async analyze(videoId: string): Promise<PegasusOutput> {
-    const video = await this.getVideo(videoId);
+  private async analyze(video: VideoInfo): Promise<PegasusOutput> {
     const common = {
       prompt: PEGASUS_PROMPT,
       temperature: 0.1,

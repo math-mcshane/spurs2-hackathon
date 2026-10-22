@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-22T23:36:54.965Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "analyze",
+    "modelKey": "pegasus1.6:d98df822a16038614d116aa864379da5",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911f0960d8ea7bdd04ced"
+  },
+  "value": {
+    "data": "{\"observations\":[{\"category\":\"onscreen_graphic\",\"confidence\":0.95,\"description\":\"Text watermark 'O_D_TRAFFORD' visible in the top left corner of the frame throughout the clip.\",\"end_time\":10.0,\"entity\":\"O_D_TRAFFORD watermark\",\"start_time\":0.0},{\"category\":\"onscreen_graphic\",\"confidence\":0.95,\"description\":\"Text label 'AWAY END' visible at the bottom center of the frame throughout the clip.\",\"end_time\":10.0,\"entity\":\"AWAY END label\",\"start_time\":0.0},{\"category\":\"broadcaster\",\"confidence\":0.9,\"description\":\"Small Tottenham Hotspur cockerel logo visible in the top right corner of the frame.\",\"end_time\":10.0,\"entity\":\"Spurs logo\",\"start_time\":0.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"no_players\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"This 10-second clip shows a crowd of spectators in a stadium stand, labeled 'AWAY END'. No game action or players are visible. The footage includes static on-screen graphics: a watermark 'O_D_TRAFFORD' in the top left, a location label 'AWAY END' at the bottom, and a small Tottenham Hotspur club logo in the top right corner. There is no broadcast scorebug, network bug, or gambling branding present. The clip appears to be a clean feed with editorial overlays rather than a live broadcast feed. Rights questions may arise regarding the use of the club logo and the editorial watermark.\"}",
+    "finishReason": "stop"
+  }
+}

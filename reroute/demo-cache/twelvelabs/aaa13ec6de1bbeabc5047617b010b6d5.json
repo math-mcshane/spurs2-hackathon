@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-10-22T23:36:58.638Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "video",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911e765b4aff96dc7baeb"
+  },
+  "value": {
+    "id": "6ad911e765b4aff96dc7baeb",
+    "assetId": "6ad9109d4a68f3b40321d113",
+    "filename": "9x16_MNU_1_1_TOT_HIGHLIGHTS.mp4",
+    "durationSec": 119.381,
+    "userMetadata": {
+      "scoreplay_event_id": "1536104",
+      "scoreplay_id": "130850829",
+      "scoreplay_rendition": "video_large",
+      "scoreplay_type": "video"
+    }
+  }
+}

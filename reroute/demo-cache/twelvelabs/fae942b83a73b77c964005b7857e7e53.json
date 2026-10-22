@@ -1,0 +1,21 @@
+{
+  "recordedAt": "2026-10-22T23:37:19.846Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "video",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad91206968fe117efe706d1"
+  },
+  "value": {
+    "id": "6ad91206968fe117efe706d1",
+    "assetId": "6ad91092968fe117efe70037",
+    "filename": "261009_Men_De Zerbi Pre Match Man Utd A_16x9.mp4",
+    "durationSec": 243.008,
+    "userMetadata": {
+      "scoreplay_event_id": "1536101",
+      "scoreplay_id": "130850922",
+      "scoreplay_rendition": "video_large",
+      "scoreplay_type": "video"
+    }
+  }
+}

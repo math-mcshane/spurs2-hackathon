@@ -167,6 +167,8 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
   const xCount = cta.status === "READY" ? linked.length - cta.destination!.url.length + X_URL_LENGTH : linked.length;
 
   const market = objective.market;
+  // The copy's locale: the market's language there (es-MX for Mexico) — only when the copy is actually in it.
+  const locale = market && copyLanguage === language ? `${language}-${market.code}` : undefined;
   return {
     id: previous?.id ?? input.id,
     schemaVersion: 1,
@@ -180,13 +182,14 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
       market: market && { code: market.code, label: market.label },
       cohort: input.cohort,
       language,
+      ...(locale ? { locale } : {}),
       basis:
         (market
           ? `Market ${market.label} comes from the objective${input.marketBasis ? `; ${input.marketBasis}` : ""}.`
           : objective.scope === "GLOBAL"
             ? "Global audience from the objective; no single territory."
             : "No market stated in the objective.") +
-        ` Copy is written in ${LANGUAGE_LABEL[language]} for that audience; nobody's location is inferred from language.`,
+        ` Copy is written in ${LANGUAGE_LABEL[language]}${locale ? ` (${locale})` : ""} for that audience; nobody's location is inferred from language.`,
     },
     media: {
       scoreplayAssetId: candidate.scoreplayAssetId,

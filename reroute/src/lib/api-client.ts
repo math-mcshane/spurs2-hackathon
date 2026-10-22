@@ -15,6 +15,7 @@ import {
   RenderResponseSchema,
   ResolveResponseSchema,
   RightsReceiptSchema,
+  UsageSchema,
   WritebackResponseSchema,
   type AccessActionSchema,
   type ApiError,
@@ -80,6 +81,14 @@ const RenderViewSchema = RenderResponseSchema.extend({ receipt: ReceiptViewSchem
 
 const ObservationResponseSchema = z.object({ evidence: EvidenceSchema });
 
+/** POST /api/resolve: the contract response + `remedy`, the licensed subset of the requested uses (CAMPAIGN blockers only). */
+export const ResolveViewSchema = ResolveResponseSchema.extend({
+  remedy: z
+    .object({ territories: z.array(z.string()).optional(), platforms: z.array(z.string()).optional(), usage: UsageSchema.optional() })
+    .optional(),
+});
+export type ResolveView = z.infer<typeof ResolveViewSchema>;
+
 async function request<S extends z.ZodType>(
   schema: S,
   path: string,
@@ -127,7 +136,7 @@ export const api = {
   decide: (body: { edit: EditPlan; intent: PublishIntent }, o?: Sig) =>
     request(DecideResponseSchema, "/api/decide", { method: "POST", body, ...o }),
   resolve: (body: { edit: EditPlan; intent: PublishIntent; segmentIndex: number; query?: string; limit?: number }) =>
-    request(ResolveResponseSchema, "/api/resolve", { method: "POST", body }),
+    request(ResolveViewSchema, "/api/resolve", { method: "POST", body }),
   access: (body: { edit: EditPlan; intent: PublishIntent; action: z.infer<typeof AccessActionSchema> }, o?: Sig) =>
     request(AccessResponseSchema, "/api/access", { method: "POST", body, ...o }),
   createReceipt: (body: { edit: EditPlan; intent: PublishIntent }) =>

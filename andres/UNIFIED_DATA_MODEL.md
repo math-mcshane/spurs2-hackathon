@@ -91,4 +91,17 @@ Hierarchy (from CLEAR discovery): `Collection → Media → Version → File`.
 
 ## TypeScript source of truth
 
-See [`schemas/unified-cdm.types.ts`](./schemas/unified-cdm.types.ts).
+- **Runtime app contracts:** [`../reroute/src/lib/contracts.ts`](../reroute/src/lib/contracts.ts) (prefer this for REROUTE shapes).
+- **Earlier sketch types:** [`schemas/unified-cdm.types.ts`](./schemas/unified-cdm.types.ts) (align to contracts when they diverge).
+
+## Where data lives (Supabase vs Unity Catalog)
+
+See **[CDM_PLATFORM_PLAN.md](./CDM_PLATFORM_PLAN.md)** for the full placement matrix, proposed Postgres DDL, UC medallion schemas, sync patterns, and phased rollout.
+
+| Platform | Role |
+|----------|------|
+| ScorePlay | Media SoR |
+| TwelveLabs | Vision SoR |
+| Supabase | App OLTP CDM (intents, edits, decisions, receipts, reviews) |
+| Databricks UC | Analytics lake (bronze → silver → gold + policy history) |
+| `.data/` today | Hackathon file store until Supabase is wired |

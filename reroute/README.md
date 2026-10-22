@@ -6,7 +6,7 @@ Spurs² Hackathon · Rights & Compliance. Spec: `REROUTE_TECHNICAL_SPEC_V1.1.md`
 
 ```bash
 pnpm install
-cp .env.example .env.local   # fill ScorePlay + TwelveLabs keys
+cp .env.example .env.local   # fill ScorePlay, TwelveLabs and Supabase keys
 pnpm dev
 pnpm test && pnpm typecheck && pnpm lint
 ```
@@ -22,21 +22,32 @@ pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts --observe <score
 
 Without keys every integration route returns `503 NOT_CONFIGURED`; there are no mock adapters.
 
+## Storage (Supabase)
+
+Receipts, the human review log and HUMAN observations live in Supabase (shared by the team, survive redeploys).
+ScorePlay stays the system of record for media: only ScorePlay ids, decisions and evidence text are stored — never event media.
+
+- Schema: `supabase/migrations/20261022190000_reroute_store.sql`. Run it once in Supabase → SQL Editor (idempotent).
+  Until then the store routes answer `503 NOT_CONFIGURED` ("Supabase tables missing").
+- Access is server-only (`src/lib/supabase-admin.ts`, secret key, RLS on, no `anon`/`authenticated` grants).
+- Local dev needs `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in `.env.local` (Supabase → Project Settings → API keys).
+  The Vercel integration stores them as *sensitive* Production/Preview variables, which `vercel env pull` / `vercel env run`
+  cannot read back, so copy them from the Supabase dashboard.
+
 ## Deploy on Vercel
 
-Import `math-mcshane/spurs2-hackathon` as a Vercel project, then:
+Project `spurs2-hackathon` (Git: `merlinh0/spurs2-hackathon`, `main` → Production):
 
-1. **Root Directory:** `reroute` (framework preset Next.js; pnpm is detected from the lockfile).
-2. **Environment variables** (Production + Preview), values from a teammate's `.env.local`, never from git:
-   `SCOREPLAY_API_KEY`, `TWELVELABS_API_KEY`, `TWELVELABS_INDEX_ID` (once organizers share it),
-   `REROUTE_POLICY_ID=demo-spurs-fr-sponsored`, `MEDIA_PROCESSING_APPROVED=false`, `SCOREPLAY_UPLOAD_APPROVED=false`.
-3. **Deployment Protection:** enable Vercel Authentication for **all deployments, including Production**
-   (Settings → Deployment Protection). The app displays ScorePlay event media, which must not be public (spec §9).
-4. Invite teammates to the Vercel team so they can pass the protection.
+1. **Root Directory:** `reroute`, framework Next.js.
+2. **Environment variables** (Production + Preview): `SCOREPLAY_API_KEY`, `TWELVELABS_API_KEY`, `TWELVELABS_INDEX_ID`
+   (once organizers share it), `REROUTE_POLICY_ID=demo-spurs-fr-sponsored`, `MEDIA_PROCESSING_APPROVED=false`,
+   `SCOREPLAY_UPLOAD_APPROVED=false`; Supabase variables come from the Supabase integration.
+3. **Deployment Protection:** Vercel Authentication for **all deployments, including Production**. The app displays
+   ScorePlay event media, which must not be public (spec §9).
+4. Teammates need access to the Vercel team to pass the protection.
 
-On Vercel, local state (receipts, reviews, HUMAN observations, TwelveLabs cache) lives in `/tmp`: per-instance and
-ephemeral. Fine for a single-user demo; use a shared store (e.g. Upstash Redis) if receipts must survive cold starts.
-FFmpeg rendering is not available there and stays disabled.
+On Vercel the TwelveLabs replay cache lives in `/tmp` (per-instance, ephemeral). FFmpeg rendering is not available there
+and stays disabled.
 
 ## Layout
 
@@ -46,7 +57,7 @@ FFmpeg rendering is not available there and stays disabled.
 | `src/lib/rights/` | Deterministic policy engine + fictional demo policies (`policies/*.json`) |
 | `src/lib/scoreplay/` | ScorePlay client, asset mapping, writeback taxonomy (`API_NOTES.md`) |
 | `src/lib/twelvelabs/` | Marengo search, Pegasus observations, record/replay cache (`API_NOTES.md`) |
-| `src/lib/server/` | Decision context, resolver, JSON store (`.data/`), FFmpeg render |
+| `src/lib/server/` | Decision context, resolver, Supabase store, FFmpeg render |
 | `src/app/api/` | `assets`, `decide`, `resolve`, `access`, `receipts`, `observations`, `writeback`, `render`, `policies` |
 | `src/components/reroute/` | One-screen producer UI |
 | `src/features/pulse/` | PULSE (optional, flag-gated): signals, opportunity scoring, REROUTE handoff, business metrics |

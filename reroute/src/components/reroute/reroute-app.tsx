@@ -52,7 +52,7 @@ function editProblem(edit: EditPlan, maxSec?: number): string | null {
 type Decisions = { original: EditDecision | null; proposed: EditDecision | null };
 type Detail = { status: "loading" } | { status: "done"; res: AssetDetailResponse } | { status: "error"; error: unknown };
 
-export function RerouteApp() {
+export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean }) {
   const [policies, setPolicies] = useState<PoliciesResponse | null>(null);
   const [policiesError, setPoliciesError] = useState<unknown>(null);
 
@@ -108,6 +108,41 @@ export function RerouteApp() {
     });
     return () => ac.abort();
   }, []);
+
+  // PULSE handoff deep link (only when PULSE is enabled): preload the handed-off asset, cut and intent.
+  // The creative brief stays in PULSE; REROUTE decides exactly as for a manually selected asset.
+  useEffect(() => {
+    if (!pulseEnabled) return;
+    const p = new URLSearchParams(window.location.search);
+    const id = p.get("asset");
+    if (!p.get("pulse") || !id) return;
+    api.asset(id).then(
+      ({ asset }) => {
+        selectAsset(asset);
+        const start = Number(p.get("start"));
+        const end = Number(p.get("end"));
+        if (p.has("start") && p.has("end") && end > start) {
+          setOriginal({
+            id: `edit-${asset.id}`,
+            title: `${asset.title} · PULSE cut`,
+            segments: [{ scoreplayMediaId: asset.id, start, end, label: "PULSE cut" }],
+            derived: false,
+          });
+        }
+        const usage = p.get("usage");
+        setIntent((i) => ({
+          territory: p.get("territory") || i.territory,
+          platform: p.get("platform") || i.platform,
+          usage: usage === "ORGANIC" || usage === "SPONSORED" ? usage : i.usage,
+          competition: p.get("competition") || i.competition,
+          publishAt: p.get("publishAt") || i.publishAt,
+        }));
+        toast.info(`Opened from PULSE · ${p.get("brief") ?? p.get("pulse")}`);
+      },
+      () => toast.error(`PULSE handoff: could not load ScorePlay asset ${id}`),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read the handoff URL once on mount
+  }, [pulseEnabled]);
 
   // Debounced decision for the original (and proposed) edit on every edit/intent change.
   useEffect(() => {
@@ -296,7 +331,7 @@ export function RerouteApp() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.06),transparent_60%)]">
-      <AppHeader policies={policies} policiesError={policiesError} />
+      <AppHeader policies={policies} policiesError={policiesError} pulseEnabled={pulseEnabled} />
 
       <main className="grid flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         {/* LEFT: find + player + timeline */}

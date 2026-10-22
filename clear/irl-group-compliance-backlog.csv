@@ -1,0 +1,38 @@
+ID,Epic,Priority,When,Story,Acceptance criteria,Estimate (hrs),Depends on
+S-01,Data connection,Must,Thu PM,"As a developer, I can read assets from both clubs' ScorePlay platforms with our own API keys.","Lists 20+ assets per club with metadata; keys kept in environment variables, not in code.",1,
+S-02,Data connection,Must,Thu PM,"As a developer, I can query the pre-indexed TwelveLabs index for both game broadcasts.",Search returns time-stamped moments from the Spurs game and Tottenham vs Man United.,1,
+S-03,Data connection,Must,Thu PM,"As the rules engine, I receive every ScorePlay asset in one standard format.","Maps league, club, type, source (broadcast, team photo, press conference, published edit, fan upload), length, game end time and rights partner; missing fields lead to Review, never Allow.",2,S-01
+S-04,Detection,Must,Thu eve,"As a media producer, I see which rostered players appear in an asset.",Players matched from the provided rosters and headshots; opponents listed separately; spot-check of 10 assets is correct.,2,"S-02,S-03"
+S-05,Detection,Must,Thu eve,"As a partnerships manager, I see which partner logos and rival brands appear in an asset.","Detects the provided partner logos (front of shirt, sleeve, major sponsors); flags whether the shirt sponsor is visible; flags brands on the rival list.",3,"S-02,S-03"
+S-06,Detection,Should,Fri AM,"As a producer, I'm told when broadcaster graphics are visible.",Score bug or broadcaster graphics detected on broadcast clips and passed to rule N-07.,1,S-02
+S-07,Detection,Should,Fri AM,"As a compliance reviewer, I'm told about unidentified people and likely children.",Counts unknown people and flags likely minors; never tries to name a fan.,2,S-02
+S-08,Rules engine,Must,Thu eve,"As a compliance reviewer, every asset gets a verdict for 7 uses in 3 regions.",Loads rules.json; strictest verdict wins; time limits become a usable-until date and turn to Block when passed; uses no rule covers default to Review; the 4 sample assets reproduce the published test results.,2,S-03
+S-09,Rules engine,Must,Fri AM,"As a reviewer, I can read why each verdict was given.","Each cell lists its reasons, most decisive first, with rule IDs; optional AI summary paragraph never contradicts the grid.",2,S-08
+S-10,Write-back,Must,Thu eve,"As a club media team, I see the verdict on the asset inside ScorePlay.","Verdict, reasons and usable-until date are saved on the asset and visible in ScorePlay after refresh.",2,"S-01,S-08"
+S-11,Rights Passport,Must,Fri AM,"As a producer, I open one asset and see its passport.","Shows preview, 7x3 grid with text labels (not color alone), reasons and usable-until date; loads in under 3 seconds.",3,"S-08,S-09"
+S-12,Rights Passport,Should,Fri AM,"As a producer, I can scan the whole library by status.","List with overall status per asset; filters for club, use, region, verdict and expiring soon.",2,S-11
+S-13,Rights Passport,Should,Fri AM,"As a social media manager, I can ask what I can post in plain words.","""What can I post on TikTok in the UK this week?"" returns the matching assets, consistent with their grids.",2,S-12
+S-14,Rules engine,Should,Fri AM,"As the club's legal team, I can change a rule without a developer.",Editing a value (e.g. 60s to 45s) and re-running updates verdicts on screen; shown live in the demo.,1,S-08
+S-15,Rights Passport,Could,Fri AM,"As a producer, I'm warned before content expires.","List of assets that expire in the next 7 days, with the uses affected.",1,S-08
+S-16,Detection,Could,Later,"As a partnerships manager, I see how long each sponsor logo was on screen.",Seconds on screen per partner logo for each video.,3,S-05
+S-17,Watch Party Clearance,Must,Fri AM,"As a fan at a watch party, I upload photos with a consent tap.",Upload via the real-time path; fan consent and guardian consent stored with the asset; no consent means Block.,2,S-01
+S-18,Watch Party Clearance,Must,Fri AM,"As the club, I get only cleared fan photos in my library.",Live check shows the grid within seconds; cleared photos go to the club library tagged 'fan content - consent on file' with the fan credited; rival-logo and child-without-consent cases are blocked with reasons.,2,"S-08,S-17"
+S-19,Watch Party Clearance,Should,Fri AM,"As a venue running a watch party, my screens only show content cleared for public display.",Venue profile records official status and presenting sponsor category; playlist includes only venue-cleared assets; sponsor conflicts are blocked.,2,S-08
+S-20,Rules engine,Should,Fri AM,"As a producer, I can reuse published edits safely.",Allowed on the platform it was published on; Review for any other platform.,1,S-08
+S-21,Demo,Must,Thu PM,"As the team, we have a demo set covering every verdict.","20-30 assets per club plus 10 fan photos, including rival logo, child, no-consent and over-length cases.",1,S-01
+S-22,Demo,Must,Fri 12-2,"As presenters, we can run the 3-minute demo even if the network fails.",Rehearsed script; backup screenshots and screen recording of each step.,2,"S-11,S-18"
+S-23,Demo,Must,Fri 12-2,"As judges, we know the rules are samples.",'Sample rules - not legal advice' shown in the app and on slides; verdicts described as recommendations a person confirms.,0.5,
+S-24,Demo,Should,Fri 12-2,"As judges, we understand the business case.","Slides: problem, demo, business model (clubs, sponsors, venues), roadmap.",1.5,
+S-25,After the event,Later,Later,"As a fan, I give photo consent inside WhatsApp.",WhatsApp Flows collects fan and guardian consent and links it to the upload.,0,S-17
+S-26,After the event,Later,Later,"As a venue, I message my guests from my own WhatsApp Business number.",Venue onboarding through WhatsApp Embedded Signup v4.,0,
+S-27,After the event,Later,Later,"As a venue or vendor, I plan watch-party programming in irl.group.","Programming calendar, capacity, RSVP list, vendor slots and sponsor rules per venue.",0,S-19
+S-28,After the event,Later,Later,"As irl.group, we can reach every ScorePlay club.",Application to the ScorePlay Connect partner program submitted.,0,
+S-29,After the event,Later,Later,"As a club, the engine uses my real rules.",Sample rules replaced with the clubs' rule sheets and reviewed by their legal teams.,0,S-14
+S-30,After the event,Later,Later,"As a compliance lead, I can see who overrode a verdict and why.","Audit log of every override with person, time and reason.",0,S-10
+NFR-1,Non-functional,Must,All,Privacy,Never identify fans by face; only flag 'unknown person'.,,
+NFR-2,Non-functional,Must,All,Human in the loop,Verdicts are recommendations; a person confirms any Review or override.,,
+NFR-3,Non-functional,Must,All,Safe default,"Anything unknown or not covered by a rule is Review, never Allow.",,
+NFR-4,Non-functional,Must,All,Speed,A single-asset check completes in a few seconds during the live demo.,,
+NFR-5,Non-functional,Must,All,Both clubs,Every feature works for the Spurs (NBA) and Tottenham (Premier League) data.,,
+NFR-6,Non-functional,Must,All,Accessibility,"Verdicts shown with text labels, not color alone.",,
+NFR-7,Non-functional,Must,All,Secrets,API keys never committed to code or shown on screen.,,

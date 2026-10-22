@@ -34,6 +34,12 @@ npm run build
 
 Copy `.env.example` to `.env.local` only when preparing integrations. Mock mode works without credentials.
 
+## Supabase database
+
+The production-shaped schema lives in `supabase/migrations/20261022133000_clear_initial_schema.sql`. It models creators, assets, ownership attestations, scoped licenses, append-only consent/audit events, video analysis, timecoded evidence, publication requests, deterministic rights decisions, review tasks, compliant asset matches, and integration events.
+
+All tables have Row Level Security enabled and no broad client policies by default. Until role-specific policies are approved, write through a trusted server using `SUPABASE_SERVICE_ROLE_KEY`; never expose that key in browser code. The public project URL and anonymous key use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
 ## What is implemented
 
 - Responsive producer library with search and status filtering.

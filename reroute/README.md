@@ -22,6 +22,22 @@ pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts --observe <score
 
 Without keys every integration route returns `503 NOT_CONFIGURED`; there are no mock adapters.
 
+## Deploy on Vercel
+
+Import `math-mcshane/spurs2-hackathon` as a Vercel project, then:
+
+1. **Root Directory:** `reroute` (framework preset Next.js; pnpm is detected from the lockfile).
+2. **Environment variables** (Production + Preview), values from a teammate's `.env.local`, never from git:
+   `SCOREPLAY_API_KEY`, `TWELVELABS_API_KEY`, `TWELVELABS_INDEX_ID` (once organizers share it),
+   `REROUTE_POLICY_ID=demo-spurs-fr-sponsored`, `MEDIA_PROCESSING_APPROVED=false`, `SCOREPLAY_UPLOAD_APPROVED=false`.
+3. **Deployment Protection:** enable Vercel Authentication for **all deployments, including Production**
+   (Settings → Deployment Protection). The app displays ScorePlay event media, which must not be public (spec §9).
+4. Invite teammates to the Vercel team so they can pass the protection.
+
+On Vercel, local state (receipts, reviews, HUMAN observations, TwelveLabs cache) lives in `/tmp`: per-instance and
+ephemeral. Fine for a single-user demo; use a shared store (e.g. Upstash Redis) if receipts must survive cold starts.
+FFmpeg rendering is not available there and stays disabled.
+
 ## Layout
 
 | Path | Role |

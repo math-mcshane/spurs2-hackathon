@@ -1,0 +1,34 @@
+# Databricks Asset Bundle — spurs2 policy engine
+# Deploy: databricks bundle deploy -t dev
+# Run:    databricks bundle run -t dev policy_engine_pipeline
+
+bundle:
+  name: spurs2-policy-engine
+
+variables:
+  catalog:
+    description: Unity Catalog name for the policy-engine CDM
+    default: spurs2
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: https://adb-4090431820227854.14.azuredatabricks.net
+      profile: DEFAULT
+      root_path: ~/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: spurs2
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-4090431820227854.14.azuredatabricks.net
+      profile: DEFAULT
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: spurs2

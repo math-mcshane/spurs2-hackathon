@@ -3,7 +3,7 @@
 **Track focus:** Policy engine (not the full REROUTE Studio pitch alone).  
 **Core idea:** Pre-process every ScorePlay artifact for *outright* violations in Databricks; keep survivors queryable for *contextual* rights when a marketing manager states an intent (player, game, territory, platform, time).
 
-Related: [CDM_PLATFORM_PLAN.md](./CDM_PLATFORM_PLAN.md) · [UNIFIED_DATA_MODEL.md](./UNIFIED_DATA_MODEL.md) · ScorePlay Connect webhooks (ingest → tag → transform → publish → archive).
+Related: [CDM_PLATFORM_PLAN.md](./CDM_PLATFORM_PLAN.md) · [UNIFIED_DATA_MODEL.md](./UNIFIED_DATA_MODEL.md) · **[databricks/](./databricks/)** (Unity Catalog DDL) · ScorePlay Connect webhooks (ingest → tag → transform → publish → archive).
 
 ---
 
@@ -213,14 +213,14 @@ evaluated_at TIMESTAMP
 
 ## 4. Unity Catalog layout (policy-engine track)
 
-Catalog: `spurs2` (example)
+Catalog: `spurs2`. **Bundle + DDL:** [databricks/](./databricks/) (`databricks.yml`, jobs `seed` / `policy_engine_pipeline`, SQL under `sql/`).
 
 | Schema | Tables |
 |--------|--------|
 | `bronze` | `scoreplay_webhooks`, `tl_api_raw` |
-| `silver` | `assets`, `eligible_artifacts`, `observations`, `tl_asset_map` |
-| `gold` | `l1_decisions`, `rejected_artifacts`, `l2_decisions`, `l2_requests` |
-| `rules` | `l1_policy_versions`, `l2_policy_packs` (league/team/player/venue/territory/advertiser) |
+| `silver` | `assets`, `eligible_artifacts` (includes TL ids), `observations` |
+| `gold` | `l1_decisions`, `rejected_artifacts`, `l2_requests`, `l2_decisions` |
+| `rules` | `l1_policy_packs`, `l2_policy_packs`, `policy_activations` |
 
 Supabase (optional later): thin API for marketing UI, `l2_requests`, review of `rejected_artifacts.triage_status`. **Heavy policy compute stays in Databricks jobs.**
 

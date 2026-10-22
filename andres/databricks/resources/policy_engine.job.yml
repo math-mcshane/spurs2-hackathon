@@ -1,0 +1,76 @@
+resources:
+  jobs:
+    policy_engine_pipeline:
+      name: spurs2-policy-engine-pipeline
+      tags:
+        project: spurs2
+        track: policy-engine
+        purpose: pipeline
+      description: >
+        Preliminary policy engine: ensure UC DDL → project silver assets from
+        bronze webhooks → L1 safety gate → enrich eligible (stub) → L2 batch
+        for queued intents (stub rules).
+      queue:
+        enabled: true
+      max_concurrent_runs: 1
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: lookback_hours
+          default: "24"
+      tasks:
+        - task_key: ensure_ddl
+          description: CREATE IF NOT EXISTS for catalog/schemas/tables
+          notebook_task:
+            notebook_path: ../src/pipeline/00_ensure_ddl.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              bundle_root: ${workspace.file_path}
+
+        - task_key: bronze_webhooks
+          description: Normalize / validate bronze.scoreplay_webhooks (append path ready)
+          depends_on:
+            - task_key: ensure_ddl
+          notebook_task:
+            notebook_path: ../src/pipeline/01_bronze_webhooks.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              lookback_hours: "{{job.parameters.lookback_hours}}"
+
+        - task_key: silver_assets
+          description: Upsert silver.assets from recent webhook payloads
+          depends_on:
+            - task_key: bronze_webhooks
+          notebook_task:
+            notebook_path: ../src/pipeline/02_silver_assets.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              lookback_hours: "{{job.parameters.lookback_hours}}"
+
+        - task_key: l1_preprocess
+          description: L1 AUTO_REJECT | PASS_L1 → gold + eligible / rejected
+          depends_on:
+            - task_key: silver_assets
+          notebook_task:
+            notebook_path: ../src/pipeline/03_l1_preprocess.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              lookback_hours: "{{job.parameters.lookback_hours}}"
+
+        - task_key: enrich_eligible
+          description: Stub enrich for PASS_L1 pool (TL observations later)
+          depends_on:
+            - task_key: l1_preprocess
+          notebook_task:
+            notebook_path: ../src/pipeline/04_enrich_eligible.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+
+        - task_key: l2_contextual
+          description: Batch L2 for queued gold.l2_requests (preliminary rules)
+          depends_on:
+            - task_key: enrich_eligible
+          notebook_task:
+            notebook_path: ../src/pipeline/05_l2_contextual.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"

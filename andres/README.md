@@ -19,6 +19,7 @@ Working notes for the Spurs² **Rights & Compliance** track, aligning:
 | [UNIFIED_DATA_MODEL.md](./UNIFIED_DATA_MODEL.md) | Entity catalog + invariants |
 | [CDM_PLATFORM_PLAN.md](./CDM_PLATFORM_PLAN.md) | **Supabase vs Unity Catalog** placement + DDL |
 | [POLICY_ENGINE_PIPELINE.md](./POLICY_ENGINE_PIPELINE.md) | **Databricks policy track** — webhooks → L1 reject → L2 intent |
+| [databricks/](./databricks/) | **Asset Bundle** — UC DDL + seed job + policy-engine pipeline job |
 | [USER_JOURNEYS.md](./USER_JOURNEYS.md) | Personas and end-to-end journeys |
 | [WORKFLOWS_AND_UI.md](./WORKFLOWS_AND_UI.md) | System workflows + app surfaces (spec only) |
 | [schemas/unified-cdm.types.ts](./schemas/unified-cdm.types.ts) | Shared TypeScript contracts for the team |

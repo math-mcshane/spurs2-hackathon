@@ -1,0 +1,24 @@
+resources:
+  jobs:
+    seed:
+      name: spurs2-seed
+      tags:
+        project: spurs2
+        track: policy-engine
+        purpose: seed
+      description: >
+        Placeholder seed job. Populate DEMO policy packs, fixtures, and sample
+        webhooks here later. Currently a no-op.
+      queue:
+        enabled: true
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+      tasks:
+        - task_key: seed_placeholder
+          description: Empty seed — no tables written yet
+          notebook_task:
+            notebook_path: ../src/seed/seed_placeholder.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+          # Serverless (no cluster / environment required for notebook tasks)

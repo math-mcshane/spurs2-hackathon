@@ -38,7 +38,14 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# Environment / secrets (any directory; keep *.example tracked)
 .env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
 
 # pkgdown site
 docs/
@@ -52,3 +59,7 @@ rsconnect/
 
 # Vercel CLI link (local only)
 .vercel
+
+# Databricks Asset Bundles local state
+.databricks/
+**/.databricks/

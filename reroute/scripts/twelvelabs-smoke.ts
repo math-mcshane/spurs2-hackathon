@@ -4,6 +4,7 @@
  */
 import { TwelveLabsVideoIntelligence } from "../src/lib/twelvelabs/client";
 import { AppError } from "../src/lib/errors";
+import { getMediaResolver } from "../src/lib/media";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -13,7 +14,7 @@ async function main() {
   if (observeAt >= 0) {
     const id = args[observeAt + 1];
     if (!id) throw new AppError("BAD_REQUEST", "--observe needs a scoreplayMediaId");
-    const ev = await tl.observations(id);
+    const ev = await tl.observations(await getMediaResolver().forScoreplay(id));
     console.log(`${ev.length} observation(s) for ${id}:`);
     for (const e of ev) {
       const tc = e.start !== undefined ? `${e.start.toFixed(1)}-${e.end?.toFixed(1)}s` : "video";

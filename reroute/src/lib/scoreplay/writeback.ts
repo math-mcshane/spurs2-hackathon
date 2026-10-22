@@ -1,114 +1,396 @@
 /**
- * Pure builders for the REROUTE → ScorePlay writeback (no I/O). What gets written is defined by
- * `SCOREPLAY_TAXONOMY` (PENDING CONFIRMATION WITH SCOREPLAY STAFF).
+ * REROUTE → ScorePlay writeback, split in two:
+ * - `planWriteback(receipt, review)` — PURE. Exactly which documented mutations would be sent (per source media).
+ * - `applyWriteback(receipt, plan, client)` — LIVE. Executes a plan add-then-verify, then removes superseded
+ *   REROUTE tags/logs. Only reachable when `writebackMode()` says LIVE (see app/api/writeback/route.ts).
+ *
+ * Rules: verdict tags ONLY for verified (non-fictional) policies; demo results are at most an informational
+ * `reroute:demo-simulation` log and are never written live. Taxonomy: ./taxonomy.ts. Endpoints: ./API_NOTES.md.
  */
-import type { RightsReceipt } from "@/lib/contracts";
-import { SCOREPLAY_TAXONOMY as T } from "./taxonomy";
+import {
+  DEMO_CLEARANCE_LABEL,
+  type Clearance,
+  type Decision,
+  type Reason,
+  type RightsReceipt,
+  type ScorePlayAction,
+  type Verdict,
+} from "@/lib/contracts";
+import { AppError } from "@/lib/errors";
+import type { ScorePlayHttpClient } from "./client";
+import type { ScorePlayVideoLog } from "./schemas";
+import { SCOREPLAY_TAXONOMY as T, managedTagNames } from "./taxonomy";
 
-/** One timecoded video log to write (`POST /video/logs`, offset modes, seconds from video start). */
-export type PlannedAction = {
-  /** Offset range when `end` is set, offset single otherwise. */
-  start: number;
-  end?: number;
-  comment: string;
-  rawTags: string[];
-};
+// ---------- Plan types ----------
 
-/** Status mirrors `RightsReceipt.writeback[].status`. */
+/** One timecoded video log (offset range mode, seconds from video start). */
+export type PlannedLog = { start: number; end: number; comment: string; rawTags: string[] };
+
+/** Structured form of a planned mutation; `applyWriteback` executes these. */
+export type WritebackOp =
+  | { kind: "ENSURE_TAG_OPTION"; name: string }
+  | { kind: "ADD_MEDIA_TAGS"; mediaId: string; tagNames: string[] }
+  | { kind: "ADD_VIDEO_LOGS"; mediaId: string; logs: PlannedLog[] }
+  | { kind: "REMOVE_SUPERSEDED_TAGS"; mediaId: string; tagNames: string[] }
+  | { kind: "REMOVE_SUPERSEDED_LOGS"; mediaId: string; receiptId: string };
+
+/** A documented ScorePlay mutation (contract shape) plus its structured op. */
+export type PlannedAction = ScorePlayAction & { op: WritebackOp };
+
+export type PolicyKind = "VERIFIED" | "DEMO" | "UNVERIFIED";
+
+export type ReviewInfo = { reviewer?: string; reviewedAt?: string };
+
+/** Per-media outcome after a LIVE write; status mirrors `RightsReceipt.writeback[].status`. */
 export type MediaReadBack = {
   status: "VERIFIED" | "WRITTEN" | "FAILED";
   at: string;
   detail?: string;
-  verdictTag?: string;
   /** REROUTE-managed tag names present on the media when re-read. */
   tags: string[];
-  /** REROUTE video logs of THIS receipt present on the media when re-read. */
-  actions: { id: number; start?: number; end?: number; comment: string }[];
+  /** REROUTE video logs of THIS receipt present on the media when re-read (seconds). */
+  logs: { id: number; start?: number; end?: number; comment: string }[];
 };
 
-export function writebackTargets(receipt: RightsReceipt): string[] {
-  return receipt.derivativeAssetId ? [receipt.derivativeAssetId] : [...new Set(receipt.sourceAssetIds)];
+// ---------- Classification (pure) ----------
+
+/** DEMO = fictional policy; UNVERIFIED = no applicable policy selected; VERIFIED otherwise. */
+export function policyKind(d: Decision): PolicyKind {
+  if (d.policyFictional || d.clearance === "DEMO" || d.policySelection?.kind === "DEMO") return "DEMO";
+  if (d.policySelection && d.policySelection.policyId === null) return "UNVERIFIED";
+  return "VERIFIED";
 }
 
-export function desiredTagNames(receipt: RightsReceipt): string[] {
-  const names: string[] = [T.verdictTags[receipt.decision.verdict], T.reviewTags[receipt.humanReviewStatus]];
-  if (receipt.decision.policyFictional) names.push(T.fictionalPolicyTag);
-  return names;
+/** Source media written to, in first-appearance order. Derivatives are their own assets (not written here). */
+export function writebackTargets(receipt: RightsReceipt): string[] {
+  return [...new Set(receipt.sourceAssetIds)];
 }
+
+function applies(r: Reason, mediaId: string, start: number, end: number): boolean {
+  if (r.scoreplayMediaId !== undefined && r.scoreplayMediaId !== mediaId) return false;
+  if (r.start === undefined || r.end === undefined) return true;
+  return r.start <= end && r.end >= start;
+}
+
+/** DENY → BLOCKED; MISSING → NEEDS_REVIEW; ALLOWED only with ≥1 applicable reason and none negative (unknown ≠ allowed). */
+function verdictOf(reasons: Reason[]): Verdict {
+  if (reasons.some((r) => r.outcome === "DENY")) return "BLOCKED";
+  if (reasons.some((r) => r.outcome === "MISSING")) return "NEEDS_REVIEW";
+  return reasons.length > 0 ? "ALLOWED" : "NEEDS_REVIEW";
+}
+
+const SEVERITY: Record<Verdict, number> = { ALLOWED: 0, NEEDS_REVIEW: 1, BLOCKED: 2 };
+
+/** Verdict of one media within this receipt: worst of its own segments (not the whole edit's verdict). */
+export function mediaVerdict(receipt: RightsReceipt, mediaId: string): Verdict {
+  const segments = receipt.edit.segments.filter((s) => s.scoreplayMediaId === mediaId);
+  if (segments.length === 0) return "NEEDS_REVIEW";
+  return segments
+    .map((s) => verdictOf(receipt.decision.reasons.filter((r) => applies(r, mediaId, s.start, s.end))))
+    .reduce((a, b) => (SEVERITY[b] > SEVERITY[a] ? b : a));
+}
+
+function clearanceOf(verdict: Verdict, kind: PolicyKind): Clearance {
+  if (verdict !== "ALLOWED") return "NONE";
+  return kind === "VERIFIED" ? "VERIFIED" : kind === "DEMO" ? "DEMO" : "NONE";
+}
+
+// ---------- Mode (pure) ----------
+
+/** Why a LIVE write must not happen for this receipt (independent of env). */
+export function liveRefusal(receipt: RightsReceipt): string | undefined {
+  const d = receipt.decision;
+  const kind = policyKind(d);
+  if (kind === "DEMO") return `Demo policy ${d.policyId}@${d.policyVersion}: ${DEMO_CLEARANCE_LABEL}. Demo results are never written to ScorePlay as metadata.`;
+  if (kind === "UNVERIFIED") return "No verified policy applies to this receipt; nothing authoritative to write.";
+  if (receipt.humanReviewStatus === "PENDING") return "Receipt has not been reviewed; live writeback requires an APPROVED or REJECTED human review.";
+  return undefined;
+}
+
+export type WritebackModeResult =
+  | { mode: "LIVE" }
+  | { mode: "DRY_RUN"; status: "DRY_RUN" | "REFUSED"; refusedReason?: string };
+
+/** LIVE only when `SCOREPLAY_WRITEBACK_MODE=live` AND verified policy AND reviewed; otherwise DRY_RUN. */
+export function writebackMode(receipt: RightsReceipt, envMode = process.env.SCOREPLAY_WRITEBACK_MODE): WritebackModeResult {
+  const liveRequested = envMode?.trim().toLowerCase() === "live";
+  const refusedReason = liveRefusal(receipt);
+  if (liveRequested && !refusedReason) return { mode: "LIVE" };
+  return { mode: "DRY_RUN", status: liveRequested ? "REFUSED" : "DRY_RUN", ...(refusedReason ? { refusedReason } : {}) };
+}
+
+// ---------- Plan (pure) ----------
 
 export function receiptMarker(receiptId: string): string {
   return `${T.commentPrefix}${receiptId} |`;
 }
 
-/**
- * Summary log at 0 s + one log per DENY/MISSING reason range that falls on `mediaId`.
- * For a derivative target, source ranges are translated onto the output timeline via `receipt.edit.segments`.
- */
-export function planActions(receipt: RightsReceipt, mediaId: string): PlannedAction[] {
+const OUTCOME_ORDER: Record<Reason["outcome"], number> = { DENY: 0, MISSING: 1, PERMIT: 2 };
+
+/** One log per segment of `mediaId`: status, clearance, top reasons, policy, receipt, reviewer, segment range. */
+function segmentLogs(receipt: RightsReceipt, mediaId: string, kind: PolicyKind, review: ReviewInfo): PlannedLog[] {
   const d = receipt.decision;
   const i = receipt.intent;
-  const policy = `policy ${d.policyId}@${d.policyVersion}${d.policyFictional ? ` | ${T.fictionalBanner}` : ""}`;
-  const intent = `intent ${i.platform}/${i.territory}/${i.usage}/${i.competition} @ ${i.publishAt}`;
-  const marker = receiptMarker(receipt.id);
-
-  const reasonsText = d.reasons
-    .filter((r) => r.outcome !== "PERMIT")
-    .map((r) => `[${r.outcome} ${r.dimension}] ${r.ruleId}: ${r.explanation}`)
-    .join("; ");
-  const summary: PlannedAction = {
-    start: 0,
-    comment: clip(
-      [
-        marker.slice(0, -2),
-        `${d.verdict} (edit ${receipt.edit.id}${receipt.derivativeAssetId ? `, derivative of ${receipt.sourceAssetIds.join(",")}` : ""})`,
-        policy,
-        intent,
-        `review ${receipt.humanReviewStatus}`,
-        d.missingFacts.length ? `missing: ${d.missingFacts.join(", ")}` : undefined,
-        reasonsText ? `reasons: ${reasonsText}` : undefined,
+  const reviewText =
+    receipt.humanReviewStatus === "PENDING"
+      ? "review=PENDING"
+      : `review=${receipt.humanReviewStatus} by ${review.reviewer ?? "unknown"} at ${review.reviewedAt ?? "unknown"}`;
+  const rawTags = [...(kind === "VERIFIED" ? T.logRawTags.verified : kind === "DEMO" ? T.logRawTags.demo : T.logRawTags.unverified)];
+  return receipt.edit.segments
+    .filter((s) => s.scoreplayMediaId === mediaId && s.end > s.start)
+    .map((s) => {
+      const reasons = d.reasons.filter((r) => applies(r, mediaId, s.start, s.end));
+      const verdict = verdictOf(reasons);
+      const status = kind === "VERIFIED" ? `status=${verdict}` : `simulated-status=${verdict} (informational, not a clearance)`;
+      const top = [...reasons]
+        .sort((a, b) => OUTCOME_ORDER[a.outcome] - OUTCOME_ORDER[b.outcome])
+        .slice(0, T.maxReasonsPerLog)
+        .map((r) => `[${r.outcome} ${r.dimension}] ${r.ruleId}: ${r.explanation}`)
+        .join("; ");
+      const comment = [
+        receiptMarker(receipt.id).slice(0, -2),
+        kind === "DEMO" ? DEMO_CLEARANCE_LABEL : kind === "UNVERIFIED" ? "NO VERIFIED POLICY" : undefined,
+        status,
+        `clearance=${clearanceOf(verdict, kind)}`,
+        `policy=${d.policyId}@${d.policyVersion} (${kind})`,
+        `segment=${s.start.toFixed(2)}-${s.end.toFixed(2)}s`,
+        reviewText,
+        `intent=${i.platform}/${i.territory}/${i.usage}/${i.competition}@${i.publishAt}`,
+        top ? `reasons: ${top}` : "reasons: none recorded",
       ]
         .filter(Boolean)
-        .join(" | "),
-    ),
-    rawTags: [...T.logRawTags.summary],
+        .join(" | ");
+      const capped = comment.length <= T.maxCommentChars ? comment : `${comment.slice(0, T.maxCommentChars - 1)}…`;
+      return { start: s.start, end: s.end, comment: capped, rawTags };
+    });
+}
+
+function toAction(op: WritebackOp): PlannedAction {
+  switch (op.kind) {
+    case "ENSURE_TAG_OPTION":
+      return {
+        method: "POST",
+        path: "/tag/options",
+        body: { name: op.name, label: op.name, type: T.tagOptionType },
+        purpose: `Create tag option "${op.name}" only if GET /tag/options?query= finds no exact match`,
+        op,
+      };
+    case "ADD_MEDIA_TAGS":
+      return {
+        method: "POST",
+        path: `/media/${op.mediaId}/tags`,
+        body: { tag_option_ids: op.tagNames.map((n) => `<tag_option_id of "${n}">`) },
+        purpose: `Tag media ${op.mediaId}: ${op.tagNames.join(", ")} (only ids not already present)`,
+        op,
+      };
+    case "ADD_VIDEO_LOGS":
+      return {
+        method: "POST",
+        path: "/video/logs",
+        body: {
+          company_id: `<company_id of media ${op.mediaId}>`,
+          video_logs: op.logs.map((l) => ({
+            media_id: Number(op.mediaId),
+            log: { start_offset: l.start, end_offset: l.end, comment: l.comment, raw_tags: l.rawTags },
+          })),
+        },
+        purpose: `Add ${op.logs.length} timecoded log(s) to media ${op.mediaId} (videos only), then re-read to verify`,
+        op,
+      };
+    case "REMOVE_SUPERSEDED_TAGS":
+      return {
+        method: "DELETE",
+        path: `/media/${op.mediaId}/tags`,
+        body: { tag_option_ids: op.tagNames.map((n) => `<tag_option_id of "${n}" if present>`) },
+        purpose: `After the add is verified: remove superseded REROUTE tags from media ${op.mediaId}`,
+        op,
+      };
+    case "REMOVE_SUPERSEDED_LOGS":
+      return {
+        method: "DELETE",
+        path: `/media/${op.mediaId}/logs`,
+        body: { log_ids: [`<ids of logs starting "${receiptMarker(op.receiptId)}" that existed before this write>`] },
+        purpose: `After the add is verified: remove this receipt's earlier REROUTE logs on media ${op.mediaId}`,
+        op,
+      };
+  }
+}
+
+/**
+ * Pure plan, computed per source media. VERIFIED policy: ensure tag options → per media add verdict (+review)
+ * tags, add one log per segment, then remove superseded REROUTE tags/logs. DEMO / UNVERIFIED: only an
+ * informational log per segment — never a verdict tag.
+ */
+export function planWriteback(receipt: RightsReceipt, review: ReviewInfo = {}): PlannedAction[] {
+  const kind = policyKind(receipt.decision);
+  const targets = writebackTargets(receipt);
+  const badId = targets.find((id) => !/^[1-9]\d*$/.test(id));
+  if (badId !== undefined) throw new AppError("BAD_REQUEST", `Invalid ScorePlay media id "${badId}" (expected a positive integer)`);
+
+  if (kind !== "VERIFIED") {
+    return targets.flatMap((mediaId) => {
+      const logs = segmentLogs(receipt, mediaId, kind, review);
+      return logs.length ? [toAction({ kind: "ADD_VIDEO_LOGS", mediaId, logs })] : [];
+    });
+  }
+
+  const reviewTag = receipt.humanReviewStatus === "PENDING" ? undefined : T.reviewTags[receipt.humanReviewStatus];
+  const perMedia = targets.map((mediaId) => {
+    const tagNames = [T.verifiedVerdictTags[mediaVerdict(receipt, mediaId)], ...(reviewTag ? [reviewTag] : [])];
+    return { mediaId, tagNames, logs: segmentLogs(receipt, mediaId, kind, review) };
+  });
+  const ensure = [...new Set(perMedia.flatMap((m) => m.tagNames))].map((name) => toAction({ kind: "ENSURE_TAG_OPTION", name }));
+  const managed = managedTagNames();
+  return [
+    ...ensure,
+    ...perMedia.flatMap(({ mediaId, tagNames, logs }) => [
+      toAction({ kind: "ADD_MEDIA_TAGS", mediaId, tagNames }),
+      ...(logs.length ? [toAction({ kind: "ADD_VIDEO_LOGS", mediaId, logs })] : []),
+      toAction({ kind: "REMOVE_SUPERSEDED_TAGS", mediaId, tagNames: managed.filter((n) => !tagNames.includes(n)) }),
+      ...(logs.length ? [toAction({ kind: "REMOVE_SUPERSEDED_LOGS", mediaId, receiptId: receipt.id })] : []),
+    ]),
+  ];
+}
+
+/** Contract shape (`WritebackResponse.planned`): strips the structured op. */
+export function toScorePlayActions(plan: PlannedAction[]): ScorePlayAction[] {
+  return plan.map(({ method, path, body, purpose }) => ({ method, path, body, purpose }));
+}
+
+// ---------- Apply (LIVE) ----------
+
+/** Video-log read-back → seconds. `timestamp` is seconds; `start/end_timestamp` are milliseconds (documented). */
+function logView(l: ScorePlayVideoLog): MediaReadBack["logs"][number] {
+  const ranged = (l.end_timestamp ?? 0) > 0;
+  return {
+    id: l.id,
+    start: ranged ? (l.start_timestamp ?? 0) / 1000 : (l.timestamp ?? undefined),
+    end: ranged ? l.end_timestamp! / 1000 : undefined,
+    comment: l.comment ?? "",
+  };
+}
+
+type MediaState = { tagIds: Set<number>; tagNames: Map<number, string>; isVideo: boolean; companyId?: number | null };
+
+async function readMedia(client: ScorePlayHttpClient, mediaId: string): Promise<MediaState> {
+  const m = await client.getMedia(mediaId);
+  const tagNames = new Map<number, string>();
+  for (const t of m.tags ?? []) if (t.tag_option_id) tagNames.set(t.tag_option_id, (t.tag_option?.name ?? t.name ?? "").toLowerCase());
+  return { tagIds: new Set([...tagNames.keys(), ...(m.tag_option_ids ?? [])]), tagNames, isVideo: m.type === "video", companyId: m.company_id };
+}
+
+/**
+ * Executes a plan from `planWriteback`. Per media: read → add tags → add logs → re-read & verify →
+ * (only if verified) remove superseded REROUTE tags and this receipt's earlier logs → final re-read.
+ * Never deletes before a verified add. Throws FORBIDDEN for receipts that must not be written live and when
+ * the key lacks `can_do_media_edit`; per-media upstream errors become FAILED.
+ */
+export async function applyWriteback(
+  receipt: RightsReceipt,
+  plan: PlannedAction[],
+  client: ScorePlayHttpClient,
+): Promise<Record<string, MediaReadBack>> {
+  const refusal = liveRefusal(receipt);
+  if (refusal) throw new AppError("FORBIDDEN", refusal);
+  const who = await client.whoami();
+  if (!(who.rights ?? []).includes("can_do_media_edit")) {
+    throw new AppError("FORBIDDEN", "ScorePlay API key lacks can_do_media_edit (GET /whoami); live writeback not authorized");
+  }
+
+  const tagIds = new Map<string, number>();
+  for (const { op } of plan) {
+    if (op.kind !== "ENSURE_TAG_OPTION") continue;
+    const existing = await client.findTagOption(op.name);
+    tagIds.set(op.name, existing?.ID ?? (await client.createTagOption(op.name, T.tagOptionType)).ID);
+  }
+  const idOf = (name: string): number => {
+    const id = tagIds.get(name);
+    if (id === undefined) throw new AppError("INTERNAL", `Plan has no ENSURE_TAG_OPTION for "${name}"`);
+    return id;
   };
 
-  const ranges = new Map<string, PlannedAction>();
-  for (const r of d.reasons) {
-    if (r.outcome === "PERMIT" || r.scoreplayMediaId === undefined || r.start === undefined || r.end === undefined) continue;
-    for (const [start, end] of placeRange(receipt, mediaId, r.scoreplayMediaId, r.start, r.end)) {
-      const label = r.outcome === "DENY" ? "BLOCKED" : "NEEDS_REVIEW";
-      const comment = clip(
-        `${marker} ${label} ${fmt(start)}-${fmt(end)}s | rule ${r.ruleId} (${r.dimension}): ${r.explanation} | ${policy} | ${intent}`,
-      );
-      const key = `${r.outcome}|${r.ruleId}|${fmt(start)}|${fmt(end)}`;
-      if (!ranges.has(key)) {
-        ranges.set(key, { start, end: end > start ? end : undefined, comment, rawTags: [...T.logRawTags[r.outcome]] });
+  const byMedia = new Map<string, WritebackOp[]>();
+  for (const { op } of plan) {
+    if (op.kind === "ENSURE_TAG_OPTION") continue;
+    byMedia.set(op.mediaId, [...(byMedia.get(op.mediaId) ?? []), op]);
+  }
+
+  const marker = receiptMarker(receipt.id);
+  const managed = new Set(managedTagNames());
+  const out: Record<string, MediaReadBack> = {};
+  for (const [mediaId, ops] of byMedia) {
+    try {
+      const before = await readMedia(client, mediaId);
+      const earlierLogs = before.isVideo ? (await client.listVideoLogs(mediaId)).filter((l) => l.comment?.startsWith(marker)) : [];
+      const earlierIds = new Set(earlierLogs.map((l) => l.id));
+      const notes: string[] = [];
+      const addTags = ops.find((o) => o.kind === "ADD_MEDIA_TAGS");
+      const addLogs = ops.find((o) => o.kind === "ADD_VIDEO_LOGS");
+
+      // 1. Add.
+      const wantedIds = addTags ? addTags.tagNames.map(idOf) : [];
+      const missing = wantedIds.filter((id) => !before.tagIds.has(id));
+      if (missing.length) await client.addMediaTags(mediaId, missing);
+      let plannedLogs: PlannedLog[] = [];
+      if (addLogs) {
+        if (!before.isVideo) notes.push("not a video: tags only, no timecoded logs");
+        else {
+          if (before.companyId == null) throw new AppError("UPSTREAM", `Media ${mediaId} has no company_id; POST /video/logs requires it`);
+          plannedLogs = addLogs.logs;
+          await client.addVideoLogs(before.companyId, Number(mediaId), plannedLogs);
+        }
       }
+
+      // 2. Verify by re-reading.
+      let after = await readMedia(client, mediaId);
+      let logs = before.isVideo ? (await client.listVideoLogs(mediaId)).filter((l) => l.comment?.startsWith(marker)) : [];
+      const problems: string[] = [];
+      const absentTags = (addTags?.tagNames ?? []).filter((n) => !after.tagIds.has(idOf(n)));
+      if (absentTags.length) problems.push(`tags not visible on re-read: ${absentTags.join(", ")}`);
+      const newComments = logs.filter((l) => !earlierIds.has(l.id)).map((l) => l.comment ?? "");
+      const absentLogs = plannedLogs.filter((p) => !newComments.includes(p.comment));
+      if (absentLogs.length) problems.push(`${absentLogs.length} of ${plannedLogs.length} new log(s) not visible on re-read`);
+
+      // 3. Only after a verified add: remove superseded REROUTE tags + this receipt's earlier logs.
+      if (problems.length === 0) {
+        let removed = false;
+        const removeTags = ops.find((o) => o.kind === "REMOVE_SUPERSEDED_TAGS");
+        if (removeTags) {
+          const names = new Set(removeTags.tagNames);
+          const stale = [...after.tagNames].filter(([, n]) => names.has(n) && managed.has(n)).map(([id]) => id);
+          if (stale.length) {
+            await client.removeMediaTags(mediaId, stale);
+            removed = true;
+          }
+        }
+        if (ops.some((o) => o.kind === "REMOVE_SUPERSEDED_LOGS") && earlierIds.size) {
+          await client.deleteVideoLogs(mediaId, [...earlierIds]);
+          removed = true;
+        }
+        if (removed) {
+          after = await readMedia(client, mediaId);
+          logs = before.isVideo ? (await client.listVideoLogs(mediaId)).filter((l) => l.comment?.startsWith(marker)) : [];
+          const lingering = logs.filter((l) => earlierIds.has(l.id)).length;
+          if (lingering) problems.push(`${lingering} superseded log(s) still present`);
+        }
+      }
+
+      out[mediaId] = {
+        status: problems.length === 0 ? "VERIFIED" : "WRITTEN",
+        at: new Date().toISOString(),
+        ...([...problems, ...notes].length ? { detail: [...problems, ...notes].join("; ") } : {}),
+        tags: [...new Set([...after.tagNames.values()].filter((n) => managed.has(n)))],
+        logs: logs.map(logView),
+      };
+    } catch (err) {
+      out[mediaId] = {
+        status: "FAILED",
+        at: new Date().toISOString(),
+        detail: err instanceof Error ? err.message : String(err),
+        tags: [],
+        logs: [],
+      };
     }
   }
-  return [summary, ...[...ranges.values()].sort((a, b) => a.start - b.start)];
-}
-
-/** Where a reason range on `sourceId` lands on the target media's timeline. */
-function placeRange(receipt: RightsReceipt, targetId: string, sourceId: string, start: number, end: number): [number, number][] {
-  if (!receipt.derivativeAssetId) return sourceId === targetId ? [[start, end]] : [];
-  if (targetId !== receipt.derivativeAssetId) return [];
-  const placed: [number, number][] = [];
-  let cursor = 0;
-  for (const seg of receipt.edit.segments) {
-    const from = Math.max(start, seg.start);
-    const to = Math.min(end, seg.end);
-    if (seg.scoreplayMediaId === sourceId && from <= to) placed.push([cursor + from - seg.start, cursor + to - seg.start]);
-    cursor += seg.end - seg.start;
-  }
-  return placed;
-}
-
-function fmt(seconds: number): string {
-  return seconds.toFixed(2);
-}
-
-function clip(text: string): string {
-  return text.length <= T.maxCommentChars ? text : `${text.slice(0, T.maxCommentChars - 1)}…`;
+  return out;
 }

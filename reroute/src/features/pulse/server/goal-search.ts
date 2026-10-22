@@ -2,18 +2,10 @@ import { CLUBS } from "../clubs";
 import { isVideoPreviewEnabled } from "../flags";
 import { goalIntents } from "../goal-intents";
 import { latestSeason, rankMoments, withPreview, type LinkedVideo } from "../moment-ranking";
-import type { Club, GoalRun, ParsedObjective, Preview } from "../types";
-import { linkToIndex, type MediaDeps } from "./media-lookup";
-import { ScorePlayDiscoveryError, defaultScorePlayHttp, discoverVideos, type Discovery } from "./scoreplay-discovery";
-import {
-  TwelveLabsError,
-  classifyTwelveLabsError,
-  createTwelveLabsSdk,
-  loadCatalog,
-  readTwelveLabsConfig,
-  searchMoments,
-  videoStream,
-} from "./twelvelabs-moments";
+import type { Club, GoalRun, MatchFilter, ParsedObjective, Preview } from "../types";
+import { candidateMapping, defaultMediaDeps, linkDiscovered, mappingAttempt, openIndex, stageIssue, type MediaDeps } from "./media-lookup";
+import { ScorePlayDiscoveryError, discoverVideos, type DiscoveredVideo, type Discovery } from "./scoreplay-discovery";
+import { classifyTwelveLabsError, searchMoments, videoStream } from "./twelvelabs-moments";
 
 /** Moments per question: one page; enough for agreement between questions to show. */
 const MOMENTS_PER_INTENT = 12;
@@ -22,26 +14,38 @@ const PREVIEW_VIDEOS = 15;
 
 export type GoalSearchDeps = MediaDeps & { previews: boolean };
 
-/** The club's index: its own (`CLUBS[club].library.indexEnv`) when configured, else the shared one. */
+/** The club's index: `PULSE_TWELVELABS_INDEX_ID_<CLUB>` when configured, else the shared `TWELVELABS_INDEX_ID`. */
 export function defaultGoalDeps(club: Club): GoalSearchDeps {
-  return {
-    scoreplay: defaultScorePlayHttp(),
-    twelvelabs: () => {
-      const config = readTwelveLabsConfig();
-      const own = process.env[CLUBS[club].library.indexEnv]?.trim();
-      return { sdk: createTwelveLabsSdk(config.apiKey), indexId: own || config.indexId };
-    },
-    previews: isVideoPreviewEnabled(),
-  };
+  return { ...defaultMediaDeps(club), previews: isVideoPreviewEnabled() };
 }
 
-export type GoalSearch = Pick<GoalRun, "intents" | "library" | "search" | "attempts" | "pool">;
+export type GoalSearch = Pick<GoalRun, "intents" | "library" | "search" | "attempts" | "pool" | "matchFilter">;
+
+/** Names under which footage refers to a fixture's opponent (lower-case). */
+const OPPONENT_ALIASES: Record<string, string[]> = {
+  "manchester united": ["manchester united", "man utd", "man united", "mnu", "united"],
+  "sacramento kings": ["sacramento kings", "sacramento", "kings", "sac"],
+};
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Restrict to videos whose filename or tags name the requested opponent (word-boundary match). */
+export function filterByMatch(videos: readonly DiscoveredVideo[], requested: string): { videos: DiscoveredVideo[]; filter: MatchFilter } {
+  const key = requested.trim().toLowerCase();
+  const names = OPPONENT_ALIASES[key] ?? Object.values(OPPONENT_ALIASES).find((a) => a.includes(key)) ?? [key];
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${names.map(escapeRegExp).join("|")})(?=$|[^\\p{L}\\p{N}])`, "iu");
+  const kept = videos.filter((v) => re.test(v.asset.title) || v.asset.tags.some((t) => re.test(t)));
+  return kept.length
+    ? { videos: kept, filter: { requested, status: "APPLIED", videos: kept.length } }
+    : { videos: [...videos], filter: { requested, status: "NOT_FOUND", videos: videos.length } };
+}
 
 /**
  * Goal → ranked real moments:
  *  1. ScorePlay lists the club's videos (team tag);
  *  2. each objective question is a TwelveLabs Marengo search restricted to those indexed videos;
  *  3. hits map back to ScorePlay assets with exact timestamps and are ranked for the objective.
+ * Identity is lib/media's MediaResolver: AMBIGUOUS/UNMAPPED videos are reported as MAPPING_FAILED attempts.
  * Every failure is reported as such; nothing is simulated or filled in.
  */
 export async function searchGoal(
@@ -56,7 +60,7 @@ export async function searchGoal(
 
   let discovery: Discovery;
   try {
-    discovery = await discoverVideos(deps.scoreplay, { terms, filenameHints: [] }, { maxPerQuery: 200 });
+    discovery = await discoverVideos(deps.scoreplay, { terms, filenameHints: [] }, { maxPerQuery: Number.POSITIVE_INFINITY });
     const tags = [...new Set(discovery.resolved.tags.map((t) => t.name))].slice(0, 5).join(", ") || "—";
     attempts.push({ service: "ScorePlay", query: terms.join(", "), outcome: discovery.videos.length ? "OK" : "EMPTY", detail: `${discovery.videos.length} video(s) · tags ${tags}` });
   } catch (err) {
@@ -64,33 +68,52 @@ export async function searchGoal(
     attempts.push({ service: "ScorePlay", query: terms.join(", "), outcome: "ERROR", code, detail: err instanceof Error ? err.message : String(err) });
     return { intents, library: empty, attempts, pool: [], search: { status: "UNAVAILABLE", code, message: "The ScorePlay media library could not be reached, so no footage is proposed." } };
   }
-  const titles = discovery.videos.map((v) => v.asset.title);
-  const library = { videos: discovery.videos.length, indexed: 0, latestSeason: latestSeason(titles) };
-  if (discovery.videos.length === 0) {
-    return { intents, library, attempts, pool: [], search: { status: "NO_MATCHING_MOMENT", message: `No ScorePlay video is tagged ${terms.join(" or ")}.` } };
+  let videos = discovery.videos;
+  let matchFilter: MatchFilter | undefined;
+  if (input.match) {
+    ({ videos, filter: matchFilter } = filterByMatch(videos, input.match));
+    attempts.push({
+      service: "ScorePlay",
+      query: `match: ${input.match}`,
+      outcome: matchFilter.status === "APPLIED" ? "OK" : "EMPTY",
+      detail:
+        matchFilter.status === "APPLIED"
+          ? `${matchFilter.videos} of ${discovery.videos.length} video(s) name ${input.match}`
+          : `no video names ${input.match}; searching the whole ${club.label} library`,
+    });
+  }
+  const titles = videos.map((v) => v.asset.title);
+  const library = { videos: videos.length, indexed: 0, latestSeason: latestSeason(titles) };
+  if (videos.length === 0) {
+    return { intents, library, attempts, pool: [], matchFilter, search: { status: "NO_MATCHING_MOMENT", message: `No ScorePlay video is tagged ${terms.join(" or ")}.` } };
   }
 
   try {
-    const { sdk, indexId } = deps.twelvelabs();
-    const catalog = await loadCatalog(sdk, indexId);
-    const { links } = linkToIndex(discovery.videos, catalog.entries);
+    const { sdk, indexId, catalog, media } = await openIndex(deps);
+    const indexLabel = catalog.indexName ?? indexId;
+    const { links, ambiguous, unmapped } = linkDiscovered(videos, media);
+    const mapping = mappingAttempt(ambiguous, unmapped, indexLabel);
+    if (mapping) attempts.push(mapping);
     const indexed = { ...library, indexed: links.length, indexName: catalog.indexName };
     if (links.length === 0) {
-      attempts.push({ service: "TwelveLabs", query: "index catalog", outcome: "EMPTY", detail: `index ${catalog.indexName ?? indexId}: 0 of ${discovery.videos.length} videos indexed` });
       return {
         intents,
         library: indexed,
         attempts,
         pool: [],
-        search: { status: "NOT_INDEXED", message: `None of the ${discovery.videos.length} ${club.label} videos in ScorePlay is in the video-intelligence index ${catalog.indexName ?? indexId}, so no moment can be found yet.` },
+        matchFilter,
+        search: ambiguous.length
+          ? {
+              status: "NOT_INDEXED",
+              code: "MAPPING_FAILED",
+              message: `${ambiguous.length} ${club.label} video(s) match several indexed videos by filename and duration, and none can be linked uniquely, so no moment is proposed.`,
+            }
+          : { status: "NOT_INDEXED", message: `None of the ${videos.length} ${club.label} videos in ScorePlay is in the video-intelligence index ${indexLabel}, so no moment can be found yet.` },
       };
     }
 
     const byVideo = new Map<string, LinkedVideo>(
-      links.map((l) => [
-        l.entry.videoId,
-        { asset: l.video.asset, discoveredBy: l.video.discoveredBy, mapping: { via: l.via, indexedScoreplayId: l.entry.customId, filename: l.entry.filename ?? l.video.asset.title } },
-      ]),
+      links.map((l) => [l.ref.twelvelabsVideoId!, { asset: l.video.asset, discoveredBy: l.video.discoveredBy, mapping: candidateMapping(l), media: l.ref }]),
     );
     const searchOptions: ("visual" | "audio")[] = catalog.searchOptions.includes("visual") ? ["visual"] : ["audio"];
     const videoIds = [...byVideo.keys()];
@@ -98,16 +121,25 @@ export async function searchGoal(
     const results = intents.flatMap((intent, i) => {
       const s = settled[i];
       if (s.status === "fulfilled") {
-        attempts.push({ service: "TwelveLabs", query: intent.query, outcome: s.value.length ? "OK" : "EMPTY", detail: `${s.value.length} moment(s) in ${catalog.indexName ?? indexId}` });
-        return [{ intent, moments: s.value }];
+        // The search is restricted to linked videos; anything else is dropped, never mapped.
+        const moments = s.value.filter((m) => byVideo.has(m.videoId));
+        const dropped = s.value.length - moments.length;
+        attempts.push({
+          service: "TwelveLabs",
+          query: intent.query,
+          outcome: moments.length ? "OK" : "EMPTY",
+          ...(dropped ? { code: "MAPPING_FAILED" } : {}),
+          detail: `${moments.length} moment(s) in ${indexLabel}${dropped ? `; ${dropped} unlinkable hit(s) dropped` : ""}`,
+        });
+        return [{ intent, moments }];
       }
       const issue = classifyTwelveLabsError(s.reason, "search");
       attempts.push({ service: "TwelveLabs", query: intent.query, outcome: "ERROR", code: issue.code, detail: issue.message });
       return [];
     });
     if (results.length === 0) {
-      const code = attempts.findLast((a) => a.code)?.code;
-      return { intents, library: indexed, attempts, pool: [], search: { status: "UNAVAILABLE", code, message: "Video intelligence is unavailable right now, so no moment can be proposed." } };
+      const code = attempts.findLast((a) => a.outcome === "ERROR")?.code;
+      return { intents, library: indexed, attempts, pool: [], matchFilter, search: { status: "UNAVAILABLE", code, message: "Video intelligence is unavailable right now, so no moment can be proposed." } };
     }
 
     const ranked = rankMoments(results, byVideo, { objective: input.objective, match: input.match, latestSeason: library.latestSeason });
@@ -139,6 +171,7 @@ export async function searchGoal(
       library: indexed,
       attempts,
       pool,
+      matchFilter,
       search: pool.length
         ? {
             status: "FOUND",
@@ -147,13 +180,14 @@ export async function searchGoal(
         : { status: "NO_MATCHING_MOMENT", code: "NO_SEARCH_RESULTS", message: "TwelveLabs found no moment in the indexed videos for this goal." },
     };
   } catch (err) {
-    const issue: TwelveLabsError = err instanceof TwelveLabsError ? err : classifyTwelveLabsError(err, "search");
-    attempts.push({ service: "TwelveLabs", query: "index", outcome: "ERROR", code: issue.code, detail: issue.message });
+    const issue = stageIssue(err);
+    attempts.push({ service: issue.service, query: "index", outcome: "ERROR", code: issue.code, detail: issue.message });
     return {
       intents,
       library,
       attempts,
       pool: [],
+      matchFilter,
       search: {
         status: issue.code === "EMPTY_INDEX" ? "NOT_INDEXED" : "UNAVAILABLE",
         code: issue.code,
@@ -162,7 +196,9 @@ export async function searchGoal(
             ? "Video intelligence is not configured (TwelveLabs key or index missing), so no moment can be found."
             : issue.code === "INDEX_NOT_ACCESSIBLE"
               ? `The ${club.label} video-intelligence index is not accessible with the configured key.`
-              : "Video intelligence is unavailable right now, so no moment can be proposed.",
+              : issue.service === "ScorePlay"
+                ? "The ScorePlay catalog needed to link footage could not be read, so no moment can be proposed."
+                : "Video intelligence is unavailable right now, so no moment can be proposed.",
       },
     };
   }

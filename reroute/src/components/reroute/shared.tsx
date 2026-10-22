@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangleIcon, KeyRoundIcon, OctagonXIcon } from "lucide-react";
-import type { DataOrigin, Evidence, Verdict } from "@/lib/contracts";
+import { DEMO_CLEARANCE_LABEL, type Clearance, type DataOrigin, type Evidence, type Verdict } from "@/lib/contracts";
 import { describeError } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -43,14 +43,20 @@ export const VERDICT_STYLE: Record<Verdict, { label: string; text: string; bg: s
   },
 };
 
-export function VerdictBadge({ verdict, className }: { verdict: Verdict; className?: string }) {
+/** ALLOWED under DEMO clearance is never shown green: it is not a verified legal clearance. */
+export function VerdictBadge({ verdict, clearance, className }: { verdict: Verdict; clearance?: Clearance; className?: string }) {
+  const demo = verdict === "ALLOWED" && clearance === "DEMO";
   const s = VERDICT_STYLE[verdict];
   return (
     <Badge
       variant="outline"
-      className={cn("rounded-sm font-mono text-[10px] tracking-wider", s.text, s.bg, s.border, className)}
+      className={cn(
+        "rounded-sm font-mono text-[10px] tracking-wider",
+        demo ? "border-amber-500/60 bg-amber-500/15 text-amber-200" : `${s.text} ${s.bg} ${s.border}`,
+        className,
+      )}
     >
-      {s.label}
+      {demo ? "ALLOWED · DEMO" : s.label}
     </Badge>
   );
 }
@@ -91,7 +97,7 @@ export function FictionalTag({ className }: { className?: string }) {
         className,
       )}
     >
-      FICTIONAL DEMO POLICY
+      {DEMO_CLEARANCE_LABEL}
     </Badge>
   );
 }

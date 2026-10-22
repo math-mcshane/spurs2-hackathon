@@ -5,9 +5,7 @@ import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import { STATE_ROOT } from "@/lib/state-dir";
 import {
-  CampaignDraftSchema,
   DetectedOpportunitySchema,
-  GoalRunSchema,
   LedgerEntrySchema,
   MediaLookupSchema,
   ParsedObjectiveSchema,
@@ -16,9 +14,10 @@ import {
 } from "../types";
 
 /**
- * PULSE's own state (`.data/pulse.json`, gitignored), separate from REROUTE's `store.json` so PULSE
- * never reads-modifies-writes REROUTE records. Same discipline as REROUTE's store: serialized
- * in-process, atomic on disk. On Vercel it lives in ephemeral `/tmp`, like REROUTE's receipts.
+ * State of the fan-signal BOARD only (`/pulse/board`, behind PULSE_BOARD_ENABLED, SIMULATED signals):
+ * snapshot, ledger, manual triggers, board objective — in `.data/pulse.json` (gitignored; ephemeral `/tmp`
+ * on Vercel). Nothing durable lives here: goal runs, campaigns, evaluations, receipts and audit events are
+ * in Supabase (`lib/server/repositories`). Serialized in-process, atomic on disk.
  */
 
 const SnapshotSchema = z.object({
@@ -33,12 +32,8 @@ const PulseDataSchema = z.object({
   snapshot: SnapshotSchema.optional().catch(undefined),
   manualTriggers: z.array(StoredManualTriggerSchema).default([]),
   ledger: z.record(z.string(), LedgerEntrySchema).default({}),
-  /** The active business objective, if the producer set one. An objective saved by an older PULSE version is dropped. */
+  /** The board's active business objective, if the producer set one. An objective saved by an older PULSE version is dropped. */
   objective: ParsedObjectiveSchema.optional().catch(undefined),
-  /** Campaign drafts by opportunity id — accessed only through `CampaignDraftRepository`. Older-format drafts are dropped. */
-  campaigns: z.record(z.string(), CampaignDraftSchema).default({}).catch({}),
-  /** Guided goal runs (references and verdicts only — never media), newest last. Older formats are dropped. */
-  goals: z.array(GoalRunSchema).default([]).catch([]),
 });
 export type PulseData = z.infer<typeof PulseDataSchema>;
 
@@ -67,7 +62,7 @@ async function save(data: PulseData): Promise<void> {
   await rename(tmp, FILE);
 }
 
-/** Run `fn` exclusively against the PULSE store; persists only if `fn` returns `{ write: true }`. */
+/** Run `fn` exclusively against the board store; persists only if `fn` returns `{ write: true }`. */
 export function transact<T>(fn: (data: PulseData) => { result: T; write: boolean }): Promise<T> {
   const run = queue.then(async () => {
     const data = await load();

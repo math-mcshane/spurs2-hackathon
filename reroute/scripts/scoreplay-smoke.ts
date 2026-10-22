@@ -2,12 +2,13 @@
  * pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts [query]
  * pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts --writeback <scoreplayMediaId>
  *
- * --writeback writes a TEST decision (fictional demo policy, receipt id `smoke-<mediaId>`) to a real
- * ScorePlay media, then prints the read-back. Re-running it must not duplicate tags or logs.
+ * --writeback prints the DRY-RUN writeback plan for a TEST receipt (fictional demo policy, receipt id
+ * `smoke-<mediaId>`). Nothing is written to ScorePlay: scripts never apply a writeback.
  */
 import { RightsReceiptSchema, type RightsReceipt } from "../src/lib/contracts";
 import { AppError } from "../src/lib/errors";
 import { ScorePlayHttpClient } from "../src/lib/scoreplay/client";
+import { planWriteback, toScorePlayActions, writebackMode } from "../src/lib/scoreplay/writeback";
 import { SCOREPLAY_TAXONOMY } from "../src/lib/scoreplay/taxonomy";
 
 async function main() {
@@ -22,8 +23,8 @@ async function main() {
   if (wbAt >= 0) {
     const mediaId = args[wbAt + 1];
     if (!mediaId) throw new AppError("BAD_REQUEST", "--writeback needs a ScorePlay media id");
-    const readBack = await sp.writeDecision(testReceipt(mediaId));
-    console.log("read-back:", JSON.stringify(readBack, null, 2));
+    const receipt = testReceipt(mediaId);
+    console.log(writebackMode(receipt), JSON.stringify(toScorePlayActions(planWriteback(receipt)), null, 2));
     return;
   }
 
@@ -61,9 +62,11 @@ function testReceipt(mediaId: string): RightsReceipt {
       policyVersion: "smoke",
       policyId: "smoke-test",
       policyFictional: true,
+      clearance: "NONE",
       evaluatedAt: now,
     },
     edit: { id: `smoke-edit-${mediaId}`, title: "Smoke test", segments: [{ scoreplayMediaId: mediaId, start: 0, end: 15 }], derived: false },
+    media: [],
     humanReviewStatus: "PENDING",
     createdAt: now,
   });

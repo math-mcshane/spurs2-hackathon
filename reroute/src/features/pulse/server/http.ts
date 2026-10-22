@@ -1,13 +1,11 @@
 import { connection } from "next/server";
 import { AppError } from "@/lib/errors";
 import { route } from "@/lib/server/http";
-import { isPulseEnabled } from "../flags";
+import { isPulseBoardEnabled } from "../flags";
 
 /**
- * Every PULSE API route goes through this: request-time flag check (never prerendered), plain 404
- * when disabled — before any parsing, store access or upstream call — then REROUTE's uniform error
- * handling. Mutations additionally reject cross-origin browser requests; the app has no session
- * layer of its own (access is Vercel Deployment Protection).
+ * Every PULSE API route goes through this: request-time evaluation (never prerendered), cross-origin
+ * mutations rejected, then REROUTE's uniform error handling.
  */
 export function pulseRoute(handler: (req: Request) => Promise<Response>) {
   const wrapped = route(async (req: Request) => {
@@ -21,7 +19,19 @@ export function pulseRoute(handler: (req: Request) => Promise<Response>) {
   });
   return async (req: Request): Promise<Response> => {
     await connection();
-    if (!isPulseEnabled()) return new Response(null, { status: 404 });
     return wrapped(req);
+  };
+}
+
+/**
+ * Routes of the SIMULATED fan-signal board: plain 404 unless `PULSE_BOARD_ENABLED=true` — checked
+ * before any parsing, store access or upstream call.
+ */
+export function boardRoute(handler: (req: Request) => Promise<Response>) {
+  const inner = pulseRoute(handler);
+  return async (req: Request): Promise<Response> => {
+    await connection();
+    if (!isPulseBoardEnabled()) return new Response(null, { status: 404 });
+    return inner(req);
   };
 }

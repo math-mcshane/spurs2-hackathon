@@ -23,7 +23,7 @@ export function ResolvePanel({
   onApply,
   onRevert,
 }: {
-  /** Index of the first BLOCKED segment of the active edit, or null when nothing is blocked. */
+  /** Index of the first BLOCKED or NEEDS_REVIEW segment of the active edit, or null when every segment is ALLOWED. */
   blockedIndex: number | null;
   state: ResolveState;
   appliedEditId: string | null;
@@ -46,8 +46,8 @@ export function ResolvePanel({
         </Button>
         <span className="text-[11px] text-zinc-400">
           {blockedIndex === null
-            ? "Available when a segment is BLOCKED."
-            : `Replace segment #${blockedIndex + 1} via Marengo search; every candidate is re-checked.`}
+            ? "Available when a segment is BLOCKED or needs review."
+            : `Route around segment #${blockedIndex + 1}; every replacement is re-checked independently.`}
         </span>
         {appliedEditId && (
           <Button type="button" size="xs" variant="ghost" className="ml-auto text-zinc-400" onClick={onRevert}>
@@ -60,13 +60,25 @@ export function ResolvePanel({
 
       {state.status === "done" && (
         <>
-          <p className="font-mono text-[10px] text-zinc-500">
-            query: “{state.res.query}” · {state.res.candidates.length} candidate
-            {state.res.candidates.length === 1 ? "" : "s"} for segment #{state.segmentIndex + 1}
-            {!state.res.best && " · no eligible alternative — the original stays restricted"}
+          <p className="text-xs text-zinc-300">
+            <span className="font-mono text-[10px] text-zinc-500">{state.res.blocker.scope} restriction</span> · {state.res.blocker.explanation}
           </p>
-          {state.res.candidates.length === 0 && (
-            <p className="text-xs text-zinc-500">Marengo returned no comparable segments in the indexed footage.</p>
+          {state.res.blocker.scope === "CAMPAIGN" ? (
+            <p role="note" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Another clip would hit the same restriction — change the intent instead.
+              {state.res.blocker.suggestion && <strong className="block">{state.res.blocker.suggestion}</strong>}
+            </p>
+          ) : (
+            <>
+              <p className="font-mono text-[10px] text-zinc-500">
+                query: “{state.res.query}” · {state.res.candidates.length} candidate
+                {state.res.candidates.length === 1 ? "" : "s"} for segment #{state.segmentIndex + 1}
+                {!state.res.best && " · no eligible alternative — the original stays restricted"}
+              </p>
+              {state.res.candidates.length === 0 && (
+                <p className="text-xs text-zinc-500">Marengo returned no comparable segments in the indexed footage.</p>
+              )}
+            </>
           )}
           <ul className="grid gap-2 sm:grid-cols-3">
             {state.res.candidates.slice(0, 3).map((c) => (
@@ -118,9 +130,9 @@ function CandidateCard({ c, best, applied, onApply }: { c: Candidate; best: bool
         </div>
         <dl className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 text-[10px] text-zinc-500">
           <dt>Segment</dt>
-          <dd><VerdictBadge verdict={c.segmentDecision.verdict} className="h-4 px-1 text-[9px]" /></dd>
+          <dd><VerdictBadge verdict={c.segmentDecision.verdict} clearance={c.segmentDecision.clearance} className="h-4 px-1 text-[9px]" /></dd>
           <dt>Full edit</dt>
-          <dd><VerdictBadge verdict={c.editDecision.decision.verdict} className="h-4 px-1 text-[9px]" /></dd>
+          <dd><VerdictBadge verdict={c.editDecision.decision.verdict} clearance={c.editDecision.decision.clearance} className="h-4 px-1 text-[9px]" /></dd>
         </dl>
         <Badge
           variant="outline"

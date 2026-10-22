@@ -114,7 +114,7 @@ describe("campaign proposal builder", () => {
 
   it("withholds the commerce CTA and says so when no store URL is configured", () => {
     const d = draftFor(MX_JERSEYS, "opp-spurs-harper-run");
-    expect(d.cta).toMatchObject({ status: "NOT_CONFIGURED", note: "Commerce destination not configured" });
+    expect(d.cta).toMatchObject({ status: "NOT_CONFIGURED", note: expect.stringMatching(/No club-configured store link .*https link on the club's own domain/) });
     for (const c of d.channels) {
       expect(c.copy).not.toContain(d.cta.text);
       expect(c.copy).not.toMatch(/https?:\/\//);

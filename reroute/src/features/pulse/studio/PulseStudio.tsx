@@ -1,125 +1,204 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Loader2Icon, SearchXIcon, SparklesIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRightIcon, Loader2Icon, PlusIcon, RefreshCwIcon, SearchXIcon, SparklesIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/reroute/shared";
+import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
 import { pulseApi } from "../client";
-import { PulseHeader } from "../pulse-ui";
 import type { Club, GoalAction, GoalView } from "../types";
-import { CampaignStage, type Busy } from "./CampaignStage";
+import { Diagnostics } from "./Diagnostics";
 import { MomentCard } from "./MomentCard";
-import { StepHeading } from "./parts";
+import { Proposal } from "./Proposal";
+import { ReceiptView } from "./Receipt";
+import { ReviewStage } from "./Review";
+import { AnotherWay, VerdictPanel } from "./Verdict";
+import { STEPS, StepHeading, Stepper, type StepKey, type StepState } from "./parts";
 
+/** The two hackathon scenarios, one click each. */
 const EXAMPLES: Record<Club, string[]> = {
-  tottenham: [
-    "Promote Tottenham merchandise to UK fans using the best moments from the Manchester United match.",
-    "Maximize global engagement from the Manchester United match.",
-  ],
-  spurs: ["Sell Spurs jerseys in Mexico using the best moments from the Kings game."],
+  tottenham: ["Promote Tottenham merchandise to UK supporters", "Maximize global engagement from the Manchester United game"],
+  spurs: ["Sell Spurs jerseys in Mexico using the best moments from the Kings game"],
 };
 
-const VERDICT_TOAST: Record<"ALLOWED" | "NEEDS_REVIEW" | "BLOCKED", string> = {
-  ALLOWED: "REROUTE: ALLOWED",
-  NEEDS_REVIEW: "REROUTE: needs a rights review",
-  BLOCKED: "REROUTE: blocked for this use",
+type Busy = null | "load" | "run" | "draft" | "rights" | "alternatives" | "submit" | `select:${string}` | `alt:${string}`;
+
+/** Section each action's result belongs to: brought into view once it has rendered. */
+const SECTION_AFTER: Record<GoalAction["action"], StepKey> = {
+  run: "moment",
+  select: "proposal",
+  draft: "proposal",
+  checkRights: "rights",
+  findAlternatives: "rights",
+  useAlternative: "rights",
+  submitForReview: "review",
 };
 
-const NEXT_SECTION: Partial<Record<GoalAction["action"], string>> = { run: "s-opps", draft: "s-campaign", findAlternatives: "s-recovery" };
+/** Index of the step the user is on (STEPS order); STEPS.length = everything done. */
+function currentStep(goal: GoalView | null): number {
+  if (!goal) return 0;
+  if (!goal.campaign) return 1;
+  if (goal.rights.state === "NOT_CHECKED") return 2;
+  if (goal.reviewStatus === "NOT_SUBMITTED" || !goal.rights.current) return 3;
+  if (goal.reviewStatus === "PENDING") return 4;
+  return goal.writeback.status === "NOT_STARTED" ? 5 : STEPS.length;
+}
+
+function runIdFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("run");
+}
 
 /**
- * PULSE's default experience: one goal → three real moments → one campaign proposal, with REROUTE's
- * rights verdict and a "Find another way" recovery that keeps the goal. Technical detail stays folded.
+ * The product: business goal → three real moments → campaign proposal → REROUTE rights verdict →
+ * "Find another way" → human review → audit receipt with the ScorePlay writeback plan. The goal run
+ * id lives in the URL (`?run=`), so a reload restores the exact state from the server.
  */
 export function PulseStudio() {
   const [goal, setGoal] = useState<GoalView | null>(null);
-  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
-  const [error, setError] = useState<unknown>(null);
+  const [failure, setFailure] = useState<{ error: unknown; retry: () => void } | null>(null);
+  const [missingRun, setMissingRun] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [club, setClub] = useState<Club>("tottenham");
-  /** Section to bring into view once the action's result has rendered. */
-  const scrollTo = useRef<string | null>(null);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const { session, setSession, error: sessionError, refresh: refreshSession } = useReviewerSession();
+  const scrollTo = useRef<StepKey | null>(null);
 
   useEffect(() => {
     if (!scrollTo.current) return;
-    document.getElementById(scrollTo.current)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(`s-${scrollTo.current}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     scrollTo.current = null;
   }, [goal]);
 
-  useEffect(() => {
-    let live = true;
-    const id = new URLSearchParams(window.location.search).get("goal") ?? undefined;
-    pulseApi.goal(id).then(
-      (g) => {
-        if (!live) return;
-        setGoal(g);
-        if (g) {
-          setText(g.run.objective.raw);
-          setClub(g.run.club);
-        }
-        setLoaded(true);
-      },
-      (err) => {
-        if (!live) return;
-        setError(err);
-        setLoaded(true);
-      },
-    );
-    return () => {
-      live = false;
-    };
+  const load = useCallback(async (id: string) => {
+    setBusy("load");
+    setFailure(null);
+    try {
+      const g = await pulseApi.goal(id);
+      setGoal(g);
+      setMissingRun(g ? null : id);
+      if (g) {
+        setText(g.run.objective.raw);
+        setClub(g.run.club);
+      }
+    } catch (error) {
+      setFailure({ error, retry: () => void load(id) });
+    } finally {
+      setBusy(null);
+    }
   }, []);
+
+  useEffect(() => {
+    const id = runIdFromUrl();
+    if (id) void load(id);
+    const onPop = () => {
+      const next = runIdFromUrl();
+      if (next) void load(next);
+      else setGoal(null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [load]);
 
   async function act(body: GoalAction, kind: Exclude<Busy, null>, done?: (g: GoalView) => void) {
     setBusy(kind);
+    setFailure(null);
     try {
       const g = await pulseApi.goalAction(body);
-      scrollTo.current = body.action === "draft" && body.commerceUrl ? null : (NEXT_SECTION[body.action] ?? null);
+      scrollTo.current = SECTION_AFTER[body.action];
       setGoal(g);
-      setError(null);
-      window.history.replaceState(null, "", `/pulse?goal=${g.run.id}`);
+      setMissingRun(null);
+      if (runIdFromUrl() !== g.run.id) window.history.pushState(null, "", `/?${new URLSearchParams({ run: g.run.id })}`);
       done?.(g);
-    } catch (err) {
-      setError(err);
-      // A refused approval still records REROUTE's fresh verdict: show it.
-      if (goal && body.action !== "run") await pulseApi.goal(goal.run.id).then(setGoal, () => undefined);
+    } catch (error) {
+      setFailure({ error, retry: () => void act(body, kind, done) });
+      // A refused action may still have recorded something (e.g. a fresh verdict): show the server's state.
+      if (goal && body.action !== "run") await pulseApi.goal(goal.run.id).then((g) => g && setGoal(g), () => undefined);
     } finally {
       setBusy(null);
     }
   }
 
+  const refresh = () => goal && void pulseApi.goal(goal.run.id).then((g) => g && setGoal(g), (error) => setFailure({ error, retry: refresh }));
+
+  function startOver() {
+    setGoal(null);
+    setFailure(null);
+    setMissingRun(null);
+    setText("");
+    window.history.pushState(null, "", "/");
+    document.getElementById("goal-text")?.focus();
+  }
+
   const id = goal?.run.id;
-  const verdictToast = (g: GoalView) => {
-    const rights = g.campaign?.rights;
-    if (rights && rights.state !== "NOT_CHECKED") toast.info(rights.cleared ? "REROUTE: cleared for this use" : VERDICT_TOAST[rights.state]);
-  };
+  const at = currentStep(goal);
+  const states = Object.fromEntries(STEPS.map((s, i) => [s.key, (i < at ? "done" : i === at ? "current" : "todo") as StepState])) as Record<StepKey, StepState>;
+  const locked = busy !== null;
 
   return (
     <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.08),transparent_60%)]">
-      <PulseHeader />
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-6">
-        {/* 1 · Goal */}
-        <section aria-labelledby="s-goal" className="space-y-3">
-          <div id="s-goal">
-            <StepHeading n={1} active={!goal} title="What do you want to achieve?" sub="Describe the business goal in your own words — market, product and match." />
+      <header className="sticky top-0 z-30 border-b border-white/8 bg-zinc-950/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
+          <div className="flex items-baseline gap-3">
+            <span className="font-mono text-base font-black tracking-[0.25em] text-zinc-50">
+              PU<span className="text-sky-400">●</span>LSE <span className="text-zinc-600">×</span> RE<span className="text-red-500">●</span>ROUTE
+            </span>
+            <span className="hidden text-xs text-zinc-400 lg:inline">From a business goal to a rights-checked campaign.</span>
           </div>
+          <div className="flex items-center gap-3">
+            <ReviewerControl session={session} onSignIn={() => setSignInOpen(true)} onSignedOut={setSession} />
+            {goal && (
+              <Button size="sm" variant="ghost" onClick={startOver}>
+                <PlusIcon /> New goal
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="mx-auto w-full max-w-7xl space-y-1 px-4 pb-2.5">
+          <Stepper states={states} />
+          {goal && (
+            <p className="flex items-center gap-1.5 text-xs text-sky-200" aria-live="polite">
+              <ArrowRightIcon className="size-3.5 shrink-0" aria-hidden /> <span className="text-zinc-400">Next:</span> {goal.nextStep}
+            </p>
+          )}
+        </div>
+      </header>
+
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-6">
+        {failure && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+            <ErrorState error={failure.error} className="flex-1" />
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={locked} onClick={failure.retry}>
+                <RefreshCwIcon /> Retry
+              </Button>
+              <Button size="sm" variant="ghost" aria-label="Dismiss error" onClick={() => setFailure(null)}>
+                <XIcon />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 1 · Goal */}
+        <section aria-labelledby="s-goal-title" className="space-y-3">
+          <StepHeading id="s-goal" n={1} active={at === 0} title="What do you want to achieve?" sub="Describe the business objective — market, product, match. PULSE finds real footage for it." />
           <form
-            className="space-y-2 rounded-xl border border-white/10 bg-zinc-950/60 p-4"
+            className="space-y-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4"
             onSubmit={(e) => {
               e.preventDefault();
               void act({ action: "run", goal: text, club }, "run", (g) => {
-                if (g.recommendations.length) toast.success(`${g.recommendations.length} moments found for “${g.run.objective.summary}”`);
-                else toast.warning("No moment to recommend for this goal yet");
+                if (g.recommendations.length) toast.success(`${g.recommendations.length} moments found · proposal drafted`);
+                else toast.warning("No moment found for this goal");
               });
             }}
           >
-            <Label htmlFor="goal-text" className="sr-only">
-              Business goal
+            <Label htmlFor="goal-text" id="s-goal-title">
+              Business objective
             </Label>
             <textarea
               id="goal-text"
@@ -130,36 +209,43 @@ export function PulseStudio() {
               placeholder={EXAMPLES.tottenham[0]}
               className="w-full resize-none rounded-lg border border-input bg-input/30 px-3 py-2 text-base text-zinc-50 outline-none placeholder:text-zinc-600 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
-            <div className="flex flex-wrap items-center gap-2">
-              <Label htmlFor="goal-club" className="text-[11px] text-zinc-500">
-                Club
-              </Label>
-              <select
-                id="goal-club"
-                value={club}
-                onChange={(e) => setClub(e.target.value === "spurs" ? "spurs" : "tottenham")}
-                className="h-8 rounded-lg border border-input bg-input/30 px-2 text-xs"
-              >
-                {Object.entries(CLUBS).map(([k, c]) => (
-                  <option key={k} value={k}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Example objectives">
               <span className="text-[11px] text-zinc-500">Try:</span>
               {EXAMPLES[club].map((ex) => (
                 <button
                   key={ex}
                   type="button"
                   onClick={() => setText(ex)}
-                  className="max-w-full truncate rounded-full border border-white/10 px-2.5 py-0.5 text-[11px] text-zinc-300 hover:border-sky-500/50 hover:text-sky-200"
+                  aria-pressed={text === ex}
+                  className={cn(
+                    "max-w-full rounded-full border px-3 py-1 text-left text-xs transition-colors",
+                    text === ex ? "border-sky-400 bg-sky-500/15 text-sky-100" : "border-white/15 text-zinc-300 hover:border-sky-500/50 hover:text-sky-200",
+                  )}
                 >
                   {ex}
                 </button>
               ))}
-              <Button type="submit" size="lg" className="ml-auto" disabled={busy !== null || text.trim().length < 3}>
-                {busy === "run" ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
-                Find the best moments
+            </div>
+            <div className="flex flex-col gap-2 border-t border-white/5 pt-3 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="goal-club" className="text-xs text-zinc-400">
+                  Club
+                </Label>
+                <select
+                  id="goal-club"
+                  value={club}
+                  onChange={(e) => setClub(e.target.value === "spurs" ? "spurs" : "tottenham")}
+                  className="h-8 rounded-lg border border-input bg-input/30 px-2 text-xs"
+                >
+                  {Object.entries(CLUBS).map(([k, c]) => (
+                    <option key={k} value={k}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit" size="lg" className="sm:ml-auto" disabled={locked || text.trim().length < 3}>
+                {busy === "run" ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />} Find the best moments
               </Button>
             </div>
             {busy === "run" && (
@@ -171,36 +257,45 @@ export function PulseStudio() {
           {goal && <Understood goal={goal} />}
         </section>
 
-        {error !== null && <ErrorState error={error} />}
-        {!loaded && (
-          <p className="flex items-center gap-2 text-sm text-zinc-400">
-            <Loader2Icon className="size-4 animate-spin" /> Loading…
+        {busy === "load" && !goal && (
+          <p role="status" className="flex items-center gap-2 text-sm text-zinc-400">
+            <Loader2Icon className="size-4 animate-spin" aria-hidden /> Restoring your campaign…
           </p>
         )}
+        {missingRun && (
+          <p role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+            Goal run <span className="font-mono">{missingRun}</span> was not found. Start a new goal above.
+          </p>
+        )}
+        {busy === "run" && <MomentSkeletons />}
 
-        {/* 2 · Opportunity */}
-        {goal && (
-          <section aria-labelledby="s-opps" className="space-y-3">
-            <div id="s-opps">
-              <StepHeading
-                n={2}
-                active={!goal.campaign}
-                title={goal.recommendations.length ? `Your best ${goal.recommendations.length === 1 ? "moment" : `${goal.recommendations.length} moments`}` : "No moment to recommend"}
-                sub={goal.run.search.message}
-              />
-            </div>
+        {/* 2 · Moments */}
+        {goal && busy !== "run" && (
+          <section aria-labelledby="s-moment" className="space-y-3">
+            <StepHeading
+              id="s-moment"
+              n={2}
+              active={at === 1}
+              title={goal.recommendations.length ? `${goal.recommendations.length} real moments for this goal` : "No moment found"}
+              sub={goal.recommendations.length ? "Each preview plays the exact TwelveLabs timestamp from the authorized stream. Pick the one to build on." : goal.run.search.message}
+            />
             {goal.recommendations.length === 0 ? (
-              <p className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
                 <SearchXIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-                <span>
-                  PULSE never fills the gap with invented clips.
-                  {goal.run.search.status === "NOT_INDEXED"
-                    ? " Index this club's footage in TwelveLabs (or set PULSE_TWELVELABS_INDEX_ID_<CLUB>) and run the goal again."
-                    : goal.run.search.status === "UNAVAILABLE"
-                      ? " Try again in a moment; the technical detail is under “How PULSE searched”."
-                      : " Try a goal with a different product or market."}
-                </span>
-              </p>
+                <div className="space-y-2">
+                  <p>
+                    PULSE never fills the gap with invented clips.
+                    {goal.run.search.status === "NOT_INDEXED"
+                      ? " This club's footage is not indexed in TwelveLabs yet."
+                      : goal.run.search.status === "UNAVAILABLE"
+                        ? " The video search is unavailable right now."
+                        : " Try a different product, market or match."}
+                  </p>
+                  <Button size="sm" variant="outline" disabled={locked} onClick={() => void act({ action: "run", goal: goal.run.objective.raw, club: goal.run.club }, "run")}>
+                    <RefreshCwIcon /> Search again
+                  </Button>
+                </div>
+              </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-3">
                 {goal.recommendations.map((rec, i) => (
@@ -208,51 +303,116 @@ export function PulseStudio() {
                     key={rec.key}
                     rec={rec}
                     position={i + 1}
-                    selected={goal.run.selectedKey === rec.key}
-                    busy={busy !== null}
-                    onChoose={() => id && void act({ action: "draft", id, key: rec.key }, `draft:${rec.key}`, () => toast.success("Campaign proposal ready"))}
+                    selected={goal.campaign?.key === rec.key}
+                    busy={locked}
+                    loading={busy === `select:${rec.key}`}
+                    onChoose={() => id && void act({ action: "select", id, key: rec.key }, `select:${rec.key}`, () => toast.success("Proposal rebuilt for this moment"))}
                   />
                 ))}
               </div>
             )}
-            <SearchDetails goal={goal} />
           </section>
         )}
 
-        {/* 3 · Campaign */}
-        {goal?.campaign && goal.selected && id && (
-          <CampaignStage
-            goal={goal}
-            campaign={goal.campaign}
-            rec={goal.selected}
-            busy={busy}
-            onCheckRights={() => void act({ action: "checkRights", id }, "rights", verdictToast)}
-            onFindAlternatives={() =>
-              void act({ action: "findAlternatives", id }, "alternatives", (g) =>
-                toast.info(g.recovery?.exhausted && !g.recovery.groups.UNCHECKED.length ? "REROUTE has evaluated every moment found for this goal" : "REROUTE evaluated the next-best moments"),
-              )
-            }
-            onUse={(key, commerceUrl) => void act({ action: "draft", id, key, commerceUrl }, `draft:${key}`, () => toast.success("Campaign updated — same goal"))}
-            onApprove={(reviewer) => void act({ action: "approve", id, reviewer }, "approve", () => toast.success("Approved"))}
-          />
+        {/* 3 · Proposal */}
+        {goal?.campaign && id && (
+          <section aria-labelledby="s-proposal" className="space-y-3">
+            <StepHeading
+              id="s-proposal"
+              n={3}
+              active={at === 2}
+              title="Campaign proposal"
+              sub={`Draft v${goal.campaign.version} for “${goal.campaign.objective.summary}” — nothing is published and no ads are bought.`}
+            />
+            <Proposal goal={goal} campaign={goal.campaign} busy={locked} onSetDestination={(url) => void act({ action: "draft", id, commerceUrl: url }, "draft", () => toast.success("Destination link added — new version"))} />
+          </section>
         )}
+
+        {/* 4 · Rights */}
+        {goal?.campaign && id && (
+          <section aria-labelledby="s-rights" className="space-y-4">
+            <StepHeading id="s-rights" n={4} active={at === 3} title="Rights" sub="Decided by REROUTE from ScorePlay metadata and the applicable policy. AI observations are evidence, never a licence." />
+            <VerdictPanel
+              rights={goal.rights}
+              busy={busy === "rights" || busy === "alternatives" ? busy : null}
+              disabled={locked}
+              onCheck={() => void act({ action: "checkRights", id }, "rights")}
+              onFindAnotherWay={() => void act({ action: "findAlternatives", id }, "alternatives")}
+            />
+            <AnotherWay
+              goal={goal}
+              busy={busy?.startsWith("alt:") ? (busy as `alt:${string}`) : null}
+              disabled={locked}
+              onUse={(key) => void act({ action: "useAlternative", id, key }, `alt:${key}`, () => toast.success("Alternative adopted — same goal, re-checked"))}
+            />
+          </section>
+        )}
+
+        {/* 5 · Review */}
+        {goal?.campaign && id && (
+          <section aria-labelledby="s-review" className="space-y-3">
+            <StepHeading id="s-review" n={5} active={at === 4} title="Review & publish" sub="A signed-in rights reviewer approves or rejects. Publishing unlocks only with verified clearance and approval." />
+            <ReviewStage
+              goal={goal}
+              session={session}
+              sessionError={sessionError}
+              onRetrySession={refreshSession}
+              submitting={busy === "submit"}
+              disabled={locked}
+              onSubmit={() => void act({ action: "submitForReview", id }, "submit", () => toast.success("Submitted — audit receipt created"))}
+              onSignIn={() => setSignInOpen(true)}
+              onReviewed={refresh}
+            />
+          </section>
+        )}
+
+        {/* 6 · Receipt */}
+        {goal?.campaign && (
+          <section aria-labelledby="s-receipt" className="space-y-3">
+            <StepHeading id="s-receipt" n={6} active={at === 5} title="Audit receipt" sub="What was decided, under which policy, for which media, by whom — and what would be written back to ScorePlay." />
+            {goal.receiptId ? (
+              <ReceiptView
+                receiptId={goal.receiptId}
+                version={`${goal.reviewStatus}:${goal.writeback.status}:${goal.writeback.at ?? ""}`}
+                session={session}
+                onSignIn={() => setSignInOpen(true)}
+                onWriteback={refresh}
+              />
+            ) : (
+              <p className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-zinc-500">The receipt appears once the campaign is submitted for review.</p>
+            )}
+          </section>
+        )}
+
+        {goal && <Diagnostics goal={goal} />}
       </main>
+
       <footer className="px-4 pb-4 text-center text-[10px] text-zinc-600">
-        PULSE recommends and drafts; it never publishes, buys ads or decides rights. Rights verdicts come only from REROUTE. Moments come
-        live from ScorePlay and TwelveLabs — no simulated signals are used in this flow.
+        PULSE recommends and drafts; it never publishes, buys ads or decides rights. Rights verdicts come only from REROUTE. Footage is streamed from ScorePlay /
+        TwelveLabs for preview only — nothing is downloaded.
       </footer>
+
+      <ReviewerSignInDialog
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
+        onSignedIn={(s) => {
+          setSession(s);
+          toast.success(`Signed in as ${s.reviewer?.name ?? "reviewer"}`);
+        }}
+      />
     </div>
   );
 }
 
 function Understood({ goal }: { goal: GoalView }) {
   const o = goal.run.objective;
+  const p = goal.run.plan;
   const chips: [string, string | undefined][] = [
     ["Goal", o.summary],
-    ["Market", o.market ? o.market.label : o.scope === "GLOBAL" ? "Global" : undefined],
+    ["Market", o.market ? o.market.label : o.scope === "GLOBAL" ? `Global (${p.territories.join(", ")})` : undefined],
     ["Product", o.product?.label],
     ["Match", goal.run.match],
-    ["Primary KPI", o.kpi],
+    ["KPI", o.kpi],
   ];
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -266,44 +426,17 @@ function Understood({ goal }: { goal: GoalView }) {
   );
 }
 
-function SearchDetails({ goal }: { goal: GoalView }) {
-  const r = goal.run;
+function MomentSkeletons() {
   return (
-    <details className="rounded-lg border border-white/8 bg-zinc-950/40 px-3 py-2 text-[11px] text-zinc-500">
-      <summary className="cursor-pointer hover:text-zinc-300">How PULSE searched</summary>
-      <div className="mt-2 space-y-2">
-        <p>
-          Library: {r.library.videos} {CLUBS[r.club].label} videos in ScorePlay, {r.library.indexed} in TwelveLabs index{" "}
-          {r.library.indexName ?? "—"}. Results in {goal.timing.toRecommendationsSec.toFixed(1)} s.
-        </p>
-        <table className="w-full text-left">
-          <thead className="text-zinc-400">
-            <tr>
-              <th className="py-0.5 pr-2 font-medium">Question for this goal</th>
-              <th className="py-0.5 pr-2 font-medium">Weight</th>
-              <th className="py-0.5 font-medium">Why it matters</th>
-            </tr>
-          </thead>
-          <tbody>
-            {r.intents.map((i) => (
-              <tr key={i.key} className="border-t border-white/5 align-top">
-                <td className="py-1 pr-2 text-zinc-300">“{i.query}”</td>
-                <td className="py-1 pr-2 font-mono">{i.weight}</td>
-                <td className="py-1">{i.why}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <ul className="space-y-0.5 font-mono text-[10px]">
-          {r.attempts.map((a, i) => (
-            <li key={i}>
-              {a.service} “{a.query}” → {a.outcome}
-              {a.code && ` [${a.code}]`}
-              {a.detail && <span className="text-zinc-600"> · {a.detail}</span>}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </details>
+    <div className="grid gap-4 md:grid-cols-3" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="space-y-3 rounded-xl border border-white/10 bg-zinc-950/70 p-4">
+          <Skeleton className="aspect-video w-full" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-5/6" />
+        </div>
+      ))}
+    </div>
   );
 }

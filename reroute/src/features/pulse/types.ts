@@ -3,7 +3,21 @@
  * truth for media, REROUTE for rights verdicts, sponsor briefs for obligations.
  */
 import { z } from "zod";
-import { DataOriginSchema, EditPlanSchema, PublishIntentSchema, UsageSchema } from "@/lib/contracts";
+import {
+  BlockerSchema,
+  ClearanceSchema,
+  DataOriginSchema,
+  DecisionSchema,
+  EditPlanSchema,
+  MediaRefSchema,
+  PolicySelectionSchema,
+  PublishIntentSchema,
+  ReasonSchema,
+  SearchHitSchema,
+  SegmentSchema,
+  UsageSchema,
+  VerdictSchema,
+} from "@/lib/contracts";
 
 export const ClubSchema = z.enum(["spurs", "tottenham"]);
 export type Club = z.infer<typeof ClubSchema>;
@@ -220,8 +234,8 @@ export const MediaCandidateSchema = z.object({
   recordedAt: z.string().optional(),
   /** TWELVELABS = a Marengo moment inside this video; SCOREPLAY_METADATA_FALLBACK = ScorePlay tags/filename only. */
   foundBy: z.enum(["TWELVELABS", "SCOREPLAY_METADATA_FALLBACK"]),
-  /** How ScorePlay surfaced the video. */
-  discoveredBy: z.enum(["FILENAME", "PLAYER_TAG", "TEAM_TAG"]),
+  /** How the video was surfaced: ScorePlay filename/tags, or REROUTE's resolver searching the whole index (INDEX_SEARCH). */
+  discoveredBy: z.enum(["FILENAME", "PLAYER_TAG", "TEAM_TAG", "INDEX_SEARCH"]),
   /** TwelveLabs search rank (1 = best) and the query that produced it. */
   rank: z.number().int().positive().optional(),
   query: z.string().optional(),
@@ -231,7 +245,7 @@ export const MediaCandidateSchema = z.object({
    * carries ids from another ScorePlay workspace — the exact same filename and duration.
    */
   mapping: z
-    .object({ via: z.enum(["CUSTOM_ID", "FILENAME_DURATION"]), indexedScoreplayId: z.string().optional(), filename: z.string() })
+    .object({ via: z.enum(["AUTHORITATIVE_ID", "FILENAME_DURATION"]), filename: z.string() })
     .optional(),
 });
 export type MediaCandidate = z.infer<typeof MediaCandidateSchema>;
@@ -617,7 +631,7 @@ export const BusinessMetricsSchema = z.object({
 });
 export type BusinessMetrics = z.infer<typeof BusinessMetricsSchema>;
 
-// ---------- Goal → opportunity → campaign (guided flow) ----------
+// ---------- Goal → moments → campaign → rights → review (the product flow) ----------
 
 /** One visual question PULSE asks TwelveLabs for an objective, with how directly it serves it. */
 export const GoalIntentSchema = z.object({
@@ -652,6 +666,8 @@ export const RecommendationSchema = z.object({
   /** `<scoreplayAssetId>@<start>-<end>`: one exact moment. */
   key: z.string(),
   candidate: MediaCandidateSchema,
+  /** Canonical ScorePlay ↔ TwelveLabs identity (MediaResolver); only linkable refs reach a recommendation. */
+  media: MediaRefSchema,
   headline: z.string(),
   score: z.number(),
   breakdown: z.object({
@@ -664,32 +680,122 @@ export const RecommendationSchema = z.object({
   /** Season written in the filename (e.g. "2020-21"), when there is one. */
   season: z.string().optional(),
   why: z.object({ opportunity: z.string(), media: z.string(), action: z.string() }),
+  /** Lower-ranked moments judged to be the same footage (re-upload: same duration and timecode). */
+  duplicates: z.array(z.string()).default([]),
   preview: PreviewSchema.optional(),
   /** What the user sees instead of a player, or alongside it. */
   previewNote: z.string(),
 });
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 
-/** A REROUTE verdict for one exact moment and use, with what was asked (so it can be re-asked). */
-export const GoalRightsCheckSchema = RightsCheckSchema.extend({
-  key: z.string(),
-  edit: EditPlanSchema,
-  intent: PublishIntentSchema,
-  rerouteUrl: z.string(),
+/**
+ * The REROUTE usage of the whole campaign: COMMERCIAL when the objective sells something
+ * (merchandise, tickets…), EDITORIAL for reach/engagement content.
+ */
+export const GoalUsageSchema = UsageSchema.extract(["COMMERCIAL", "EDITORIAL"]);
+export type GoalUsage = z.infer<typeof GoalUsageSchema>;
+
+/** What PULSE will ask REROUTE about — derived from the objective and the selected club, never guessed. */
+export const GoalPlanSchema = z.object({
+  club: ClubSchema,
+  scope: z.enum(["MARKET", "GLOBAL", "UNSPECIFIED"]),
+  /** Every territory is evaluated separately (GLOBAL = an explicit documented list). */
+  territories: z.array(z.string().min(2)).min(1),
+  territoryBasis: z.string(),
+  usage: GoalUsageSchema,
+  channels: z.array(ChannelSchema).min(1),
+  competition: z.string(),
 });
-export type GoalRightsCheck = z.infer<typeof GoalRightsCheckSchema>;
+export type GoalPlan = z.infer<typeof GoalPlanSchema>;
+
+/** The fixture named in the goal and whether it actually restricted the footage searched. */
+export const MatchFilterSchema = z.object({
+  requested: z.string(),
+  /** APPLIED = only videos whose tags/filename name the opponent were searched; NOT_FOUND = none did, library unfiltered. */
+  status: z.enum(["APPLIED", "NOT_FOUND"]),
+  videos: z.number().int().nonnegative(),
+});
+export type MatchFilter = z.infer<typeof MatchFilterSchema>;
+
+/** REROUTE's decision for one channel × territory, verbatim. */
+export const IntentDecisionSchema = z.object({ intent: PublishIntentSchema, decision: DecisionSchema });
+export type IntentDecision = z.infer<typeof IntentDecisionSchema>;
 
 const iso = z.iso.datetime({ offset: true });
 
+/** One recorded REROUTE campaign evaluation (every proposed channel × territory). */
+export const GoalEvaluationSchema = z.object({
+  /** Id of the `evaluations` record holding the overall decision. */
+  id: z.string(),
+  /** ORIGINAL = the proposed media; ALTERNATIVE = independent re-check after "Find another way". */
+  kind: z.enum(["ORIGINAL", "ALTERNATIVE"]),
+  campaignId: z.string(),
+  campaignVersion: z.number().int().positive(),
+  key: z.string(),
+  media: MediaRefSchema,
+  edit: EditPlanSchema,
+  overall: DecisionSchema,
+  perIntent: z.array(IntentDecisionSchema).min(1),
+  evaluatedAt: iso,
+});
+export type GoalEvaluation = z.infer<typeof GoalEvaluationSchema>;
+
+const ReasonBriefSchema = z.object({ dimension: z.string(), outcome: z.enum(["DENY", "PERMIT", "MISSING"]), explanation: z.string() });
+
+/** A replacement REROUTE's resolver found and checked (alone and as the full edit) for the blocking use. */
+export const AlternativeCandidateSchema = z.object({
+  /** `<scoreplayMediaId>@<start>-<end>`. */
+  key: z.string(),
+  hit: SearchHitSchema,
+  segment: SegmentSchema,
+  verdict: VerdictSchema,
+  clearance: ClearanceSchema,
+  eligible: z.boolean(),
+  reasons: z.array(ReasonBriefSchema),
+});
+export type AlternativeCandidate = z.infer<typeof AlternativeCandidateSchema>;
+
+export const GoalAlternativesSchema = z.object({
+  /** Id of the `alternatives` record. */
+  id: z.string(),
+  forKey: z.string(),
+  forEvaluationId: z.string(),
+  requestedAt: iso,
+  /** The blocking use the resolver searched replacements for. */
+  intent: PublishIntentSchema,
+  query: z.string(),
+  blocker: BlockerSchema,
+  /** Empty when the blocker is CAMPAIGN-scoped: another clip cannot fix it. */
+  candidates: z.array(AlternativeCandidateSchema),
+});
+export type GoalAlternatives = z.infer<typeof GoalAlternativesSchema>;
+
+/** A campaign version. `campaignId` is stable; every change saves a new `version` (campaigns repo). */
+export const GoalCampaignSchema = CampaignDraftSchema.extend({
+  campaignId: z.string(),
+  version: z.number().int().positive(),
+  /** The moment this version uses (a ranked recommendation or an adopted alternative). */
+  key: z.string(),
+  mediaRef: MediaRefSchema,
+  plan: GoalPlanSchema,
+  /** Every channel × territory REROUTE is asked about. */
+  intents: z.array(PublishIntentSchema).min(1),
+  /** Why this version exists. */
+  origin: z.enum(["PROPOSAL", "SELECTED", "DESTINATION", "ALTERNATIVE"]),
+});
+export type GoalCampaign = z.infer<typeof GoalCampaignSchema>;
+
 export const GoalRunSchema = z.object({
   id: z.string(),
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   club: ClubSchema,
   submittedAt: iso,
   resultsAt: iso,
   objective: ParsedObjectiveSchema,
+  plan: GoalPlanSchema,
   /** The fixture named in the goal, as written. */
   match: z.string().optional(),
+  matchFilter: MatchFilterSchema.optional(),
   intents: z.array(GoalIntentSchema),
   library: z.object({
     videos: z.number().int().nonnegative(),
@@ -705,14 +811,15 @@ export const GoalRunSchema = z.object({
   attempts: MediaLookupSchema.shape.attempts,
   /** Every ranked moment, diverse assets first; the first three are the recommendations. */
   pool: z.array(RecommendationSchema),
+  /** Moments swapped in from "Find another way" (outside the ranked pool). */
+  adopted: z.array(RecommendationSchema).default([]),
   selectedKey: z.string().optional(),
-  campaign: CampaignDraftSchema.optional(),
-  rights: z.record(z.string(), GoalRightsCheckSchema).default({}),
-  /** "Find another way": which moments were sent to REROUTE as alternatives, for which blocked one. */
-  recovery: z
-    .object({ requestedAt: iso, forKey: z.string(), keys: z.array(z.string()), exhausted: z.boolean() })
-    .optional(),
-  approval: z.object({ key: z.string(), by: z.string(), at: iso }).optional(),
+  campaign: GoalCampaignSchema.optional(),
+  /** When the first proposal was built (automatically, before any user think-time). */
+  proposalAt: iso.optional(),
+  evaluations: z.array(GoalEvaluationSchema).default([]),
+  alternatives: z.array(GoalAlternativesSchema).default([]),
+  review: z.object({ receiptId: z.string(), submittedAt: iso, campaignVersion: z.number().int().positive(), evaluationId: z.string() }).optional(),
 });
 export type GoalRun = z.infer<typeof GoalRunSchema>;
 
@@ -725,28 +832,49 @@ export const RightsIssueSchema = z.object({
 });
 export type RightsIssue = z.infer<typeof RightsIssueSchema>;
 
-/** REROUTE's verdict for one moment, in plain English. PULSE adds wording, never judgment. */
-export const RightsPresentationSchema = z.object({
-  state: RightsStateSchema,
-  /** True only when REROUTE returned ALLOWED for this exact use under a non-fictional policy. */
-  cleared: z.boolean(),
-  headline: z.string(),
-  detail: z.string(),
+/** REROUTE's answer for one channel × territory, in plain English. */
+export const ChannelRightsSchema = z.object({
+  channel: z.string(),
+  territory: z.string(),
   use: z.string(),
+  verdict: VerdictSchema,
+  clearance: ClearanceSchema,
+  policyId: z.string(),
+  policyVersion: z.string().optional(),
+  policyFictional: z.boolean(),
+  policySelection: PolicySelectionSchema.optional(),
+  /** REROUTE's reasons verbatim (incl. `basis`), for the diagnostics drawer. */
+  reasons: z.array(ReasonSchema).default([]),
   issues: z.array(RightsIssueSchema),
   missingFacts: z.array(z.string()),
-  checkedAt: iso.optional(),
-  policyId: z.string().optional(),
-  policyFictional: z.boolean().optional(),
-  rerouteUrl: z.string().optional(),
 });
-export type RightsPresentation = z.infer<typeof RightsPresentationSchema>;
+export type ChannelRights = z.infer<typeof ChannelRightsSchema>;
 
-export const RecommendationViewSchema = RecommendationSchema.extend({ rights: RightsPresentationSchema });
+/** REROUTE's latest verdict for the campaign. PULSE adds wording, never judgment. */
+export const RightsViewSchema = z.object({
+  state: RightsStateSchema,
+  clearance: ClearanceSchema.optional(),
+  /** DEMO_CLEARANCE_LABEL whenever a fictional demo policy produced any part of the verdict. */
+  clearanceLabel: z.string().optional(),
+  headline: z.string(),
+  detail: z.string(),
+  evaluationId: z.string().optional(),
+  kind: GoalEvaluationSchema.shape.kind.optional(),
+  campaignVersion: z.number().int().optional(),
+  evaluatedAt: iso.optional(),
+  /** False when the campaign changed after this evaluation: check again. */
+  current: z.boolean(),
+  perIntent: z.array(ChannelRightsSchema),
+  issues: z.array(RightsIssueSchema),
+  missingFacts: z.array(z.string()),
+});
+export type RightsView = z.infer<typeof RightsViewSchema>;
+
+export const RecommendationViewSchema = RecommendationSchema.extend({
+  /** Latest recorded overall verdict for this moment, if REROUTE evaluated it. */
+  rights: z.object({ state: RightsStateSchema, clearance: ClearanceSchema.optional() }),
+});
 export type RecommendationView = z.infer<typeof RecommendationViewSchema>;
-
-export const CampaignStageSchema = z.enum(["PROPOSED", "RIGHTS_CLEARED", "READY_FOR_APPROVAL", "APPROVED"]);
-export type CampaignStage = z.infer<typeof CampaignStageSchema>;
 
 export const ChecklistItemSchema = z.object({
   item: z.string(),
@@ -754,40 +882,62 @@ export const ChecklistItemSchema = z.object({
   note: z.string(),
 });
 
-export const GoalCampaignViewSchema = CampaignDraftSchema.extend({
-  rights: RightsPresentationSchema,
-  stage: CampaignStageSchema,
-  stageNote: z.string(),
-  checklist: z.array(ChecklistItemSchema),
-  approval: GoalRunSchema.shape.approval,
-});
-export type GoalCampaignView = z.infer<typeof GoalCampaignViewSchema>;
-
-export const RecoveryViewSchema = z.object({
-  forKey: z.string(),
-  requestedAt: iso,
-  exhausted: z.boolean(),
-  groups: z.object({
-    ALLOWED: z.array(RecommendationViewSchema),
-    NEEDS_REVIEW: z.array(RecommendationViewSchema),
-    BLOCKED: z.array(RecommendationViewSchema),
-    UNCHECKED: z.array(RecommendationViewSchema),
-  }),
-  /** A reason every checked candidate shares: switching clips cannot fix it. */
-  sharedBlocker: z.string().optional(),
-});
-export type RecoveryView = z.infer<typeof RecoveryViewSchema>;
+export const ReviewStatusSchema = z.enum(["NOT_SUBMITTED", "PENDING", "APPROVED", "REJECTED"]);
+export type ReviewStatus = z.infer<typeof ReviewStatusSchema>;
 
 export const GoalViewSchema = z.object({
-  run: GoalRunSchema.omit({ pool: true, rights: true, campaign: true }),
+  run: GoalRunSchema.pick({
+    id: true,
+    club: true,
+    submittedAt: true,
+    resultsAt: true,
+    objective: true,
+    plan: true,
+    match: true,
+    matchFilter: true,
+    intents: true,
+    library: true,
+    search: true,
+    attempts: true,
+    selectedKey: true,
+  }),
   recommendations: z.array(RecommendationViewSchema),
   selected: RecommendationViewSchema.optional(),
-  campaign: GoalCampaignViewSchema.optional(),
-  recovery: RecoveryViewSchema.optional(),
+  campaign: GoalCampaignSchema.extend({ checklist: z.array(ChecklistItemSchema) }).optional(),
+  rights: RightsViewSchema,
+  /** Why the latest evaluation is not ALLOWED, classified by REROUTE's resolver (after "Find another way"). */
+  blocker: BlockerSchema.optional(),
+  /** Latest "Find another way" for the current moment. */
+  alternatives: GoalAlternativesSchema.optional(),
+  /** Audit trail of every recorded evaluation, oldest first. */
+  evaluations: z.array(
+    z.object({
+      id: z.string(),
+      kind: GoalEvaluationSchema.shape.kind,
+      campaignVersion: z.number().int(),
+      key: z.string(),
+      verdict: VerdictSchema,
+      clearance: ClearanceSchema,
+      evaluatedAt: iso,
+    }),
+  ),
+  receiptId: z.string().optional(),
+  reviewStatus: ReviewStatusSchema,
+  /** Submitting is allowed for ALLOWED (any clearance) or NEEDS_REVIEW on the current version; never BLOCKED. */
+  canSubmit: z.boolean(),
+  writeback: z.object({
+    status: z.enum(["NOT_STARTED", "DRY_RUN", "WRITTEN", "VERIFIED", "FAILED", "REFUSED"]),
+    at: z.string().optional(),
+    detail: z.string().optional(),
+  }),
+  /** `canPublish()` on the receipt: verified clearance AND human approval. Demo clearance is never publishable. */
+  publishable: z.boolean(),
+  publishNote: z.string(),
+  nextStep: z.string(),
   /** The objective's primary KPI. `value` stays null until a verified source is connected. */
   kpi: z.object({ label: z.string(), value: z.null(), status: MeasurementSchema.shape.status, note: z.string() }),
-  /** Measured server-side from goal submission. */
-  timing: z.object({ toRecommendationsSec: z.number(), toCampaignSec: z.number().optional() }),
+  /** Measured server-side from goal submission. `toProposalSec` = first proposal createdAt − submittedAt. */
+  timing: z.object({ toRecommendationsSec: z.number(), toProposalSec: z.number().optional() }),
 });
 export type GoalView = z.infer<typeof GoalViewSchema>;
 
@@ -795,9 +945,11 @@ const httpsUrl = z.url({ protocol: /^https$/ });
 
 export const GoalActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("run"), goal: z.string().trim().min(3).max(280), club: ClubSchema }),
-  z.object({ action: z.literal("draft"), id: z.string(), key: z.string(), commerceUrl: httpsUrl.optional() }),
+  z.object({ action: z.literal("select"), id: z.string(), key: z.string() }),
+  z.object({ action: z.literal("draft"), id: z.string(), commerceUrl: httpsUrl.optional() }),
   z.object({ action: z.literal("checkRights"), id: z.string() }),
   z.object({ action: z.literal("findAlternatives"), id: z.string() }),
-  z.object({ action: z.literal("approve"), id: z.string(), reviewer: z.string().trim().min(1).max(80) }),
+  z.object({ action: z.literal("useAlternative"), id: z.string(), key: z.string() }),
+  z.object({ action: z.literal("submitForReview"), id: z.string() }),
 ]);
 export type GoalAction = z.infer<typeof GoalActionSchema>;

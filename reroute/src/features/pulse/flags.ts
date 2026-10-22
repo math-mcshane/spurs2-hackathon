@@ -1,8 +1,9 @@
 /**
- * PULSE feature flags. Server-side and authoritative: every PULSE page and API route checks
- * `isPulseEnabled()` itself; hiding the nav link is presentation only. Missing = disabled.
+ * PULSE feature flags. The Studio goal flow is the product and is always on. The SIMULATED fan-signal
+ * board is optional: its pages and API routes check `isPulseBoardEnabled()` themselves (server-side,
+ * authoritative); hiding the nav link is presentation only. Missing = disabled.
  */
-export const isPulseEnabled = (): boolean => process.env.PULSE_ENABLED === "true";
+export const isPulseBoardEnabled = (): boolean => process.env.PULSE_BOARD_ENABLED === "true";
 
 export type SignalSourceSetting = "fixture" | "manual";
 

@@ -125,7 +125,12 @@ export type HumanReviewStatus = z.infer<typeof HumanReviewStatusSchema>;
 /** Rights facts read from ScorePlay metadata. `undefined` = unknown (→ NEEDS_REVIEW, never ALLOWED). */
 export const RightsFactsSchema = z.object({
   competition: z.string().optional(),
+  /** Set only when exactly one club is tagged (see `teams`). */
   team: z.string().optional(),
+  /** Every club tagged on the asset (a match tags both sides). */
+  teams: z.array(z.string()).optional(),
+  /** Person → club names, ONLY when ScorePlay registers the player in that club's squad. Absent person = club unknown. */
+  peopleTeams: z.record(z.string(), z.array(z.string())).optional(),
   people: z.array(z.string()).optional(),
   sponsors: z.array(z.string()).optional(),
   recordedAt: z.string().optional(),
@@ -390,8 +395,7 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
 export interface ScorePlayClient {
   searchAssets(query: string, limit?: number): Promise<Asset[]>;
   getAsset(id: string): Promise<Asset>;
-  /** Writes verdict/reasons/tags/timecoded actions per agreed taxonomy; returns the raw re-read. */
-  writeDecision(receipt: RightsReceipt): Promise<Record<string, unknown>>;
+  // Writes go through lib/scoreplay/writeback.ts (planWriteback → applyWriteback), never through this seam.
   /** Optional: upload a derivative as its own asset. Throws NOT_CONFIGURED if not permitted. */
   uploadDerivative?(file: { path: string; title: string }, receipt: RightsReceipt): Promise<{ id: string }>;
 }

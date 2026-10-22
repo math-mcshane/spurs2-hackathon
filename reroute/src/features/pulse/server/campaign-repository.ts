@@ -1,27 +1,28 @@
+import { randomUUID } from "node:crypto";
+import { campaigns } from "@/lib/server/repositories";
 import { CampaignDraftSchema, type CampaignDraft } from "../types";
-import { transact } from "./store";
 
 /**
- * Persistence port for campaign drafts. One draft per opportunity, stored as a whole validated
- * document — maps 1:1 to a future Supabase table, e.g.
- * `pulse_campaign_drafts(opportunity_id text primary key, id text, schema_version int, payload jsonb, updated_at timestamptz)`.
- * A Supabase adapter implements these two methods; nothing else in PULSE touches storage for drafts.
+ * Board campaign proposals (one per fan-signal opportunity), stored as versioned campaigns in Supabase
+ * (`reroute_campaigns` keyed by `opportunity_id`). Every save appends a version; earlier drafts are kept.
  */
 export interface CampaignDraftRepository {
   get(opportunityId: string): Promise<CampaignDraft | undefined>;
   save(draft: CampaignDraft): Promise<CampaignDraft>;
 }
 
-/** Local adapter: PULSE's own `.data/pulse.json` (never REROUTE's store). */
-export const fileCampaignRepository: CampaignDraftRepository = {
-  get: (opportunityId) => transact((data) => ({ result: data.campaigns[opportunityId], write: false })),
-  save: (draft) =>
-    transact((data) => {
-      const valid = CampaignDraftSchema.parse(draft);
-      data.campaigns[valid.opportunityId] = valid;
-      return { result: valid, write: true };
-    }),
-};
+/** Audit actor for drafts PULSE composes from (simulated) board signals. */
+const BOARD_ACTOR = "pulse-board";
 
-/** The active adapter. */
-export const campaignRepository: CampaignDraftRepository = fileCampaignRepository;
+export const campaignRepository: CampaignDraftRepository = {
+  async get(opportunityId) {
+    const record = await campaigns.findByOpportunity(opportunityId);
+    return record ? CampaignDraftSchema.parse(record.draft) : undefined;
+  },
+  async save(draft) {
+    const valid = CampaignDraftSchema.parse(draft);
+    const existing = await campaigns.findByOpportunity(valid.opportunityId);
+    await campaigns.saveVersion(existing?.id ?? randomUUID(), valid, BOARD_ACTOR, { opportunityId: valid.opportunityId });
+    return valid;
+  },
+};

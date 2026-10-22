@@ -5,6 +5,7 @@ import { FilmIcon, GitBranchIcon, Loader2Icon, TriangleAlertIcon } from "lucide-
 import { toast } from "sonner";
 import {
   PublishIntentSchema,
+  UsageSchema,
   type Asset,
   type Candidate,
   type EditDecision,
@@ -19,6 +20,7 @@ import { ComplianceTimeline, type TimelineLane } from "./compliance-timeline";
 import { ObservationForm, SegmentEditor } from "./edit-controls";
 import { IntentForm, type IntentDraft } from "./intent-form";
 import { ReceiptPanel } from "./receipt-panel";
+import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "./reviewer";
 import { ResolvePanel, type ResolveState } from "./resolve-panel";
 import { ErrorState, OriginBadge, Panel, PanelTitle, VerdictBadge, tc } from "./shared";
 import { VerdictCard, type AccessState } from "./verdict-card";
@@ -52,7 +54,7 @@ function editProblem(edit: EditPlan, maxSec?: number): string | null {
 type Decisions = { original: EditDecision | null; proposed: EditDecision | null };
 type Detail = { status: "loading" } | { status: "done"; res: AssetDetailResponse } | { status: "error"; error: unknown };
 
-export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean }) {
+export function RerouteApp() {
   const [policies, setPolicies] = useState<PoliciesResponse | null>(null);
   const [policiesError, setPoliciesError] = useState<unknown>(null);
 
@@ -66,10 +68,12 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
 
   const [original, setOriginal] = useState<EditPlan | null>(null);
   const [proposed, setProposed] = useState<EditPlan | null>(null);
+  // Tottenham footage is the flagship dataset: default to the club's home market and organic social use.
   const [intent, setIntent] = useState<IntentDraft>({
-    territory: "FR",
+    club: "tottenham",
+    territory: "GB",
     platform: "instagram",
-    usage: "SPONSORED",
+    usage: "ORGANIC",
     competition: "",
     publishAt: "",
   });
@@ -80,6 +84,8 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
   const [access, setAccess] = useState<AccessState>({ status: "idle" });
   const [resolve, setResolve] = useState<ResolveState>({ status: "idle" });
   const [receipt, setReceipt] = useState<ReceiptView | null>(null);
+  const { session, setSession } = useReviewerSession();
+  const [signInOpen, setSignInOpen] = useState(false);
 
   const selected = selectedId ? assets[selectedId] : undefined;
   const playerAsset = playerId ? assets[playerId] : undefined;
@@ -87,7 +93,7 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
   const activeDecision = proposed ? decisions.proposed : decisions.original;
 
   const validIntent: PublishIntent | null = useMemo(() => {
-    const r = PublishIntentSchema.safeParse(intent);
+    const r = PublishIntentSchema.safeParse({ ...intent, club: intent.club || undefined });
     return r.success ? r.data : null;
   }, [intent]);
   const originalProblem = original ? editProblem(original, selected?.durationSec) : null;
@@ -109,13 +115,12 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
     return () => ac.abort();
   }, []);
 
-  // PULSE handoff deep link (only when PULSE is enabled): preload the handed-off asset, cut and intent.
-  // The creative brief stays in PULSE; REROUTE decides exactly as for a manually selected asset.
+  // Deep link from the studio's diagnostics (`/desk?asset=&start=&end=&territory=&platform=&usage=&competition=&club=`):
+  // preload that asset, cut and intent. The desk decides exactly as for a manually selected asset.
   useEffect(() => {
-    if (!pulseEnabled) return;
     const p = new URLSearchParams(window.location.search);
     const id = p.get("asset");
-    if (!p.get("pulse") || !id) return;
+    if (!id) return;
     api.asset(id).then(
       ({ asset }) => {
         selectAsset(asset);
@@ -124,25 +129,26 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
         if (p.has("start") && p.has("end") && end > start) {
           setOriginal({
             id: `edit-${asset.id}`,
-            title: `${asset.title} · PULSE cut`,
-            segments: [{ scoreplayMediaId: asset.id, start, end, label: "PULSE cut" }],
+            title: `${asset.title} · studio cut`,
+            segments: [{ scoreplayMediaId: asset.id, start, end, label: "studio cut" }],
             derived: false,
           });
         }
-        const usage = p.get("usage");
+        const usage = UsageSchema.safeParse(p.get("usage"));
         setIntent((i) => ({
+          club: p.get("club") ?? i.club,
           territory: p.get("territory") || i.territory,
           platform: p.get("platform") || i.platform,
-          usage: usage === "ORGANIC" || usage === "SPONSORED" ? usage : i.usage,
+          usage: usage.success ? usage.data : i.usage,
           competition: p.get("competition") || i.competition,
           publishAt: p.get("publishAt") || i.publishAt,
         }));
-        toast.info(`Opened from PULSE · ${p.get("brief") ?? p.get("pulse")}`);
+        toast.info(`Opened ScorePlay asset ${asset.id} from the studio`);
       },
-      () => toast.error(`PULSE handoff: could not load ScorePlay asset ${id}`),
+      () => toast.error(`Could not load ScorePlay asset ${id}`),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- read the handoff URL once on mount
-  }, [pulseEnabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read the deep link once on mount
+  }, []);
 
   // Debounced decision for the original (and proposed) edit on every edit/intent change.
   useEffect(() => {
@@ -325,13 +331,17 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
     if (d.status === "done") observationsByMedia[id] = d.res.observations;
   }
 
-  const blockedIndex = activeDecision ? activeDecision.segments.findIndex((s) => s.decision.verdict === "BLOCKED") : -1;
+  const blockedIndex = activeDecision ? activeDecision.segments.findIndex((s) => s.decision.verdict !== "ALLOWED") : -1;
   const selectedDetail = selectedId ? details[selectedId] : undefined;
   const playerDetail = playerId ? details[playerId] : undefined;
 
   return (
     <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.06),transparent_60%)]">
-      <AppHeader policies={policies} policiesError={policiesError} pulseEnabled={pulseEnabled} />
+      <AppHeader
+        policies={policies}
+        policiesError={policiesError}
+        reviewer={<ReviewerControl session={session} onSignIn={() => setSignInOpen(true)} onSignedOut={setSession} />}
+      />
 
       <main className="grid flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         {/* LEFT: find + player + timeline */}
@@ -414,7 +424,9 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
                     <div className="font-medium">
                       {selectedDetail.res.analysis === "NOT_CONFIGURED"
                         ? "TwelveLabs key not configured — no automated observations"
-                        : "TwelveLabs analysis failed — no automated observations"}
+                        : selectedDetail.res.analysis === "UNLINKABLE"
+                          ? "This ScorePlay asset has no proven TwelveLabs match — no automated observations attached"
+                          : "TwelveLabs analysis failed — no automated observations"}
                     </div>
                     <div className="opacity-80">
                       {selectedDetail.res.analysisDetail ? `${selectedDetail.res.analysisDetail} · ` : ""}
@@ -518,6 +530,8 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
             edit={incompleteReason ? null : activeEdit}
             intent={validIntent}
             receipt={receipt}
+            session={session}
+            onSignIn={() => setSignInOpen(true)}
             onReceipt={(r) => {
               setReceipt(r);
               if (r.writeback.some((w) => w.status === "VERIFIED")) toast.success("ScorePlay writeback verified by read-back");
@@ -529,6 +543,7 @@ export function RerouteApp({ pulseEnabled = false }: { pulseEnabled?: boolean })
         Decisions come from verified rules and metadata only — logo detection, similarity or absence of a deny rule is never permission.
         In-app access gating does not change ScorePlay ACLs.
       </footer>
+      <ReviewerSignInDialog open={signInOpen} onOpenChange={setSignInOpen} onSignedIn={setSession} />
     </div>
   );
 }

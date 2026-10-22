@@ -5,7 +5,8 @@ import type * as NextServer from "next/server";
 import type { EditDecision, Verdict } from "@/lib/contracts";
 import { computeBusinessMetrics } from "../business-metrics";
 import { detectOpportunities, freshnessScore, matchBrief } from "../detect-opportunities";
-import { isPulseEnabled } from "../flags";
+import { isPulseBoardEnabled } from "../flags";
+import { useMemoryRepositoriesForTests } from "@/lib/server/repositories/testing";
 import * as opportunitiesRoute from "@/app/api/pulse/opportunities/route";
 import * as refreshRoute from "@/app/api/pulse/refresh/route";
 import * as handoffRoute from "@/app/api/pulse/handoff/route";
@@ -51,6 +52,7 @@ vi.mock("@/lib/server/decide", () => ({
       policyVersion: "t",
       policyId: "test-policy",
       policyFictional: true,
+      clearance: verdict.current === "ALLOWED" ? ("DEMO" as const) : ("NONE" as const),
       evaluatedAt: new Date().toISOString(),
     };
     return { edit, decision, segments: [] };
@@ -107,33 +109,35 @@ function view(id: string, rights: RightsState | undefined, priority: number, led
   return buildView({ ...base, id, score: { ...base.score, priority } }, undefined, entry);
 }
 
-describe("feature flag", () => {
-  const original = process.env.PULSE_ENABLED;
+describe("board feature flag", () => {
+  const original = process.env.PULSE_BOARD_ENABLED;
   afterEach(() => {
-    process.env.PULSE_ENABLED = original;
+    process.env.PULSE_BOARD_ENABLED = original;
   });
 
   it("is enabled only by the exact string 'true'", () => {
     for (const v of [undefined, "", "false", "1", "TRUE", "yes"]) {
-      if (v === undefined) delete process.env.PULSE_ENABLED;
-      else process.env.PULSE_ENABLED = v;
-      expect(isPulseEnabled()).toBe(false);
+      if (v === undefined) delete process.env.PULSE_BOARD_ENABLED;
+      else process.env.PULSE_BOARD_ENABLED = v;
+      expect(isPulseBoardEnabled()).toBe(false);
     }
-    process.env.PULSE_ENABLED = "true";
-    expect(isPulseEnabled()).toBe(true);
+    process.env.PULSE_BOARD_ENABLED = "true";
+    expect(isPulseBoardEnabled()).toBe(true);
   });
 
-  it("every /api/pulse route returns a bare 404 when disabled, without touching state", async () => {
-    delete process.env.PULSE_ENABLED;
-    const routes = [opportunitiesRoute, refreshRoute, handoffRoute, businessRoute, goalRoute];
+  it("every board route returns a bare 404 when disabled, without touching state; the Studio goal route is not gated", async () => {
+    delete process.env.PULSE_BOARD_ENABLED;
+    const routes = [opportunitiesRoute, refreshRoute, handoffRoute, businessRoute];
     const handlers = routes.flatMap((r) => Object.values(r) as ((req: Request) => Promise<Response>)[]);
-    expect(handlers).toHaveLength(7);
+    expect(handlers).toHaveLength(5);
     for (const handler of handlers) {
       const res = await handler(new Request("http://x/api/pulse/any", { method: "POST", body: "{}" }));
       expect(res.status).toBe(404);
       expect(await res.text()).toBe("");
     }
     expect(lookupMedia).not.toHaveBeenCalled();
+    const goal = await goalRoute.POST(new Request("http://x/api/pulse/goal", { method: "POST", body: "{}" }));
+    expect(goal.status).toBe(400);
   });
 });
 
@@ -236,8 +240,10 @@ describe("handoff to REROUTE", () => {
     const { edit, intent, rerouteUrl } = handoffToReroute(buildHandoff(bench(), tl), { brief, now: NOW });
     expect(edit.segments).toEqual([{ scoreplayMediaId: "sp-9", start: 3, end: 14, label: "PULSE cut" }]);
     expect(intent).toMatchObject({ territory: "FR", platform: "instagram", usage: "SPONSORED", competition: "NBA" });
-    const q = new URL(rerouteUrl, "http://x").searchParams;
-    expect([q.get("asset"), q.get("start"), q.get("end"), q.get("usage")]).toEqual(["sp-9", "3", "14", "SPONSORED"]);
+    const url = new URL(rerouteUrl, "http://x");
+    expect(url.pathname).toBe("/desk");
+    const q = url.searchParams;
+    expect([q.get("asset"), q.get("start"), q.get("end"), q.get("usage"), q.get("club")]).toEqual(["sp-9", "3", "14", "SPONSORED", "spurs"]);
   });
 
   it("without timecodes cuts at most 15 s (bounded by duration); without a brief publishes organically", () => {
@@ -281,28 +287,29 @@ describe("business metrics", () => {
 
 describe("producer actions re-ask REROUTE", () => {
   beforeEach(() => {
-    process.env.PULSE_ENABLED = "true";
+    process.env.PULSE_BOARD_ENABLED = "true";
+    useMemoryRepositoriesForTests();
     rmSync(path.join(STATE, ".data"), { recursive: true, force: true });
   });
 
-  it("refuses approval and publication unless REROUTE says ALLOWED, and records the fresh verdict", async () => {
+  it("one rule with the Studio: blocked cannot be approved, demo clearance can never be recorded as published", async () => {
     const { opportunities } = await svc.listOpportunities();
     const id = opportunities[0].id;
 
-    verdict.current = "NEEDS_REVIEW";
-    const sent = await svc.handoff(id, "sp-1");
-    expect(sent.opportunity).toMatchObject({ status: "SENT_TO_REROUTE", rightsState: "NEEDS_REVIEW", gate: "NEEDS_CLEARANCE" });
-
-    await expect(svc.act({ id, action: "approve", reviewer: "ed" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     verdict.current = "BLOCKED";
+    const sent = await svc.handoff(id, "sp-1");
+    expect(sent.opportunity).toMatchObject({ status: "SENT_TO_REROUTE", rightsState: "BLOCKED", gate: "BLOCKED" });
     await expect(svc.act({ id, action: "approve", reviewer: "ed" })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect((await svc.getOpportunity(id)).opportunity).toMatchObject({ status: "SENT_TO_REROUTE", rightsState: "BLOCKED" });
 
-    verdict.current = "ALLOWED";
-    expect(await svc.act({ id, action: "approve", reviewer: "ed" })).toMatchObject({ status: "APPROVED", rightsState: "ALLOWED" });
+    verdict.current = "NEEDS_REVIEW";
+    expect(await svc.act({ id, action: "approve", reviewer: "ed" })).toMatchObject({ status: "APPROVED", rightsState: "NEEDS_REVIEW" });
 
-    verdict.current = "BLOCKED";
-    await expect(svc.act({ id, action: "publish", evidenceUrl: "https://example.com/p" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    verdict.current = "ALLOWED";
+    await expect(svc.act({ id, action: "publish", evidenceUrl: "https://example.com/p" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringContaining("DEMO POLICY"),
+    });
     expect((await svc.getOpportunity(id)).opportunity.status).toBe("APPROVED");
   });
 
@@ -429,7 +436,8 @@ describe("objective ranker", () => {
 
 describe("objective lifecycle", () => {
   beforeEach(() => {
-    process.env.PULSE_ENABLED = "true";
+    process.env.PULSE_BOARD_ENABLED = "true";
+    useMemoryRepositoriesForTests();
     rmSync(path.join(STATE, ".data"), { recursive: true, force: true });
   });
 
@@ -453,7 +461,8 @@ describe("objective lifecycle", () => {
 describe("campaign proposals through the service", () => {
   const HARPER = "opp-spurs-harper-run";
   beforeEach(() => {
-    process.env.PULSE_ENABLED = "true";
+    process.env.PULSE_BOARD_ENABLED = "true";
+    useMemoryRepositoriesForTests();
     rmSync(path.join(STATE, ".data"), { recursive: true, force: true });
   });
 
@@ -468,7 +477,7 @@ describe("campaign proposals through the service", () => {
     expect(campaign).toMatchObject({
       objective: { summary: "Sell jerseys in Mexico" },
       audience: { market: { code: "MX" }, language: "es" },
-      cta: { status: "NOT_CONFIGURED", note: "Commerce destination not configured" },
+      cta: { status: "NOT_CONFIGURED" },
       rerouteIntent: { territory: "MX" },
       rights: { state: "NOT_CHECKED", source: "REROUTE" },
     });
@@ -478,6 +487,8 @@ describe("campaign proposals through the service", () => {
     verdict.current = "NEEDS_REVIEW";
     await svc.handoff(HARPER, "sp-1");
     expect((await svc.getOpportunity(HARPER)).campaign?.rights).toMatchObject({ state: "NEEDS_REVIEW", matchesDraft: true });
+    verdict.current = "BLOCKED";
+    await svc.act({ id: HARPER, action: "recheck" });
     await expect(svc.act({ id: HARPER, action: "approve", reviewer: "smm" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
     verdict.current = "ALLOWED";
@@ -505,8 +516,8 @@ describe("campaign proposals through the service", () => {
     expect((await svc.getOpportunity(HARPER)).campaign?.stale).toBe(true);
   });
 
-  it("is unreachable when PULSE is disabled", async () => {
-    delete process.env.PULSE_ENABLED;
+  it("is unreachable when the board is disabled", async () => {
+    delete process.env.PULSE_BOARD_ENABLED;
     const res = await opportunitiesRoute.POST(
       new Request("http://x/api/pulse/opportunities", {
         method: "POST",
@@ -514,7 +525,7 @@ describe("campaign proposals through the service", () => {
       }),
     );
     expect(res.status).toBe(404);
-    process.env.PULSE_ENABLED = "true";
+    process.env.PULSE_BOARD_ENABLED = "true";
     expect((await svc.getOpportunity(HARPER)).campaign).toBeUndefined();
   });
 });

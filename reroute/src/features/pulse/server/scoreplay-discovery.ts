@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Asset } from "@/lib/contracts";
 import { mapMediaToAsset } from "@/lib/scoreplay/map";
-import { MediaSearchResultSchema, TagSearchResultSchema, type ScorePlayMedia } from "@/lib/scoreplay/schemas";
+import { MediaSchema, MediaSearchResultSchema, TagSearchResultSchema, type ScorePlayMedia } from "@/lib/scoreplay/schemas";
 import type { MediaDiscoverySpec } from "../types";
 
 /**
@@ -89,25 +89,37 @@ async function call<S extends z.ZodType>(
 
 export type ResolvedTags = { players: { id: number; name: string }[]; tags: { id: number; name: string }[]; unresolved: string[] };
 
-/** Step 1: names → IDs. Only entries whose name contains the term are kept (tag search is fuzzy). */
+/** Whole word(s), case-insensitive: "SAS" matches "san antonio spurs (sas)" but never "Kansas". */
+export function namesTerm(name: string, term: string): boolean {
+  const t = term.trim().normalize("NFC");
+  if (!t) return false;
+  const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "iu").test(name.normalize("NFC"));
+}
+
+/** Step 1: names → IDs. Only entries naming the term as whole word(s) are kept (tag search is fuzzy). */
 export async function resolveTags(http: ScorePlayHttp, terms: readonly string[]): Promise<ResolvedTags> {
   const out: ResolvedTags = { players: [], tags: [], unresolved: [] };
   for (const term of terms) {
-    const needle = term.toLowerCase();
     const found = await call(http, "GET", "/tag/search", TagSearchResultSchema, { query: { query: term.slice(0, TAG_QUERY_MAX) } });
     const players = (found.players ?? []).flatMap((p) => {
       const name = p.full_name ?? [p.first_name, p.last_name].filter(Boolean).join(" ");
-      return name.toLowerCase().includes(needle) ? [{ id: p.ID, name }] : [];
+      return namesTerm(name, term) ? [{ id: p.ID, name }] : [];
     });
     const tags = (found.tags ?? []).flatMap((t) => {
       const name = t.name ?? t.label ?? "";
-      return name.toLowerCase().includes(needle) ? [{ id: t.ID, name }] : [];
+      return namesTerm(name, term) ? [{ id: t.ID, name }] : [];
     });
     if (players.length + tags.length === 0) out.unresolved.push(term);
     out.players.push(...players.filter((p) => !out.players.some((x) => x.id === p.id)));
     out.tags.push(...tags.filter((t) => !out.tags.some((x) => x.id === t.id)));
   }
   return out;
+}
+
+/** `GET /media/{id}`: unlike search results, carries the exact `media_duration` (search truncates it to whole seconds). */
+export function getMedia(http: ScorePlayHttp, id: string): Promise<ScorePlayMedia> {
+  return call(http, "GET", `/media/${encodeURIComponent(id)}`, MediaSchema);
 }
 
 export type SearchPage = { media: ScorePlayMedia[]; count: number; pages: number };

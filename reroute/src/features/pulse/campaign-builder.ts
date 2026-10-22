@@ -27,7 +27,7 @@ import type {
 const LANGUAGE_BY_MARKET: Record<MarketCode, Language> = { MX: "es", ES: "es", FR: "fr", DE: "de", IT: "it", US: "en", GB: "en", CA: "en" };
 const LANGUAGE_LABEL: Record<Language, string> = { en: "English", es: "Spanish", fr: "French", de: "German", it: "Italian" };
 const CLUB_HASHTAG: Record<Club, string> = { spurs: "#GoSpursGo", tottenham: "#COYS" };
-const DISCOVERED_LABEL: Record<MediaCandidate["discoveredBy"], string> = { FILENAME: "filename", PLAYER_TAG: "player-tag", TEAM_TAG: "team-tag" };
+const DISCOVERED_LABEL: Record<MediaCandidate["discoveredBy"], string> = { FILENAME: "filename", PLAYER_TAG: "player-tag", TEAM_TAG: "team-tag", INDEX_SEARCH: "index-search" };
 
 type Templated = "default" | Product;
 type Copy = (hook: string, club: string) => string;
@@ -92,14 +92,16 @@ export const X_CHAR_LIMIT = 280;
 /** X counts every link as 23 characters (t.co). */
 const X_URL_LENGTH = 23;
 const INSTAGRAM_CAPTION_LIMIT = 2200;
+/** Facebook post text limit. */
+const FACEBOOK_POST_LIMIT = 63_206;
 
 export const SAFEGUARDS = [
   "No stock or availability claim: PULSE has no inventory data.",
   "No sales, conversions or engagement are predicted; engagement is not evidence of purchase intent.",
   "Audience market comes from the objective and source-reported regions — never from the language of posts.",
-  "No player biography or nationality is stated or implied.",
+  "No player biography, nationality or club is stated or implied unless ScorePlay identity data says so.",
   "PULSE never publishes posts or buys ads.",
-  "Approval and publication require an ALLOWED verdict from REROUTE.",
+  "Publication requires a verified REROUTE clearance and human approval; a demo policy never authorizes publication.",
 ];
 
 /** What a proposal is composed from; the opportunity board and the goal flow each supply it. */
@@ -150,7 +152,11 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
               ? "Destination configured by the club (PULSE_COMMERCE_DESTINATIONS). PULSE does not know stock or availability."
               : "Destination entered by the producer — confirm it is an authorized store. PULSE does not know stock or availability.",
         }
-      : { text: ctaText, status: "NOT_CONFIGURED", note: "Commerce destination not configured" };
+      : {
+          text: ctaText,
+          status: "NOT_CONFIGURED",
+          note: "No club-configured store link (PULSE_COMMERCE_DESTINATIONS). Add an https link on the club's own domain to enable the call to action; until then the copy carries no buy prompt.",
+        };
 
   const hashtag = CLUB_HASHTAG[input.club];
   // Without a destination a commerce objective gets no CTA line at all: no buy prompt without an authorized link.
@@ -195,9 +201,7 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
     rationale: [
       ...input.rationale,
       ...(candidate.mapping?.via === "FILENAME_DURATION"
-        ? [
-            `TwelveLabs indexed this video under ScorePlay id ${candidate.mapping.indexedScoreplayId ?? "?"} (another workspace); linked here by exact filename and duration.`,
-          ]
+        ? ["TwelveLabs video linked to this ScorePlay asset by exact filename and duration (unique in both directions)."]
         : []),
     ],
     creative: { angle: input.angle, hook, hookLanguage: copyLanguage },
@@ -218,7 +222,8 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
         copy: linked,
         linkHandling: "The link can sit in the post text.",
         characterCount: linked.length,
-        withinLimit: true,
+        limit: FACEBOOK_POST_LIMIT,
+        withinLimit: linked.length <= FACEBOOK_POST_LIMIT,
       },
       {
         channel: "x",

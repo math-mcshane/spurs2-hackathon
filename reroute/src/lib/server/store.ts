@@ -1,96 +1,56 @@
 import { randomUUID } from "node:crypto";
-import type { PostgrestError } from "@supabase/supabase-js";
 import {
   EvidenceSchema,
+  MediaRefSchema,
   RightsReceiptSchema,
   type Decision,
   type EditPlan,
   type Evidence,
   type HumanReviewStatus,
+  type MediaRef,
   type PublishIntent,
   type RightsReceipt,
 } from "@/lib/contracts";
-import { AppError } from "@/lib/errors";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import {
+  campaigns,
+  events,
+  humanObservationRecords,
+  receiptRecords,
+  type AuditEvent,
+  type ReviewRecord,
+} from "@/lib/server/repositories";
+import { casUpdate } from "@/lib/server/repositories/shared";
 import { z } from "zod";
 
 /**
- * Persistent store on Supabase (schema: supabase/migrations/*_reroute_store.sql): receipts, review log,
- * HUMAN observations. Shared by every teammate and deployment; survives redeploys. ScorePlay remains
- * the system of record for media — only ids, decisions and evidence text live here.
+ * Receipt workflow on the persistent store (Supabase; schema in supabase/migrations): receipts, review
+ * log, HUMAN observations, each change recorded as a hash-chained audit event. ScorePlay remains the
+ * system of record for media — only ids, decisions and evidence text live here.
  */
 
-const ReviewRecordSchema = z.object({
-  status: z.enum(["APPROVED", "REJECTED"]),
-  reviewer: z.string(),
-  at: z.iso.datetime({ offset: true }),
-});
-export type ReviewRecord = z.infer<typeof ReviewRecordSchema>;
+export type { ReviewRecord };
 
 /** Receipt as returned by the API: the contract shape plus the review audit trail. */
 export type StoredReceipt = RightsReceipt & { reviews: ReviewRecord[] };
 
-const MAX_UPDATE_ATTEMPTS = 3;
-
-function fail(op: string, error: PostgrestError): never {
-  // 42P01 / PGRST205: table missing → migration not applied yet.
-  const missing = error.code === "42P01" || error.code === "PGRST205";
-  throw new AppError(
-    missing ? "NOT_CONFIGURED" : "UPSTREAM",
-    missing
-      ? `Supabase tables missing (${op}): run supabase/migrations/20261022190000_reroute_store.sql in the SQL Editor`
-      : `Supabase ${op} failed: ${error.message}`,
-  );
-}
-
-function row(receipt: RightsReceipt) {
-  return {
-    receipt,
-    verdict: receipt.decision.verdict,
-    human_review_status: receipt.humanReviewStatus,
-    source_asset_ids: receipt.sourceAssetIds,
-  };
-}
-
-async function loadReceipt(id: string): Promise<{ receipt: RightsReceipt; version: number }> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("reroute_receipts")
-    .select("receipt, version")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) fail("read receipt", error);
-  if (!data) throw new AppError("NOT_FOUND", `Receipt ${id} not found`);
-  return { receipt: RightsReceiptSchema.parse(data.receipt), version: data.version as number };
-}
-
-async function loadReviews(id: string): Promise<ReviewRecord[]> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("reroute_reviews")
-    .select("status, reviewer, at")
-    .eq("receipt_id", id)
-    .order("at", { ascending: true });
-  if (error) fail("read reviews", error);
-  return z.array(ReviewRecordSchema).parse(data.map((r) => ({ ...r, at: new Date(r.at).toISOString() })));
-}
+/** Audit actor for changes made by the server itself rather than a signed-in reviewer. */
+export const SYSTEM_ACTOR = "system";
 
 /**
- * Optimistic read-modify-write: the update only lands if nobody bumped `version` in between;
+ * Optimistic read-modify-write: the update only lands if nobody bumped the version in between;
  * otherwise re-read and retry. `mutate` may throw (e.g. a review guard) to abort.
  */
 async function mutateReceipt(id: string, mutate: (r: RightsReceipt) => RightsReceipt): Promise<RightsReceipt> {
-  for (let attempt = 0; attempt < MAX_UPDATE_ATTEMPTS; attempt++) {
-    const { receipt, version } = await loadReceipt(id);
-    const next = RightsReceiptSchema.parse(mutate(structuredClone(receipt)));
-    const { data, error } = await getSupabaseAdmin()
-      .from("reroute_receipts")
-      .update({ ...row(next), version: version + 1, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("version", version)
-      .select("id");
-    if (error) fail("update receipt", error);
-    if (data.length === 1) return next;
-  }
-  throw new AppError("UPSTREAM", `Receipt ${id} is being modified concurrently; retry`);
+  const { value } = await casUpdate(
+    `Receipt ${id}`,
+    async () => {
+      const { receipt, version } = await receiptRecords.load(id);
+      return { value: receipt, version };
+    },
+    (next, version) => receiptRecords.compareAndSet(id, version, RightsReceiptSchema.parse(next)),
+    (current) => RightsReceiptSchema.parse(mutate(current)),
+  );
+  return value;
 }
 
 // ---------- Receipts ----------
@@ -101,33 +61,79 @@ export async function createReceipt(input: {
   edit: EditPlan;
   intent: PublishIntent;
   decision: Decision;
+  /** Campaign this receipt belongs to (goal flow); omitted for the advanced rights desk. */
+  campaignId?: string;
+  /** MediaRefs whose evidence informed the decision. */
+  media?: MediaRef[];
+  actor?: string;
 }): Promise<StoredReceipt> {
   const receipt: RightsReceipt = RightsReceiptSchema.parse({
     id: input.id ?? randomUUID(),
+    campaignId: input.campaignId,
     sourceAssetIds: [...new Set(input.edit.segments.map((s) => s.scoreplayMediaId))],
     intent: input.intent,
     decision: input.decision,
     edit: input.edit,
+    media: z.array(MediaRefSchema).parse(input.media ?? []),
     humanReviewStatus: "PENDING",
     createdAt: new Date().toISOString(),
     writeback: [],
   });
-  const { error } = await getSupabaseAdmin()
-    .from("reroute_receipts")
-    .insert({ id: receipt.id, ...row(receipt) });
-  if (error) fail("create receipt", error);
+  await receiptRecords.insert(receipt);
+  if (receipt.campaignId) await campaigns.setState(receipt.campaignId, { receiptId: receipt.id, reviewStatus: "PENDING" });
+  await events.append({
+    subjectType: "receipt",
+    subjectId: receipt.id,
+    type: "RECEIPT_CREATED",
+    actor: input.actor ?? SYSTEM_ACTOR,
+    payload: {
+      campaignId: receipt.campaignId ?? null,
+      verdict: receipt.decision.verdict,
+      clearance: receipt.decision.clearance,
+      policyId: receipt.decision.policyId,
+      policyFictional: receipt.decision.policyFictional,
+      sourceAssetIds: receipt.sourceAssetIds,
+    },
+  });
   return { ...receipt, reviews: [] };
 }
 
 export async function getReceipt(id: string): Promise<StoredReceipt> {
-  const [{ receipt }, reviews] = await Promise.all([loadReceipt(id), loadReviews(id)]);
+  const [{ receipt }, reviews] = await Promise.all([receiptRecords.load(id), receiptRecords.listReviews(id)]);
   return { ...receipt, reviews };
+}
+
+/** Latest receipt created for a campaign, or null if it was never submitted. */
+export async function findReceiptForCampaign(campaignId: string): Promise<StoredReceipt | null> {
+  const receipt = await receiptRecords.latestForCampaign(campaignId);
+  return receipt && { ...receipt, reviews: await receiptRecords.listReviews(receipt.id) };
+}
+
+/**
+ * Latest receipt for the same edit, asked for the same use under the same policy version — lets the access
+ * gate reuse a pending/approved receipt instead of creating duplicates.
+ */
+export async function findReceiptFor(q: { editId: string; intent: PublishIntent; policyVersion: string }): Promise<StoredReceipt | null> {
+  const sameUse = (i: PublishIntent) =>
+    i.territory === q.intent.territory &&
+    i.platform === q.intent.platform &&
+    i.usage === q.intent.usage &&
+    i.competition === q.intent.competition &&
+    i.club === q.intent.club &&
+    Date.parse(i.publishAt) === Date.parse(q.intent.publishAt);
+  const receipt = (await receiptRecords.findForEdit(q.editId, q.policyVersion)).find((r) => sameUse(r.intent));
+  return receipt ? { ...receipt, reviews: await receiptRecords.listReviews(receipt.id) } : null;
+}
+
+/** Hash-chained audit events recorded for one receipt, in chain order. */
+export function listReceiptAudit(id: string): Promise<AuditEvent[]> {
+  return events.list("receipt", id);
 }
 
 /** Apply a mutation to one receipt; the result is re-validated against the contract before saving. */
 export async function updateReceipt(id: string, mutate: (r: RightsReceipt) => RightsReceipt): Promise<StoredReceipt> {
   const next = await mutateReceipt(id, mutate);
-  return { ...next, reviews: await loadReviews(id) };
+  return { ...next, reviews: await receiptRecords.listReviews(id) };
 }
 
 /** Record a human review decision (status + reviewer + time) on a receipt. */
@@ -141,30 +147,33 @@ export async function recordReview(
     guard(current);
     return { ...current, humanReviewStatus: review.status };
   });
-  const { error } = await getSupabaseAdmin()
-    .from("reroute_reviews")
-    .insert({ receipt_id: id, status: review.status, reviewer: review.reviewer, at });
-  if (error) fail("record review", error);
-  return { ...next, reviews: await loadReviews(id) };
+  await receiptRecords.addReview(id, { status: review.status, reviewer: review.reviewer, at });
+  if (next.campaignId) await campaigns.setState(next.campaignId, { reviewStatus: review.status });
+  await events.append({
+    subjectType: "receipt",
+    subjectId: id,
+    type: "REVIEW_RECORDED",
+    actor: review.reviewer,
+    payload: { status: review.status, verdict: next.decision.verdict, clearance: next.decision.clearance },
+  });
+  return { ...next, reviews: await receiptRecords.listReviews(id) };
 }
 
 // ---------- HUMAN observations ----------
 
-export async function addHumanObservation(evidence: Evidence): Promise<Evidence> {
+export async function addHumanObservation(evidence: Evidence, actor: string): Promise<Evidence> {
   const stored: Evidence = EvidenceSchema.parse({ ...evidence, source: "HUMAN", origin: "HUMAN" });
-  const { error } = await getSupabaseAdmin()
-    .from("reroute_observations")
-    .insert({ scoreplay_media_id: stored.scoreplayMediaId, evidence: stored });
-  if (error) fail("add observation", error);
+  await humanObservationRecords.add(stored);
+  await events.append({
+    subjectType: "media",
+    subjectId: stored.scoreplayMediaId,
+    type: "HUMAN_OBSERVATION_ADDED",
+    actor,
+    payload: stored,
+  });
   return stored;
 }
 
-export async function listHumanObservations(scoreplayMediaId: string): Promise<Evidence[]> {
-  const { data, error } = await getSupabaseAdmin()
-    .from("reroute_observations")
-    .select("evidence")
-    .eq("scoreplay_media_id", scoreplayMediaId)
-    .order("created_at", { ascending: true });
-  if (error) fail("list observations", error);
-  return data.map((r) => EvidenceSchema.parse(r.evidence));
+export function listHumanObservations(scoreplayMediaId: string): Promise<Evidence[]> {
+  return humanObservationRecords.list(scoreplayMediaId);
 }

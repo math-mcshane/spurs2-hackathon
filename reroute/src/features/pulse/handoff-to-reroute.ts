@@ -59,9 +59,9 @@ export function handoffToReroute(
     competition: candidate.competition ?? club.competition,
     // Same default REROUTE's desk uses: the next full hour + 1 h.
     publishAt: new Date(Math.ceil(opts.now.getTime() / 3_600_000) * 3_600_000 + 3_600_000).toISOString(),
+    club: payload.club,
   };
   const params = new URLSearchParams({
-    pulse: payload.opportunityId,
     asset: candidate.scoreplayAssetId,
     start: String(start),
     end: String(end),
@@ -70,7 +70,7 @@ export function handoffToReroute(
     usage: intent.usage,
     competition: intent.competition,
     publishAt: intent.publishAt,
-    brief: payload.creativeBrief.slice(0, 160),
+    club: payload.club,
   });
-  return { edit, intent, rerouteUrl: `/?${params}` };
+  return { edit, intent, rerouteUrl: `/desk?${params}` };
 }

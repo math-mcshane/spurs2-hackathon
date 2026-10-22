@@ -1,29 +1,18 @@
-import type { PublishIntent } from "@/lib/contracts";
+import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type PublishIntent, type Reason, type RightsReceipt } from "@/lib/contracts";
 import { MARKETS, PRODUCTS } from "./objective-parser";
 import { MarketCodeSchema } from "./types";
-import type {
-  CampaignStage,
-  GoalCampaignView,
-  GoalRightsCheck,
-  GoalRun,
-  GoalView,
-  Recommendation,
-  RecommendationView,
-  RecoveryView,
-  RightsIssue,
-  RightsPresentation,
-} from "./types";
+import type { ChannelRights, GoalEvaluation, GoalRun, GoalView, Recommendation, RecommendationView, ReviewStatus, RightsIssue, RightsView } from "./types";
 
 /**
  * Presentation of a goal run. Rights wording is a plain-English rendering of REROUTE's recorded
- * verdict and reasons — PULSE never computes, upgrades or softens a verdict. "Cleared" is reserved
- * for REROUTE ALLOWED under a non-fictional policy for the exact moment and use.
+ * decisions — PULSE never computes, upgrades or softens a verdict. Publication is decided by one rule
+ * only: `canPublish()` on the review receipt (verified clearance AND human approval).
  */
 
 const TOPIC: Record<string, string> = {
   territory: "Territory",
   platform: "Platform",
-  usage: "Organic vs sponsored use",
+  usage: "Type of use",
   competition: "Competition licence",
   expiry: "Licence dates",
   people: "People on screen",
@@ -31,20 +20,21 @@ const TOPIC: Record<string, string> = {
 };
 const LICENCE: Record<string, true> = { territory: true, platform: true, usage: true, competition: true, expiry: true };
 const PLATFORM: Record<string, string> = { instagram: "Instagram", x: "X", youtube: "YouTube", facebook: "Facebook", tiktok: "TikTok" };
+const USAGE: Record<PublishIntent["usage"], string> = { COMMERCIAL: "Commercial", EDITORIAL: "Editorial", ORGANIC: "Organic", SPONSORED: "Sponsored" };
 
 export function describeUse(intent: PublishIntent): string {
   const market = MarketCodeSchema.safeParse(intent.territory);
   const country = market.success ? MARKETS[market.data].label : intent.territory;
-  return `${intent.usage === "ORGANIC" ? "Organic" : "Sponsored"} ${PLATFORM[intent.platform] ?? intent.platform} post in ${country} (${intent.territory}) · ${intent.competition}`;
+  return `${USAGE[intent.usage]} ${PLATFORM[intent.platform] ?? intent.platform} post in ${country} (${intent.territory}) · ${intent.competition}`;
 }
 
 /**
  * REROUTE reasons as plain-English topics: dimensions REROUTE explained with the same sentence are
  * one topic (e.g. all licence terms), and each topic lists REROUTE's explanations verbatim.
  */
-export function rightsIssues(check: GoalRightsCheck): RightsIssue[] {
+export function rightsIssues(reasons: readonly Pick<Reason, "dimension" | "outcome" | "explanation">[]): RightsIssue[] {
   const byExplanation = new Map<string, { outcome: "DENY" | "MISSING"; dimensions: string[] }>();
-  for (const r of check.reasons) {
+  for (const r of reasons) {
     if (r.outcome === "PERMIT") continue;
     const g = byExplanation.get(r.explanation) ?? { outcome: r.outcome, dimensions: [] };
     if (r.outcome === "DENY") g.outcome = "DENY";
@@ -63,188 +53,193 @@ export function rightsIssues(check: GoalRightsCheck): RightsIssue[] {
   return [...byTopic.values()].sort((a, b) => Number(b.outcome === "DENY") - Number(a.outcome === "DENY"));
 }
 
-export function presentRights(check: GoalRightsCheck | undefined, intent: PublishIntent): RightsPresentation {
-  const use = describeUse(check?.intent ?? intent);
-  if (!check) {
+const isDemo = (d: Pick<Decision, "policyFictional" | "clearance">) => d.policyFictional || d.clearance === "DEMO";
+
+function channelRights(intent: PublishIntent, d: Decision): ChannelRights {
+  return {
+    channel: intent.platform,
+    territory: intent.territory,
+    use: describeUse(intent),
+    verdict: d.verdict,
+    clearance: d.clearance,
+    policyId: d.policyId,
+    policyVersion: d.policyVersion,
+    policyFictional: d.policyFictional,
+    policySelection: d.policySelection,
+    reasons: d.reasons,
+    issues: rightsIssues(d.reasons),
+    missingFacts: d.missingFacts,
+  };
+}
+
+/** The latest evaluation of the campaign's current moment (any version), if REROUTE evaluated it. */
+export function latestEvaluation(run: GoalRun): GoalEvaluation | undefined {
+  const c = run.campaign;
+  return c ? run.evaluations.findLast((e) => e.campaignId === c.campaignId && e.key === c.key) : undefined;
+}
+
+export function presentRights(run: GoalRun): RightsView {
+  const e = latestEvaluation(run);
+  if (!e) {
     return {
       state: "NOT_CHECKED",
-      cleared: false,
       headline: "Not checked yet",
-      detail: "REROUTE has not evaluated this moment yet. Nothing is cleared until it does.",
-      use,
+      detail: "REROUTE has not evaluated this proposal yet. Nothing is cleared until it does.",
+      current: false,
+      perIntent: [],
       issues: [],
       missingFacts: [],
     };
   }
-  const issues = rightsIssues(check);
-  const base = {
-    state: check.state,
-    use,
+  const d = e.overall;
+  const perIntent = e.perIntent.map((p) => channelRights(p.intent, p.decision));
+  const demo = isDemo(d) || e.perIntent.some((p) => isDemo(p.decision));
+  const counts = { ALLOWED: 0, NEEDS_REVIEW: 0, BLOCKED: 0 };
+  for (const p of perIntent) counts[p.verdict]++;
+  const tally = `${perIntent.length} use${perIntent.length === 1 ? "" : "s"} checked: ${counts.ALLOWED} allowed, ${counts.NEEDS_REVIEW} need review, ${counts.BLOCKED} blocked.`;
+  const issues = rightsIssues(e.perIntent.flatMap((p) => p.decision.reasons));
+  const copy: Record<Decision["verdict"], { headline: string; detail: string }> = {
+    ALLOWED: demo
+      ? { headline: "Allowed under a demo policy", detail: `${DEMO_CLEARANCE_LABEL}. ${tally} This can go to review for the demo, but it can never authorize publication.` }
+      : { headline: "Cleared by REROUTE for every proposed use", detail: `${tally} Policy ${d.policyId} v${d.policyVersion}.` },
+    NEEDS_REVIEW: { headline: "Needs a rights review", detail: `REROUTE could not confirm everything. ${tally} A person must review it — or find another way.` },
+    BLOCKED: { headline: "Restricted for at least one proposed use", detail: `REROUTE found a restriction PULSE cannot override. ${tally} Find another way to keep the same goal.` },
+  };
+  return {
+    state: d.verdict,
+    clearance: d.clearance,
+    clearanceLabel: demo ? DEMO_CLEARANCE_LABEL : undefined,
+    ...copy[d.verdict],
+    evaluationId: e.id,
+    kind: e.kind,
+    campaignVersion: e.campaignVersion,
+    evaluatedAt: e.evaluatedAt,
+    current: e.campaignVersion === run.campaign?.version,
+    perIntent,
     issues,
-    missingFacts: check.missingFacts,
-    checkedAt: check.checkedAt,
-    policyId: check.policyId,
-    policyFictional: check.policyFictional,
-    rerouteUrl: check.rerouteUrl,
+    missingFacts: [...new Set(e.perIntent.flatMap((p) => p.decision.missingFacts))],
   };
-  switch (check.state) {
-    case "ALLOWED":
-      return check.policyFictional
-        ? {
-            ...base,
-            cleared: false,
-            headline: "Allowed under a demo policy — not a real clearance",
-            detail: `REROUTE returned ALLOWED, but policy ${check.policyId} is fictional demo data. A real rights policy is required before this can be called cleared.`,
-          }
-        : { ...base, cleared: true, headline: "Cleared by REROUTE for this exact use", detail: `REROUTE returned ALLOWED under policy ${check.policyId} v${check.policyVersion}.` };
-    case "BLOCKED": {
-      const denied = issues.filter((i) => i.outcome === "DENY").map((i) => i.topic.toLowerCase());
-      return {
-        ...base,
-        cleared: false,
-        headline: "Blocked for this use",
-        detail: `REROUTE found a restriction${denied.length ? ` on ${denied.join(", ")}` : ""} that rules this moment out for this use. PULSE cannot override it.`,
-      };
-    }
-    case "NEEDS_REVIEW":
-      return {
-        ...base,
-        cleared: false,
-        headline: "Needs a rights review",
-        detail: `REROUTE could not confirm ${issues.length} point${issues.length === 1 ? "" : "s"} for this use, so a person has to review it before it can be used. Nothing was found that forbids it outright.`,
-      };
-  }
 }
 
-/** Asset ids vary between candidates; the reason behind them does not. */
-const normalize = (s: string) => s.replace(/\b\d{5,}\b/g, "#");
-
-/**
- * When every non-ALLOWED moment REROUTE checked shares open points, switching clips cannot resolve
- * them — say so, in REROUTE's terms.
- */
-export function sharedBlocker(checks: readonly GoalRightsCheck[]): string | undefined {
-  const open = checks.filter((c) => c.state !== "ALLOWED");
-  if (open.length < 2) return undefined;
-  const keyed = open.map((c) => new Map(c.reasons.filter((r) => r.outcome !== "PERMIT").map((r) => [`${r.dimension}|${normalize(r.explanation)}`, r.dimension])));
-  const common = [...keyed[0].entries()].filter(([k]) => keyed.every((m) => m.has(k))).map(([, d]) => d);
-  if (common.length === 0) return undefined;
-  const dims = [...new Set(common)];
-  const topics = dims.every((d) => LICENCE[d]) && dims.length > 1 ? ["licence terms"] : dims.map((d) => (TOPIC[d] ?? d).toLowerCase());
-  return (
-    `All ${open.length} moments REROUTE checked share the same open point${topics.length > 1 ? "s" : ""}: ${topics.join(", ")}. ` +
-    "Another clip will not resolve this — it needs rights data or a reviewer in REROUTE."
-  );
+function recommendationView(run: GoalRun, rec: Recommendation): RecommendationView {
+  const e = run.evaluations.findLast((x) => x.key === rec.key);
+  return { ...rec, rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" } };
 }
 
-function checkFor(recorded: GoalRun["rights"], rec: Recommendation): GoalRightsCheck | undefined {
-  const c = recorded[rec.key];
-  const seg = c?.edit.segments[0];
-  // Only a verdict for exactly this asset and cut counts.
-  return c && seg?.scoreplayMediaId === rec.candidate.scoreplayAssetId && seg.start === rec.candidate.startSeconds && seg.end === rec.candidate.endSeconds
-    ? c
-    : undefined;
+/** The review receipt for the current campaign version, if one was submitted. */
+type Receipt = Pick<RightsReceipt, "id" | "decision" | "humanReviewStatus" | "writeback">;
+
+function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSubmit: boolean, publishable: boolean): string {
+  if (!run.campaign) return run.pool.length ? "Pick one of the three moments to build its campaign." : "No usable moment was found — refine the goal or index more footage.";
+  if (run.campaign.cta.status === "NOT_CONFIGURED" && review === "NOT_SUBMITTED" && rights.state === "NOT_CHECKED")
+    return "Check rights with REROUTE. The store link is not configured — add an https link on the club's domain (optional before review).";
+  if (rights.state === "NOT_CHECKED" || !rights.current) return "Check rights with REROUTE for every proposed channel and territory.";
+  if (review === "APPROVED")
+    return publishable
+      ? "Approved with verified clearance — ready to publish outside PULSE, then record the ScorePlay writeback."
+      : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Run the ScorePlay writeback (dry-run) to record the decision.`;
+  if (review === "REJECTED") return "The reviewer rejected this version. Find another way or change the proposal, then submit again.";
+  if (review === "PENDING") return "Waiting for a reviewer to approve or reject the receipt.";
+  if (rights.state === "BLOCKED") return "Restricted. Find another way: REROUTE searches comparable footage and re-checks it independently.";
+  if (canSubmit)
+    return rights.state === "NEEDS_REVIEW"
+      ? "Submit for human review — or find another way first."
+      : "Submit for human review to create the audit receipt.";
+  return "Check rights again.";
 }
 
-export function recommendationView(recorded: GoalRun["rights"], rec: Recommendation, intent: PublishIntent): RecommendationView {
-  return { ...rec, rights: presentRights(checkFor(recorded, rec), intent) };
-}
+export function buildGoalView(run: GoalRun, receipt?: Receipt | null): GoalView {
+  const { pool, adopted, campaign: draft } = run;
+  const rights = presentRights(run);
+  const latest = latestEvaluation(run);
+  const all = [...pool, ...adopted];
+  const selectedRec = draft ? all.find((r) => r.key === draft.key) : undefined;
 
-function campaignStage(run: GoalRun, rights: RightsPresentation, ctaReady: boolean): { stage: CampaignStage; note: string } {
-  if (run.approval && run.approval.key === run.selectedKey && rights.cleared) {
-    return { stage: "APPROVED", note: `Approved by ${run.approval.by}. Publish it outside PULSE — PULSE never posts or buys ads.` };
-  }
-  if (rights.cleared) {
-    return ctaReady
-      ? { stage: "READY_FOR_APPROVAL", note: "Rights cleared by REROUTE and the proposal is complete — ready for human approval." }
-      : { stage: "RIGHTS_CLEARED", note: "Rights cleared by REROUTE. Add the club-approved destination URL before approval." };
-  }
-  const note: Record<RightsPresentation["state"], string> = {
-    NOT_CHECKED: "Draft proposal. Next: ask REROUTE whether this exact moment can be used.",
-    NEEDS_REVIEW: "Draft proposal. REROUTE needs a rights review before it can move on — or find another way.",
-    BLOCKED: "Draft proposal on a blocked moment. Find another way to keep the same goal.",
-    ALLOWED: "REROUTE allowed it under a fictional demo policy, so it stays a proposal: a real rights policy is the missing dependency.",
+  // A submission only counts for the version that was submitted.
+  const submitted = run.review && draft && run.review.campaignVersion === draft.version ? run.review : undefined;
+  const liveReceipt = submitted && receipt?.id === submitted.receiptId ? receipt : undefined;
+  const reviewStatus: ReviewStatus = submitted ? (liveReceipt?.humanReviewStatus ?? "PENDING") : "NOT_SUBMITTED";
+  const canSubmit = !!latest && rights.current && latest.overall.verdict !== "BLOCKED" && !submitted;
+  const publishable = !!liveReceipt && canPublish(liveReceipt);
+  const lastWrite = liveReceipt?.writeback.at(-1);
+
+  const commerce = run.objective.product && PRODUCTS[run.objective.product.key].commerce;
+  const notLocalized = draft?.evidenceLabels.find((l) => l.startsWith("Copy not localized"));
+  const campaign = draft && {
+    ...draft,
+    checklist: [
+      { item: "Media and exact timestamps", status: "DONE" as const, note: `TwelveLabs moment on ScorePlay asset ${draft.mediaRef.scoreplayMediaId} (${draft.mediaRef.method}).` },
+      notLocalized
+        ? { item: "Localized copy", status: "MISSING" as const, note: notLocalized }
+        : { item: "Localized copy", status: "DONE" as const, note: `Written in ${draft.audience.language.toUpperCase()}.` },
+      ...(commerce
+        ? [
+            draft.cta.destination
+              ? { item: "Destination URL", status: "DONE" as const, note: draft.cta.destination.source === "CONFIGURED" ? "Configured by the club." : "Entered by you on the club's domain." }
+              : { item: "Destination URL", status: "MISSING" as const, note: "NOT_CONFIGURED: add an https link on the club's domain to enable the call to action." },
+            { item: "Product inventory", status: "NOT_CONNECTED" as const, note: "No product feed: the copy makes no stock, price or availability claim." },
+          ]
+        : []),
+      rights.state === "NOT_CHECKED" || !rights.current
+        ? { item: "Rights evaluation", status: "MISSING" as const, note: "Not checked for this version." }
+        : { item: "Rights evaluation", status: "DONE" as const, note: `${rights.headline}. ${rights.clearanceLabel ?? ""}`.trim() },
+      { item: "Performance tracking", status: "NOT_CONNECTED" as const, note: run.objective.measurement.note },
+      reviewStatus === "APPROVED" || reviewStatus === "REJECTED"
+        ? { item: "Human review", status: "DONE" as const, note: `Reviewer decision: ${reviewStatus}.` }
+        : { item: "Human review", status: "MISSING" as const, note: reviewStatus === "PENDING" ? "Waiting for a reviewer." : "Not submitted." },
+    ],
   };
-  return { stage: "PROPOSED", note: note[rights.state] };
-}
 
-/** `intentFor`: the publish intent REROUTE would be asked about for a moment (labels unchecked moments). */
-export function buildGoalView(run: GoalRun, intentFor: (rec: Recommendation) => PublishIntent): GoalView {
-  const { pool, rights: recorded, campaign: draft, ...light } = run;
-  const view = (r: Recommendation) => recommendationView(recorded, r, intentFor(r));
-  const selectedRec = pool.find((r) => r.key === run.selectedKey);
-
-  let campaign: GoalCampaignView | undefined;
-  if (draft && selectedRec) {
-    const rights = presentRights(checkFor(recorded, selectedRec), draft.rerouteIntent);
-    const commerce = run.objective.product && PRODUCTS[run.objective.product.key].commerce;
-    const ctaReady = draft.cta.status !== "NOT_CONFIGURED";
-    const { stage, note } = campaignStage(run, rights, ctaReady);
-    const notLocalized = draft.evidenceLabels.find((l) => l.startsWith("Copy not localized"));
-    campaign = {
-      ...draft,
-      rights,
-      stage,
-      stageNote: note,
-      approval: stage === "APPROVED" ? run.approval : undefined,
-      checklist: [
-        { item: "Media and exact timestamps", status: "DONE", note: "TwelveLabs moment on a ScorePlay asset." },
-        notLocalized
-          ? { item: "Localized copy", status: "MISSING", note: notLocalized }
-          : { item: "Localized copy", status: "DONE", note: `Written in ${draft.audience.language.toUpperCase()}.` },
-        ...(commerce
-          ? [
-              draft.cta.destination
-                ? { item: "Destination URL", status: "DONE" as const, note: draft.cta.destination.source === "CONFIGURED" ? "Configured by the club." : "Entered by you — confirm it is club-approved." }
-                : { item: "Destination URL", status: "MISSING" as const, note: "No club-approved store URL yet — add one to enable the call to action." },
-              { item: "Product inventory", status: "NOT_CONNECTED" as const, note: "No product feed: the copy makes no stock, price or availability claim." },
-            ]
-          : []),
-        rights.cleared
-          ? { item: "Rights clearance", status: "DONE", note: rights.detail }
-          : { item: "Rights clearance", status: "MISSING", note: `${rights.headline}. ${rights.detail}` },
-        { item: "Performance tracking", status: "NOT_CONNECTED", note: run.objective.measurement.note },
-        stage === "APPROVED"
-          ? { item: "Human approval", status: "DONE", note: `Approved by ${run.approval!.by}.` }
-          : { item: "Human approval", status: "MISSING", note: rights.cleared ? "Waiting for an approver." : "Possible only after rights clearance." },
-      ],
-    };
-  }
-
-  let recovery: RecoveryView | undefined;
-  if (run.recovery) {
-    const checked = run.recovery.keys.flatMap((k) => pool.find((r) => r.key === k) ?? []).map(view);
-    const tried = new Set([run.recovery.forKey, ...run.recovery.keys]);
-    const unchecked = pool.filter((r) => !tried.has(r.key) && !checkFor(recorded, r)).slice(0, 3).map(view);
-    // Every verdict recorded for this goal, including the moment that triggered the recovery.
-    const verdicts = pool.flatMap((r) => checkFor(recorded, r) ?? []);
-    recovery = {
-      forKey: run.recovery.forKey,
-      requestedAt: run.recovery.requestedAt,
-      exhausted: run.recovery.exhausted,
-      groups: {
-        ALLOWED: checked.filter((r) => r.rights.state === "ALLOWED"),
-        NEEDS_REVIEW: checked.filter((r) => r.rights.state === "NEEDS_REVIEW"),
-        BLOCKED: checked.filter((r) => r.rights.state === "BLOCKED"),
-        UNCHECKED: [...checked.filter((r) => r.rights.state === "NOT_CHECKED"), ...unchecked],
-      },
-      sharedBlocker: sharedBlocker(verdicts),
-    };
-  }
-
+  const lastAlternatives = run.alternatives.at(-1);
   const seconds = (to: string) => Math.round((Date.parse(to) - Date.parse(run.submittedAt)) / 100) / 10;
   return {
-    run: light,
-    recommendations: pool.slice(0, 3).map(view),
-    selected: selectedRec && view(selectedRec),
+    run: {
+      id: run.id,
+      club: run.club,
+      submittedAt: run.submittedAt,
+      resultsAt: run.resultsAt,
+      objective: run.objective,
+      plan: run.plan,
+      match: run.match,
+      matchFilter: run.matchFilter,
+      intents: run.intents,
+      library: run.library,
+      search: run.search,
+      attempts: run.attempts,
+      selectedKey: run.selectedKey,
+    },
+    recommendations: pool.slice(0, 3).map((r) => recommendationView(run, r)),
+    selected: selectedRec && recommendationView(run, selectedRec),
     campaign,
-    recovery,
+    rights,
+    blocker: lastAlternatives && latest && lastAlternatives.forEvaluationId === latest.id ? lastAlternatives.blocker : undefined,
+    alternatives: lastAlternatives,
+    evaluations: run.evaluations.map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      campaignVersion: e.campaignVersion,
+      key: e.key,
+      verdict: e.overall.verdict,
+      clearance: e.overall.clearance,
+      evaluatedAt: e.evaluatedAt,
+    })),
+    receiptId: submitted?.receiptId,
+    reviewStatus,
+    canSubmit,
+    writeback: lastWrite ? { status: lastWrite.status, at: lastWrite.at, detail: lastWrite.detail } : { status: "NOT_STARTED" },
+    publishable,
+    publishNote: publishable
+      ? "Verified clearance and human approval: publishable."
+      : rights.clearanceLabel
+        ? `${rights.clearanceLabel} — never publishable, even after approval.`
+        : "Publishable only with a verified REROUTE clearance AND human approval.",
+    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable),
     kpi: {
       label: run.objective.kpi,
       value: null,
       status: run.objective.measurement.status,
       note: `${run.objective.measurement.note} No value is shown until a verified source is connected.`,
     },
-    timing: { toRecommendationsSec: seconds(run.resultsAt), toCampaignSec: draft ? seconds(draft.createdAt) : undefined },
+    timing: { toRecommendationsSec: seconds(run.resultsAt), toProposalSec: run.proposalAt ? seconds(run.proposalAt) : undefined },
   };
 }

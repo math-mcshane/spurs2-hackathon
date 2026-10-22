@@ -1,420 +1,382 @@
-import { rmSync } from "node:fs";
-import path from "node:path";
-import { afterAll, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import type { Asset, EditDecision, EditPlan, PublishIntent, Verdict } from "@/lib/contracts";
-import { loadPolicy } from "@/lib/rights";
-import type { ContextDeps } from "@/lib/server/context";
-import { decideEdit } from "@/lib/server/decide";
-import { describeUse, presentRights, sharedBlocker } from "../goal-view";
-import { goalIntents, parseMatch } from "../goal-intents";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEMO_CLEARANCE_LABEL, type Asset, type Blocker, type Candidate, type Decision, type EditPlan, type MediaRef, type PublishIntent, type Verdict } from "@/lib/contracts";
+import type { Repositories } from "@/lib/server/repositories";
+import { resetRepositoriesForTests, useMemoryRepositoriesForTests } from "@/lib/server/repositories/testing";
+import { recordReview } from "@/lib/server/store";
+import { buildGoalCampaign } from "../goal-campaign";
+import { GLOBAL_TERRITORIES, goalIntents, goalPlan, parseMatch } from "../goal-intents";
+import { rankMoments, type LinkedVideo, type RawMoment } from "../moment-ranking";
 import { parseObjective } from "../objective-parser";
-import { seasonOf } from "../moment-ranking";
-import { searchGoal, type GoalSearchDeps } from "../server/goal-search";
 import * as goals from "../server/goal-service";
-import type { ScorePlayHttp } from "../server/scoreplay-discovery";
-import type { AssetPage, TwelveLabsSdk } from "../server/twelvelabs-moments";
-import type { GoalRightsCheck } from "../types";
-
-const STATE = await vi.hoisted(async () => {
-  const { mkdtempSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  return mkdtempSync(`${tmpdir()}/pulse-goal-test-`);
-});
-vi.mock("@/lib/state-dir", () => ({ STATE_ROOT: STATE }));
-afterAll(() => rmSync(STATE, { recursive: true, force: true }));
+import type { GoalDeps } from "../server/goal-service";
+import type { GoalSearch } from "../server/goal-search";
+import { GoalViewSchema, type GoalIntent, type GoalRun } from "../types";
 
 const NOW = new Date("2026-10-22T12:00:00Z");
-const MERCH = "Promote Tottenham merchandise to UK fans using the best moments from the Manchester United match.";
-const GLOBAL = "Maximize global engagement from the Manchester United match.";
+const A = "Promote Tottenham merchandise to UK supporters";
+const B = "Maximize global engagement from the Manchester United game";
 
-// ---------- A Tottenham library: ScorePlay workspace + the TwelveLabs index (linked by filename + duration) ----------
+// ---------- A Tottenham @ Manchester United library, linked by the canonical MediaResolver ----------
 
-const LIBRARY = [
-  { id: 901, name: "Away End FT.mov", sec: 6.9 },
-  { id: 902, name: "Goal Slo Mo 9x16.mp4", sec: 45 },
-  { id: 903, name: "Full Match | 2026-27.mp4", sec: 6000 },
-  { id: 904, name: "MNU_1_6_TOT_20_21_HIGHLIGHTS.mp4", sec: 159 },
-  { id: 905, name: "MNU_1_6_TOT_20_21_HIGHLIGHTS_2.mp4", sec: 159 }, // re-upload of 904
-  { id: 906, name: "Not indexed.mp4", sec: 30 },
-];
-
-const scoreplay = (status = 200): ScorePlayHttp => ({
-  apiKey: "k",
-  fetch: (async (input: string | URL | Request) => {
-    const url = new URL(String(input));
-    const json = url.pathname.endsWith("/tag/search")
-      ? { tags: [{ ID: 10797072, name: "tottenham hotspur" }] }
-      : { media: LIBRARY.map((v) => ({ ID: v.id, name: v.name, type: "video", media_duration: v.sec * 1e9 })), count: LIBRARY.length };
-    return new Response(JSON.stringify(json), { status });
-  }) as unknown as typeof fetch,
-});
-
-/** What the index returns per question (Marengo rank order). tl-999 is indexed but not in this workspace. */
-function hits(query: string) {
-  const at = (videoId: string, start: number, end: number, rank: number) => ({ videoId, start, end, rank });
-  if (query.includes("shirt with the crest")) return [at("tl-903", 100, 106, 1)];
-  if (query.includes("celebrating a goal")) return [at("tl-902", 14.8, 20.2, 1), at("tl-904", 130, 137, 2), at("tl-905", 130, 137, 3)];
-  if (query.includes("away end")) return [at("tl-901", 0, 6.9, 1), at("tl-999", 0, 5, 2)];
-  if (query.includes("applauding")) return [at("tl-901", 0.5, 6, 1)];
-  if (query.includes("goal being scored")) return [at("tl-904", 130, 137, 1), at("tl-905", 130, 137, 2), at("tl-903", 4752, 4757, 3)];
-  if (query.includes("crossbar")) return [at("tl-902", 0, 14.8, 1)];
-  if (query.includes("making a save")) return [at("tl-903", 182, 187, 1)];
-  if (query.includes("singing")) return [at("tl-901", 0, 6.9, 5)];
-  return [];
-}
-
-let indexSeq = 0;
-function library(opts: { previews?: boolean; search?: TwelveLabsSdk["search"]["create"] } = {}): GoalSearchDeps & { retrieve: Mock } {
-  const entries = LIBRARY.filter((v) => v.id !== 906)
-    .map((v) => ({ id: `tl-${v.id}`, status: "ready", systemMetadata: { filename: v.name, duration: v.sec }, user_metadata: { scoreplay_id: `other-${v.id}` } }))
-    .concat({ id: "tl-999", status: "ready", systemMetadata: { filename: "elsewhere.mp4", duration: 5 }, user_metadata: { scoreplay_id: "x" } });
-  const page: AssetPage = { data: entries, hasNextPage: () => false, getNextPage: async () => page };
-  const retrieve = vi.fn(async (_index: string, videoId: string) =>
-    videoId === "tl-901" ? { hls: { videoUrl: "https://cdn.example/901.m3u8", status: "COMPLETE" } } : {},
-  );
-  const sdk: TwelveLabsSdk = {
-    indexes: {
-      retrieve: async () => ({ indexName: "premiere-league", videoCount: entries.length, models: [{ modelName: "marengo3.0", modelOptions: ["visual", "audio"] }] }),
-      indexedAssets: { list: async () => page },
-      videos: { retrieve },
-    },
-    search: { create: opts.search ?? (async (req) => ({ data: hits(req.queryText) })), retrieve: async () => ({ data: [] }) },
-  };
-  const indexId = `idx-goal-${++indexSeq}`;
-  return { scoreplay: scoreplay(), twelvelabs: () => ({ sdk, indexId }), previews: opts.previews ?? true, retrieve };
-}
-
-const search = (goal: string, deps = library()) => searchGoal({ club: "tottenham", objective: parseObjective(goal, NOW), match: parseMatch(goal) }, deps);
-
-describe("goal → real candidates", () => {
-  it("normalizes TwelveLabs hits into ScorePlay moments with exact timestamps; unmapped hits are dropped", async () => {
-    const r = await search(MERCH);
-    expect(r.search.status).toBe("FOUND");
-    expect(r.library).toMatchObject({ videos: 6, indexed: 5, indexName: "premiere-league", latestSeason: "2026-27" });
-    const away = r.pool.find((p) => p.candidate.scoreplayAssetId === "901")!;
-    expect(away.candidate).toMatchObject({
-      twelveLabsVideoId: "tl-901",
-      startSeconds: 0,
-      endSeconds: 6.9,
-      foundBy: "TWELVELABS",
-      origin: "LIVE",
-      mapping: { via: "FILENAME_DURATION", indexedScoreplayId: "other-901", filename: "Away End FT.mov" },
-    });
-    // Overlapping hits from two questions are one moment, supported by both.
-    expect(away.matches.map((m) => [m.intent, m.rank])).toEqual([
-      ["fans-colours", 1],
-      ["player-fan-bond", 1],
-    ]);
-    expect(r.pool.some((p) => p.candidate.twelveLabsVideoId === "tl-999")).toBe(false);
-    expect(r.pool.every((p) => p.candidate.foundBy === "TWELVELABS")).toBe(true);
-  });
-
-  it("previews only through a returned stream; otherwise says why, and makes no stream calls when switched off", async () => {
-    const r = await search(MERCH);
-    expect(r.pool.find((p) => p.candidate.scoreplayAssetId === "901")!.preview).toEqual({ source: "TWELVELABS_STREAM", url: "https://cdn.example/901.m3u8", hls: true });
-    const other = r.pool.find((p) => p.candidate.scoreplayAssetId === "902")!;
-    expect(other.preview).toBeUndefined();
-    expect(other.previewNote).toMatch(/Neither ScorePlay nor TwelveLabs returned a browser-playable stream.*open ScorePlay asset 902 at 0:15–0:20/);
-
-    const off = library({ previews: false });
-    const silent = await search(MERCH, off);
-    expect(off.retrieve).not.toHaveBeenCalled();
-    expect(silent.pool.every((p) => !p.preview && /switched off/.test(p.previewNote))).toBe(true);
-  });
-
-  it("reports an unreachable library or index instead of proposing anything", async () => {
-    const down = await search(MERCH, { ...library(), scoreplay: scoreplay(401) });
-    expect(down).toMatchObject({ pool: [], search: { status: "UNAVAILABLE", code: "UNAUTHORIZED" } });
-
-    const failing = await search(MERCH, library({ search: async () => Promise.reject(Object.assign(new Error("x"), { statusCode: 429 })) }));
-    expect(failing).toMatchObject({ pool: [], search: { status: "UNAVAILABLE", code: "RATE_LIMITED" } });
-  });
-});
-
-describe("objective-dependent ranking", () => {
-  it("asks different questions of the same library for different goals", () => {
-    const merch = goalIntents(parseObjective(MERCH, NOW), "football").map((i) => i.key);
-    const global = goalIntents(parseObjective(GLOBAL, NOW), "football").map((i) => i.key);
-    expect(merch).toEqual(["kit", "celebration", "fans-colours", "player-fan-bond"]);
-    expect(global).toEqual(["score", "celebration", "near-miss", "save", "atmosphere"]);
-    expect(goalIntents(parseObjective(GLOBAL, NOW), "basketball")[0].query).toMatch(/dunk/);
-  });
-
-  it("ranks the same footage differently for merchandise in the UK and global engagement", async () => {
-    const merch = await search(MERCH);
-    const global = await search(GLOBAL);
-    expect(merch.pool[0].candidate.scoreplayAssetId).toBe("901"); // fans in club colours
-    expect(global.pool[0].candidate.scoreplayAssetId).toBe("902"); // goal / big chance
-    expect(merch.pool.slice(0, 3).map((p) => p.candidate.scoreplayAssetId)).not.toEqual(global.pool.slice(0, 3).map((p) => p.candidate.scoreplayAssetId));
-  });
-
-  it("discounts earlier-season footage only when the goal names a match", async () => {
-    const named = await search(GLOBAL);
-    const archive = named.pool.find((p) => p.candidate.scoreplayAssetId === "904")!;
-    expect(archive).toMatchObject({ season: "2020-21", breakdown: { contextFactor: 0.6 } });
-    const unnamed = await search("Maximize global engagement");
-    expect(unnamed.pool.find((p) => p.candidate.scoreplayAssetId === "904")!.breakdown.contextFactor).toBe(1);
-    expect(unnamed.pool[0].candidate.scoreplayAssetId).toBe("904");
-  });
-
-  it("leads with distinct assets and treats a re-upload of the same file as the same asset", async () => {
-    const r = await search(GLOBAL);
-    const lead = r.pool.slice(0, 4).map((p) => p.candidate.scoreplayAssetId);
-    expect(new Set(lead).size).toBe(4);
-    expect(lead).not.toContain("905");
-    expect(r.pool.map((p) => p.candidate.scoreplayAssetId)).toContain("905");
-  });
-
-  it("reads seasons and matches from what the user and the filenames say", () => {
-    expect(seasonOf("9x16_MNU_0_3_TOT_PL_18_19_HIGHLIGHTS.mp4")).toBe("2018-19");
-    expect(seasonOf("Manchester United vs Spurs | Full Match | 2026-27.mp4")).toBe("2026-27");
-    expect(seasonOf("9x16_MNU_1_1_TOT_HIGHLIGHTS.mp4")).toBeUndefined();
-    expect(parseMatch(MERCH)).toBe("Manchester United");
-    expect(parseMatch("Sell shirts in France against Arsenal")).toBe("Arsenal");
-    expect(parseMatch("Grow followers in France")).toBeUndefined();
-  });
-});
-
-// ---------- Rights presentation ----------
-
-const check = (over: Partial<GoalRightsCheck> = {}): GoalRightsCheck => ({
-  key: "901@0-6.9",
-  state: "NEEDS_REVIEW",
+const ref = (id: string, method: MediaRef["method"] = "FILENAME_DURATION"): MediaRef => ({
+  scoreplayMediaId: id,
+  twelvelabsIndexId: "idx",
+  twelvelabsVideoId: method === "AMBIGUOUS" || method === "UNMAPPED" ? undefined : `tl-${id}`,
+  method,
+  match: { scoreplayFilename: `MNU_TOT_${id}.mp4`, twelvelabsFilename: `MNU_TOT_${id}.mp4`, scoreplayDurationSec: 60, twelvelabsDurationSec: 60, durationDeltaSec: 0 },
+  candidates: [],
   checkedAt: NOW.toISOString(),
-  scoreplayAssetId: "901",
-  policyId: "demo-tottenham-pl",
-  policyVersion: "1",
-  policyFictional: true,
-  reasons: [],
-  missingFacts: [],
-  edit: { id: "e", title: "t", derived: false, segments: [{ scoreplayMediaId: "901", start: 0, end: 6.9 }] },
-  intent: { territory: "GB", platform: "instagram", usage: "ORGANIC", competition: "Premier League", publishAt: NOW.toISOString() },
-  rerouteUrl: "/?asset=901",
-  ...over,
 });
 
-describe("rights-state presentation", () => {
-  it("renders REROUTE reasons as plain topics while keeping REROUTE's words", () => {
-    const licence = "No rule in policy demo-spurs-fr-sponsored grants territory for this asset and intent";
-    const r = presentRights(
-      check({
-        reasons: [
-          ...["territory", "platform", "usage"].map((dimension) => ({ dimension, outcome: "MISSING" as const, explanation: licence })),
-          { dimension: "sponsor", outcome: "MISSING", explanation: "Sponsors/branding in asset 901 are not recorded in ScorePlay metadata" },
-          { dimension: "sponsor", outcome: "MISSING", explanation: "No video analysis for asset 901; on-screen sponsors cannot be confirmed." },
-        ],
-      }),
-      check().intent,
-    );
-    expect(r).toMatchObject({ state: "NEEDS_REVIEW", cleared: false, headline: "Needs a rights review" });
-    expect(r.issues).toEqual([
-      { topic: "Licence terms", outcome: "MISSING", dimensions: ["territory", "platform", "usage"], explanations: [licence] },
-      expect.objectContaining({ topic: "Sponsors and brands on screen", explanations: expect.arrayContaining([expect.stringContaining("not recorded in ScorePlay")]) }),
-    ]);
-    expect(describeUse(check().intent)).toBe("Organic Instagram post in United Kingdom (GB) · Premier League");
-  });
-
-  it("calls a moment cleared only for ALLOWED under a non-fictional policy", () => {
-    expect(presentRights(undefined, check().intent)).toMatchObject({ state: "NOT_CHECKED", cleared: false });
-    expect(presentRights(check({ state: "ALLOWED" }), check().intent)).toMatchObject({
-      state: "ALLOWED",
-      cleared: false,
-      headline: "Allowed under a demo policy — not a real clearance",
-    });
-    expect(presentRights(check({ state: "ALLOWED", policyFictional: false }), check().intent)).toMatchObject({ cleared: true });
-    const blocked = presentRights(check({ state: "BLOCKED", reasons: [{ dimension: "people", outcome: "DENY", explanation: "Interviews may not be sponsored" }] }), check().intent);
-    expect(blocked).toMatchObject({ cleared: false, headline: "Blocked for this use" });
-    expect(blocked.detail).toContain("people on screen");
-  });
-
-  it("names a blocker every checked moment shares, ignoring asset ids, and nothing otherwise", () => {
-    const same = (id: string) =>
-      check({ scoreplayAssetId: id, reasons: [{ dimension: "people", outcome: "MISSING", explanation: `No video analysis for asset ${id} (custom_id ${id})` }] });
-    expect(sharedBlocker([same("130851438"), same("130851415")])).toMatch(/All 2 moments .* people on screen/);
-    expect(sharedBlocker([same("130851438"), check({ reasons: [{ dimension: "sponsor", outcome: "MISSING", explanation: "x" }] })])).toBeUndefined();
-    expect(sharedBlocker([same("130851438"), check({ state: "ALLOWED" })])).toBeUndefined();
-  });
+const asset = (id: string, sec = 60): Asset => ({
+  id,
+  title: `MNU_TOT_${id}.mp4`,
+  kind: "video",
+  durationSec: sec,
+  tags: ["Tottenham Hotspur", "Manchester United"],
+  facts: { competition: "Premier League" },
+  metadata: {},
+  origin: "LIVE",
 });
 
-// ---------- Service: goal → campaign → REROUTE → another way ----------
+const LINKS = new Map<string, LinkedVideo>([
+  ["tl-901", { asset: asset("901"), discoveredBy: "TEAM_TAG", media: ref("901") }],
+  ["tl-902", { asset: asset("902"), discoveredBy: "TEAM_TAG", media: ref("902") }],
+  ["tl-903", { asset: asset("903"), discoveredBy: "TEAM_TAG", media: ref("903") }],
+  ["tl-904", { asset: asset("904"), discoveredBy: "TEAM_TAG", media: ref("904") }],
+  ["tl-905", { asset: asset("905"), discoveredBy: "TEAM_TAG", media: ref("905") }], // re-upload of 904
+  ["tl-906", { asset: asset("906"), discoveredBy: "TEAM_TAG", media: ref("906", "AMBIGUOUS") }],
+]);
 
-type Ruling = { verdict: Verdict; fictional?: boolean };
-function decider(rule: (assetId: string) => Ruling) {
-  const calls: { edit: EditPlan; intent: PublishIntent }[] = [];
-  const decide = async (edit: EditPlan, intent: PublishIntent): Promise<EditDecision> => {
-    calls.push({ edit, intent });
-    const id = edit.segments[0].scoreplayMediaId;
-    const { verdict, fictional = true } = rule(id);
-    return {
-      edit,
-      segments: [],
-      decision: {
-        verdict,
-        reasons:
-          verdict === "ALLOWED"
-            ? [{ ruleId: "p", dimension: "territory", outcome: "PERMIT", explanation: "permitted" }]
-            : [{ ruleId: "r", dimension: "sponsor", outcome: verdict === "BLOCKED" ? "DENY" : "MISSING", explanation: `Sponsors/branding in asset ${id} are not recorded` }],
-        missingFacts: verdict === "NEEDS_REVIEW" ? [`Sponsors/branding in asset ${id}`] : [],
-        evidence: [],
-        policyId: fictional ? "demo-tottenham-pl" : "club-contract",
-        policyVersion: "1",
-        policyFictional: fictional,
-        evaluatedAt: NOW.toISOString(),
-      },
-    };
-  };
-  return { decide, calls };
+/** Marengo hits per question (rank order, real-looking timestamps). */
+function hits(intent: GoalIntent): RawMoment[] {
+  const at = (videoId: string, start: number, end: number, rank: number) => ({ videoId, start, end, rank });
+  switch (intent.key) {
+    case "kit":
+      return [at("tl-903", 10, 16, 1), at("tl-906", 0, 5, 2)];
+    case "fans-colours":
+      return [at("tl-901", 0, 6.9, 1)];
+    case "player-fan-bond":
+      return [at("tl-901", 0.5, 6, 1)];
+    case "celebration":
+      return [at("tl-902", 14.8, 20.2, 1), at("tl-904", 30, 37, 2)];
+    case "score":
+      return [at("tl-904", 30, 37, 1), at("tl-905", 30, 37.4, 2), at("tl-902", 14, 20, 3)];
+    case "near-miss":
+      return [at("tl-902", 0, 9, 1)];
+    case "save":
+      return [at("tl-903", 40, 45, 1)];
+    default:
+      return [];
+  }
 }
 
-const deps = (decide: goals.GoalDeps["decide"]): goals.GoalDeps => ({ search: (input) => searchGoal(input, library()), decide, now: () => NOW });
-
-describe("goal service", () => {
-  beforeEach(() => {
-    rmSync(path.join(STATE, ".data"), { recursive: true, force: true });
-    delete process.env.PULSE_COMMERCE_DESTINATIONS;
-  });
-
-  it("submits a goal, keeps it as the latest run, and refuses goals with nothing to aim at", async () => {
-    const { decide } = decider(() => ({ verdict: "NEEDS_REVIEW" }));
-    expect(await goals.getGoal()).toBeNull();
-    const view = await goals.runGoal(MERCH, "tottenham", deps(decide));
-    expect(view.run.objective.summary).toBe("Sell merchandise in United Kingdom");
-    expect(view.run.match).toBe("Manchester United");
-    expect(view.recommendations).toHaveLength(3);
-    expect(view.recommendations.every((r) => r.rights.state === "NOT_CHECKED")).toBe(true);
-    expect(view.kpi).toEqual(expect.objectContaining({ label: "Merchandise sales in United Kingdom", value: null, status: "NOT_CONNECTED" }));
-    expect((await goals.getGoal())?.run.id).toBe(view.run.id);
-    await expect(goals.runGoal("do better", "tottenham", deps(decide))).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("recovers from a review verdict without restarting: same goal, alternatives evaluated independently by REROUTE", async () => {
-    const verdicts: Record<string, Ruling> = { "901": { verdict: "NEEDS_REVIEW" }, "902": { verdict: "BLOCKED" }, "903": { verdict: "ALLOWED" } };
-    const { decide, calls } = decider((id) => verdicts[id] ?? { verdict: "NEEDS_REVIEW" });
-    const d = deps(decide);
-    const { run } = await goals.runGoal(MERCH, "tottenham", d);
-    const first = (await goals.getGoal(run.id))!.recommendations[0];
-    expect(first.candidate.scoreplayAssetId).toBe("901");
-
-    const drafted = await goals.draftGoalCampaign(run.id, first.key, undefined, d);
-    expect(drafted.campaign).toMatchObject({
-      objective: { summary: "Sell merchandise in United Kingdom" },
-      media: { scoreplayAssetId: "901", startSeconds: 0, endSeconds: 6.9 },
-      rerouteIntent: { territory: "GB", platform: "instagram", usage: "ORGANIC", competition: "Premier League" },
-      cta: { status: "NOT_CONFIGURED" },
-      stage: "PROPOSED",
-      rights: { state: "NOT_CHECKED" },
-    });
-    expect(drafted.campaign!.checklist.find((c) => c.item === "Destination URL")).toMatchObject({ status: "MISSING" });
-    expect(drafted.campaign!.checklist.find((c) => c.item === "Product inventory")).toMatchObject({ status: "NOT_CONNECTED" });
-
-    const reviewed = await goals.checkGoalRights(run.id, d);
-    expect(reviewed.campaign).toMatchObject({ stage: "PROPOSED", rights: { state: "NEEDS_REVIEW", cleared: false } });
-
-    const recovered = await goals.findAlternatives(run.id, d);
-    const r = recovered.recovery!;
-    expect(r.forKey).toBe(first.key);
-    // The next-best moments on other assets, each sent to REROUTE once, with the same use.
-    const altAssets = calls.slice(1).map((c) => c.edit.segments[0].scoreplayMediaId);
-    expect(altAssets).toHaveLength(3);
-    expect(altAssets).not.toContain("901");
-    expect(calls.every((c) => c.intent.territory === "GB" && c.intent.usage === "ORGANIC")).toBe(true);
-    expect(r.groups.BLOCKED.map((a) => a.candidate.scoreplayAssetId)).toEqual(["902"]);
-    expect(r.groups.ALLOWED.map((a) => a.candidate.scoreplayAssetId)).toEqual(["903"]);
-    expect(r.groups.ALLOWED[0].rights.cleared).toBe(false); // fictional policy
-    expect(r.groups.NEEDS_REVIEW).toHaveLength(1);
-    expect(r.groups.UNCHECKED.every((a) => a.rights.state === "NOT_CHECKED")).toBe(true);
-    expect(recovered.run.objective.raw).toBe(MERCH);
-
-    // "Use this instead": same goal, same draft, the alternative's recorded verdict applies to it.
-    const alt = r.groups.ALLOWED[0];
-    const switched = await goals.draftGoalCampaign(run.id, alt.key, undefined, d);
-    expect(switched.campaign).toMatchObject({ id: drafted.campaign!.id, createdAt: drafted.campaign!.createdAt, media: { scoreplayAssetId: "903" }, stage: "PROPOSED" });
-    expect(switched.campaign!.rights).toMatchObject({ state: "ALLOWED", cleared: false });
-    expect(switched.recovery?.groups.ALLOWED[0].key).toBe(alt.key);
-
-    // A fictional ALLOWED is never approvable; the fresh verdict is still recorded.
-    await expect(goals.approveGoalCampaign(run.id, "Sam", d)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect((await goals.getGoal(run.id))!.campaign!.stage).toBe("PROPOSED");
-    await expect(goals.findAlternatives(run.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
-
-    // Asking again never re-sends a moment REROUTE already evaluated.
-    await goals.draftGoalCampaign(run.id, first.key, undefined, d);
-    const before = calls.length;
-    const again = await goals.findAlternatives(run.id, d);
-    const resent = calls.slice(before).map((c) => `${c.edit.segments[0].scoreplayMediaId}@${c.edit.segments[0].start}`);
-    expect(resent.some((k) => [first, ...r.groups.NEEDS_REVIEW, ...r.groups.BLOCKED, ...r.groups.ALLOWED].some((x) => x.key.startsWith(`${k}-`)))).toBe(false);
-    expect(again.recovery!.groups.ALLOWED.map((a) => a.key)).toContain(alt.key);
-  });
-
-  it("moves proposed → rights cleared → ready for approval → approved only on a real ALLOWED", async () => {
-    let ruling: Ruling = { verdict: "ALLOWED", fictional: false };
-    const { decide } = decider(() => ruling);
-    const d = deps(decide);
-    const { run, recommendations } = await goals.runGoal(MERCH, "tottenham", d);
-    await goals.draftGoalCampaign(run.id, recommendations[0].key, undefined, d);
-    const cleared = await goals.checkGoalRights(run.id, d);
-    expect(cleared.campaign).toMatchObject({ stage: "RIGHTS_CLEARED", rights: { cleared: true } });
-    await expect(goals.approveGoalCampaign(run.id, "Sam", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
-
-    const withUrl = await goals.draftGoalCampaign(run.id, recommendations[0].key, "https://shop.example.com/uk", d);
-    expect(withUrl.campaign).toMatchObject({ stage: "READY_FOR_APPROVAL", cta: { status: "READY", destination: { source: "PRODUCER_ENTERED" } } });
-    expect(withUrl.campaign!.channels.find((c) => c.channel === "x")!.copy).toContain("https://shop.example.com/uk");
-
-    const approved = await goals.approveGoalCampaign(run.id, "Sam", d);
-    expect(approved.campaign).toMatchObject({ stage: "APPROVED", approval: { by: "Sam" } });
-
-    ruling = { verdict: "NEEDS_REVIEW" };
-    await expect(goals.approveGoalCampaign(run.id, "Sam", d)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect((await goals.getGoal(run.id))!.campaign).toMatchObject({ stage: "PROPOSED", rights: { state: "NEEDS_REVIEW" } });
-  });
-});
-
-// ---------- The complete PULSE → REROUTE handoff, decided by the real rights engine ----------
-
-describe("PULSE → REROUTE handoff", () => {
-  beforeEach(() => rmSync(path.join(STATE, ".data"), { recursive: true, force: true }));
-
-  const asset = (id: string, facts: Asset["facts"], tags: string[]): Asset => ({ id, title: id, kind: "video", durationSec: 60, tags, facts, metadata: {}, origin: "LIVE" });
-  const context: ContextDeps = {
-    getAsset: async (id) =>
-      id === "901"
-        ? asset(id, { competition: "Premier League", people: ["A Player"], sponsors: ["Kit sponsor"] }, ["match"])
-        : asset(id, { competition: "Premier League" }, []),
-    video: () => ({
-      search: async () => [],
-      observations: async (id) => {
-        if (id === "901") return [];
-        throw new Error(`No TwelveLabs video in index has custom_id ${id}`);
-      },
-    }),
-    humanObservations: async () => [],
+function searchFor(goal: string): GoalSearch {
+  const objective = parseObjective(goal, NOW);
+  const intents = goalIntents(objective, "football");
+  const pool = rankMoments(intents.map((intent) => ({ intent, moments: hits(intent) })), LINKS, { objective, match: parseMatch(goal) });
+  return {
+    intents,
+    library: { videos: 6, indexed: 6, indexName: "premiere-league" },
+    attempts: [],
+    pool,
+    search: { status: "FOUND", message: "found" },
+    matchFilter: parseMatch(goal) ? { requested: parseMatch(goal)!, status: "APPLIED", videos: 6 } : undefined,
   };
-  const real = (edit: EditPlan, intent: PublishIntent) => decideEdit(edit, intent, { deps: context, policy: loadPolicy("demo-tottenham-pl"), now: NOW });
+}
 
-  it("sends the exact moment and use to REROUTE and shows its verdict without upgrading it", async () => {
-    const d: goals.GoalDeps = { search: (input) => searchGoal(input, library()), decide: real, now: () => NOW };
-    const { run, recommendations } = await goals.runGoal(MERCH, "tottenham", d);
-    await goals.draftGoalCampaign(run.id, recommendations[0].key, undefined, d);
-    const allowed = await goals.checkGoalRights(run.id, d);
-    // REROUTE's fictional Tottenham policy permits organic GB match footage — still not a real clearance.
-    expect(allowed.campaign!.rights).toMatchObject({ state: "ALLOWED", cleared: false, policyId: "demo-tottenham-pl", policyFictional: true });
-    expect(allowed.campaign!.stage).toBe("PROPOSED");
-    const link = new URLSearchParams(allowed.campaign!.rights.rerouteUrl!.split("?")[1]);
-    expect(Object.fromEntries(["asset", "start", "end", "territory", "usage", "competition"].map((k) => [k, link.get(k)]))).toEqual({
-      asset: "901",
-      start: "0",
-      end: "6.9",
-      territory: "GB",
-      usage: "ORGANIC",
+// ---------- REROUTE fakes ----------
+
+const decision = (verdict: Verdict, opts: { fictional?: boolean; dimension?: string } = {}): Decision => {
+  const fictional = opts.fictional ?? true;
+  return {
+    verdict,
+    reasons:
+      verdict === "ALLOWED"
+        ? [{ ruleId: "r-ok", dimension: "territory", outcome: "PERMIT", explanation: "Licensed", basis: "LEGAL_ENTITLEMENT" }]
+        : [{ ruleId: "r-x", dimension: opts.dimension ?? "people", outcome: verdict === "BLOCKED" ? "DENY" : "MISSING", explanation: `Restricted ${opts.dimension ?? "people"}`, basis: "LEGAL_ENTITLEMENT" }],
+    missingFacts: [],
+    evidence: [],
+    policyVersion: "1",
+    policyId: fictional ? "demo-tottenham-pl" : "thfc-pl-2026",
+    policyFictional: fictional,
+    clearance: verdict === "ALLOWED" ? (fictional ? "DEMO" : "VERIFIED") : "NONE",
+    evaluatedAt: NOW.toISOString(),
+  };
+};
+
+const worst = (vs: Verdict[]): Verdict => (vs.includes("BLOCKED") ? "BLOCKED" : vs.includes("NEEDS_REVIEW") ? "NEEDS_REVIEW" : "ALLOWED");
+
+/** decideCampaign fake: the verdict depends on the asset only (what a CLIP blocker looks like). */
+function campaignDecider(byAsset: Record<string, Verdict>, opts: { fictional?: boolean } = {}): GoalDeps["decideCampaign"] {
+  return vi.fn(async ({ edit, intents }: { edit: EditPlan; intents: PublishIntent[] }) => {
+    const v = byAsset[edit.segments[0].scoreplayMediaId] ?? "NEEDS_REVIEW";
+    const perIntent = intents.map((intent) => {
+      const d = decision(v, opts);
+      return { intent, decision: { edit, decision: d, segments: [{ segment: edit.segments[0], decision: d }] } };
+    });
+    const overall = { ...decision(worst(perIntent.map((p) => p.decision.decision.verdict)), opts) };
+    return { overall, perIntent };
+  });
+}
+
+function candidate(id: string, start: number, end: number, verdict: Verdict, base: EditPlan): Candidate {
+  const segment = { scoreplayMediaId: id, start, end, label: "q" };
+  const proposedEdit: EditPlan = { ...base, id: `${base.id}~${id}`, segments: [segment], derived: true, derivedFrom: base.id };
+  const d = decision(verdict);
+  return {
+    hit: { scoreplayMediaId: id, twelvelabsVideoId: `tl-${id}`, start, end, rank: 1, origin: "LIVE", mapping: "FILENAME_DURATION" },
+    proposedEdit,
+    segmentDecision: d,
+    editDecision: { edit: proposedEdit, decision: d, segments: [{ segment, decision: d }] },
+    eligible: verdict === "ALLOWED",
+  };
+}
+
+const CLIP: Blocker = { scope: "CLIP", dimensions: ["people"], ruleIds: ["r-x"], explanation: "A person on screen is restricted", suggestion: "Use footage without this person" };
+const CAMPAIGN: Blocker = { scope: "CAMPAIGN", dimensions: ["territory"], ruleIds: ["r-t"], explanation: "Not licensed in NG", suggestion: "Licensed territories: GB, US, FR, ES, DE, IN" };
+
+function deps(over: Partial<GoalDeps> = {}): GoalDeps {
+  return {
+    search: vi.fn(async ({ objective }) => searchFor(objective.raw)),
+    decideCampaign: campaignDecider({}),
+    resolve: vi.fn(async (input) => ({ query: input.query ?? "q", blocker: CLIP, candidates: [candidate("907", 3, 8.4, "ALLOWED", input.edit)], best: undefined })),
+    resolveMedia: vi.fn(async (id: string) => ref(id)),
+    now: () => NOW,
+    ...over,
+  };
+}
+
+let repos: Repositories;
+beforeEach(() => {
+  repos = useMemoryRepositoriesForTests();
+});
+afterEach(() => resetRepositoriesForTests());
+
+// ---------- Objective → plan ----------
+
+describe("objective → intent", () => {
+  it("Scenario A: Tottenham merchandise to UK supporters is a commercial GB campaign on IG/FB/X", () => {
+    const o = parseObjective(A, NOW);
+    expect(o).toMatchObject({ club: "tottenham", scope: "MARKET", market: { code: "GB" }, product: { key: "merch" } });
+    expect(goalPlan(o, "tottenham")).toMatchObject({
+      club: "tottenham",
+      territories: ["GB"],
+      usage: "COMMERCIAL",
+      channels: ["instagram", "facebook", "x"],
       competition: "Premier League",
     });
+  });
 
-    const second = recommendations.find((r) => r.candidate.scoreplayAssetId === "902")!;
-    await goals.draftGoalCampaign(run.id, second.key, undefined, d);
-    const review = await goals.checkGoalRights(run.id, d);
-    expect(review.campaign!.rights.state).toBe("NEEDS_REVIEW");
-    const said = review.campaign!.rights.issues.flatMap((i) => i.explanations);
-    expect(said).toContainEqual(expect.stringContaining("No video analysis for asset 902"));
-    expect(review.campaign!.rights.missingFacts).toContainEqual(expect.stringContaining("Video analysis (sponsors/people on screen) for asset 902"));
+  it("Scenario B: global engagement is editorial, evaluated per territory of the documented list, for the named match", () => {
+    const o = parseObjective(B, NOW);
+    expect(o).toMatchObject({ scope: "GLOBAL", product: { key: "engagement" } });
+    expect(o.club).toBeUndefined();
+    expect(parseMatch(B)).toBe("Manchester United");
+    const plan = goalPlan(o, "tottenham");
+    expect(plan).toMatchObject({ club: "tottenham", usage: "EDITORIAL", scope: "GLOBAL" });
+    expect(plan.territories).toEqual([...GLOBAL_TERRITORIES]);
+    expect(plan.territories).toEqual(["GB", "US", "FR", "ES", "DE", "IN", "NG"]);
+  });
+
+  it("intent labels, reasons and hooks never assert whose shirt, fans or player is on screen", () => {
+    const merch = goalIntents(parseObjective(A, NOW), "football");
+    for (const i of merch) expect(`${i.label} ${i.why}`).not.toMatch(/club shirt|our fans|Tottenham/i);
+    const s = searchFor(A);
+    const kit = s.pool.find((r) => r.matches[0].intent === "kit")!;
+    const run = { ...runFixture(A), pool: s.pool };
+    const draft = buildGoalCampaign({ run, rec: kit, campaignId: "c", version: 1, origin: "PROPOSAL", now: NOW });
+    expect(draft.creative.hook).toBe("Matchday detail.");
+    expect(JSON.stringify(draft.channels)).not.toMatch(/Wear it like they do|like they do|Our fans/);
+  });
+});
+
+function runFixture(goal: string): GoalRun {
+  const objective = parseObjective(goal, NOW);
+  return {
+    id: "goal-test",
+    schemaVersion: 2,
+    club: "tottenham",
+    submittedAt: NOW.toISOString(),
+    resultsAt: NOW.toISOString(),
+    objective,
+    plan: goalPlan(objective, "tottenham"),
+    intents: [],
+    library: { videos: 0, indexed: 0 },
+    search: { status: "FOUND", message: "" },
+    attempts: [],
+    pool: [],
+    adopted: [],
+    evaluations: [],
+    alternatives: [],
+  };
+}
+
+// ---------- Search result → recommendations ----------
+
+describe("search result → three real moments", () => {
+  it("keeps Marengo's exact timestamps, links via MediaRef, drops unlinkable videos and folds re-uploads", () => {
+    const pool = searchFor(B).pool;
+    const top = pool[0];
+    expect(top.candidate).toMatchObject({ scoreplayAssetId: "904", twelveLabsVideoId: "tl-904", startSeconds: 30, endSeconds: 37, foundBy: "TWELVELABS" });
+    expect(top.media).toMatchObject({ scoreplayMediaId: "904", twelvelabsVideoId: "tl-904", method: "FILENAME_DURATION" });
+    expect(top.duplicates).toEqual(["905@30-37.4"]);
+    expect(pool.some((r) => r.candidate.scoreplayAssetId === "905")).toBe(false);
+    expect(pool.some((r) => r.candidate.scoreplayAssetId === "906")).toBe(false); // AMBIGUOUS mapping
+    for (const r of pool) expect(r.why.opportunity && r.why.media && r.why.action).toBeTruthy();
+  });
+
+  it("A and B produce different recommendations, copy and KPI", async () => {
+    const d = deps();
+    const a = await goals.runGoal(A, "tottenham", d);
+    const b = await goals.runGoal(B, "tottenham", d);
+    expect(a.recommendations.map((r) => r.key)).not.toEqual(b.recommendations.map((r) => r.key));
+    expect(a.recommendations[0].headline).not.toBe(b.recommendations[0].headline);
+    expect(a.recommendations[0].why.action).toMatch(/store/);
+    expect(b.recommendations[0].why.action).toMatch(/comments and shares/);
+    expect(a.campaign!.channels[0].copy).not.toBe(b.campaign!.channels[0].copy);
+    expect(a.kpi.label).toMatch(/Merchandise sales/);
+    expect(b.kpi.label).toMatch(/Engagement/);
+    expect(a.kpi.value).toBeNull();
+  });
+});
+
+// ---------- The service flow ----------
+
+describe("goal → campaign → rights → alternative → review", () => {
+  it("runs the search for the objective and builds a versioned proposal before any user action", async () => {
+    const d = deps();
+    const v = await goals.runGoal(A, "tottenham", d);
+    expect(d.search).toHaveBeenCalledWith(expect.objectContaining({ club: "tottenham", objective: expect.objectContaining({ raw: A }) }));
+    expect(v.recommendations).toHaveLength(3);
+    expect(v.campaign).toMatchObject({ version: 1, origin: "PROPOSAL", key: v.recommendations[0].key, mediaRef: { method: "FILENAME_DURATION" } });
+    expect(v.campaign!.campaignId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(v.campaign!.intents).toHaveLength(3);
+    expect(v.campaign!.intents.every((i) => i.club === "tottenham" && i.usage === "COMMERCIAL" && i.territory === "GB")).toBe(true);
+    expect(v.campaign!.cta.status).toBe("NOT_CONFIGURED");
+    expect(v.timing.toProposalSec).toBe(0);
+    expect(v.rights.state).toBe("NOT_CHECKED");
+    expect(v.reviewStatus).toBe("NOT_SUBMITTED");
+    expect(await repos.campaigns.listVersions(v.campaign!.campaignId)).toHaveLength(1);
+  });
+
+  it("rejects a goal naming another club than the selected one", async () => {
+    await expect(goals.runGoal(A, "spurs", deps())).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("accepts a club destination only on the club's domain, as a new version", async () => {
+    const d = deps();
+    const v = await goals.runGoal(A, "tottenham", d);
+    await expect(goals.draftGoalCampaign(v.run.id, "https://evil.example/shop", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const next = await goals.draftGoalCampaign(v.run.id, "https://shop.tottenhamhotspur.com/", d);
+    expect(next.campaign).toMatchObject({ version: 2, campaignId: v.campaign!.campaignId, cta: { status: "READY" } });
+  });
+
+  it("checks every channel × territory and records each evaluation", async () => {
+    const d = deps({ decideCampaign: campaignDecider({}) });
+    const v = await goals.runGoal(B, "tottenham", d);
+    const checked = await goals.checkGoalRights(v.run.id, d);
+    const call = vi.mocked(d.decideCampaign).mock.calls[0][0];
+    expect(call.intents).toHaveLength(3 * GLOBAL_TERRITORIES.length);
+    expect(new Set(call.intents.map((i) => `${i.platform}/${i.territory}`)).size).toBe(21);
+    expect(call.edit.segments[0]).toMatchObject({ scoreplayMediaId: "904", start: 30, end: 37 });
+    expect(checked.rights).toMatchObject({ state: "NEEDS_REVIEW", current: true, kind: "ORIGINAL" });
+    expect(checked.rights.perIntent).toHaveLength(21);
+    expect(checked.rights.perIntent[0].reasons[0]).toMatchObject({ basis: "LEGAL_ENTITLEMENT" });
+    expect(await repos.evaluations.listForCampaign(v.campaign!.campaignId)).toHaveLength(21);
+    expect((await repos.events.list("campaign", v.campaign!.campaignId)).map((e) => e.type)).toContain("RIGHTS_EVALUATED");
+  });
+
+  it("BLOCKED → resolver search → alternative swapped into a new version and re-checked independently", async () => {
+    const decide = campaignDecider({ "901": "BLOCKED", "907": "ALLOWED" });
+    const d = deps({ decideCampaign: decide });
+    const v = await goals.runGoal(A, "tottenham", d);
+    expect(v.campaign!.mediaRef.scoreplayMediaId).toBe("901");
+    const blocked = await goals.checkGoalRights(v.run.id, d);
+    expect(blocked.rights.state).toBe("BLOCKED");
+    expect(blocked.canSubmit).toBe(false);
+    await expect(goals.submitForReview(v.run.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const alt = await goals.findAlternatives(v.run.id, d);
+    const resolveInput = vi.mocked(d.resolve).mock.calls[0][0];
+    expect(resolveInput).toMatchObject({ segmentIndex: 0, intent: { platform: "instagram", territory: "GB", club: "tottenham" } });
+    expect(resolveInput.query).toBe(blocked.selected!.matches[0].query);
+    expect(alt.blocker).toEqual(CLIP);
+    expect(alt.alternatives!.candidates).toHaveLength(1);
+
+    const key = alt.alternatives!.candidates[0].key;
+    const swapped = await goals.useAlternative(v.run.id, key, d);
+    expect(d.resolveMedia).toHaveBeenCalledWith("907", "tottenham");
+    expect(swapped.campaign).toMatchObject({ version: 2, origin: "ALTERNATIVE", key, mediaRef: { scoreplayMediaId: "907" } });
+    expect(vi.mocked(decide).mock.calls).toHaveLength(2);
+    expect(vi.mocked(decide).mock.calls[1][0].edit.segments[0]).toMatchObject({ scoreplayMediaId: "907", start: 3, end: 8.4 });
+    expect(swapped.rights).toMatchObject({ state: "ALLOWED", kind: "ALTERNATIVE", campaignVersion: 2, clearanceLabel: DEMO_CLEARANCE_LABEL });
+    // What the API returns satisfies the published GoalView contract (the browser client parses it).
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(swapped))).success).toBe(true);
+    expect(swapped.evaluations.map((e) => [e.kind, e.verdict])).toEqual([
+      ["ORIGINAL", "BLOCKED"],
+      ["ALTERNATIVE", "ALLOWED"],
+    ]);
+    const kinds = (await repos.evaluations.listForCampaign(v.campaign!.campaignId)).map((e) => e.kind);
+    expect(kinds.filter((k) => k === "ALTERNATIVE")).toHaveLength(3);
+  });
+
+  it("a CAMPAIGN-scoped blocker offers no replacement clips and is never searched again", async () => {
+    const d = deps({
+      decideCampaign: campaignDecider({ "904": "BLOCKED" }),
+      resolve: vi.fn(async (input) => ({ query: "q", blocker: CAMPAIGN, candidates: [candidate("907", 0, 7, "BLOCKED", input.edit)] })),
+    });
+    const v = await goals.runGoal(B, "tottenham", d);
+    await goals.checkGoalRights(v.run.id, d);
+    const first = await goals.findAlternatives(v.run.id, d);
+    const again = await goals.findAlternatives(v.run.id, d);
+    expect(d.resolve).toHaveBeenCalledTimes(1);
+    expect(first.blocker).toMatchObject({ scope: "CAMPAIGN", suggestion: CAMPAIGN.suggestion });
+    expect(first.alternatives!.candidates).toEqual([]);
+    expect(again.alternatives!.id).toBe(first.alternatives!.id);
+    await expect(goals.useAlternative(v.run.id, "907@0-7", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("demo clearance can be reviewed but is never publishable; NEEDS_REVIEW can be submitted", async () => {
+    const d = deps({ decideCampaign: campaignDecider({ "904": "ALLOWED" }) });
+    const v = await goals.runGoal(B, "tottenham", d);
+    const checked = await goals.checkGoalRights(v.run.id, d);
+    expect(checked).toMatchObject({ canSubmit: true, publishable: false, rights: { clearance: "DEMO", clearanceLabel: DEMO_CLEARANCE_LABEL } });
+    const submitted = await goals.submitForReview(v.run.id, d);
+    expect(submitted).toMatchObject({ reviewStatus: "PENDING", canSubmit: false, publishable: false, writeback: { status: "NOT_STARTED" } });
+    expect(submitted.receiptId).toBeTruthy();
+    expect((await repos.campaigns.get(v.campaign!.campaignId)).receiptId).toBe(submitted.receiptId);
+
+    await recordReview(submitted.receiptId!, { status: "APPROVED", reviewer: "Ana" }, () => {});
+    const approved = (await goals.getGoal(v.run.id))!;
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(approved))).success).toBe(true);
+    expect(approved).toMatchObject({ reviewStatus: "APPROVED", publishable: false });
+    expect(approved.publishNote).toContain(DEMO_CLEARANCE_LABEL);
+
+    const review = deps({ decideCampaign: campaignDecider({ "901": "NEEDS_REVIEW" }) });
+    const nr = await goals.runGoal(A, "tottenham", review);
+    await goals.checkGoalRights(nr.run.id, review);
+    expect((await goals.submitForReview(nr.run.id, review)).reviewStatus).toBe("PENDING");
+  });
+
+  it("verified clearance + human approval is the only publishable state", async () => {
+    const d = deps({ decideCampaign: campaignDecider({ "901": "ALLOWED" }, { fictional: false }) });
+    const v = await goals.runGoal(A, "tottenham", d);
+    await goals.checkGoalRights(v.run.id, d);
+    const submitted = await goals.submitForReview(v.run.id, d);
+    expect(submitted.publishable).toBe(false);
+    await recordReview(submitted.receiptId!, { status: "APPROVED", reviewer: "Ana" }, () => {});
+    expect((await goals.getGoal(v.run.id))!.publishable).toBe(true);
+  });
+
+  it("a new version after submission needs a new check and submission", async () => {
+    const d = deps({ decideCampaign: campaignDecider({ "901": "ALLOWED", "902": "ALLOWED" }) });
+    const v = await goals.runGoal(A, "tottenham", d);
+    await goals.checkGoalRights(v.run.id, d);
+    await goals.submitForReview(v.run.id, d);
+    const other = v.recommendations[1].key;
+    const switched = await goals.selectMoment(v.run.id, other, d);
+    expect(switched).toMatchObject({ reviewStatus: "NOT_SUBMITTED", canSubmit: false, rights: { state: "NOT_CHECKED" }, campaign: { version: 2, origin: "SELECTED" } });
+    await expect(goals.submitForReview(v.run.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

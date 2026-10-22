@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  classifyTwelveLabsError,
-  loadCatalog,
-  readTwelveLabsConfig,
-  searchMoments,
-  type AssetPage,
-  type TwelveLabsSdk,
-} from "../server/twelvelabs-moments";
+import { readTwelveLabsConfig } from "@/lib/twelvelabs/config";
+import { classifyTwelveLabsError, loadCatalog, searchMoments, type AssetPage, type TwelveLabsSdk } from "../server/twelvelabs-moments";
 
 /** Shape of twelvelabs-js `TwelvelabsApiError`. */
 const apiError = (statusCode: number, code = "", message = "error") => Object.assign(new Error(message), { statusCode, body: { code, message } });
@@ -30,19 +24,17 @@ function fakeSdk(over: Partial<{ index: TwelveLabsSdk["indexes"]["retrieve"]; as
   };
 }
 
-describe("TwelveLabs configuration", () => {
-  it("reports a missing key or index id", () => {
-    expect(() => readTwelveLabsConfig({})).toThrow(expect.objectContaining({ code: "MISSING_API_KEY" }));
-    expect(() => readTwelveLabsConfig({ TWELVELABS_API_KEY: "k" })).toThrow(expect.objectContaining({ code: "MISSING_INDEX_ID" }));
-  });
-
-  it("prefers the canonical key and accepts the legacy alias", () => {
-    expect(readTwelveLabsConfig({ TWELVELABS_API_KEY: "a", TWELVE_LABS_API_KEY: "b", TWELVELABS_INDEX_ID: "i" })).toEqual({
-      apiKey: "a",
-      indexId: "i",
-      keyVariable: "TWELVELABS_API_KEY",
-    });
-    expect(readTwelveLabsConfig({ TWELVE_LABS_API_KEY: "b", TWELVELABS_INDEX_ID: "i" }).keyVariable).toBe("TWELVE_LABS_API_KEY");
+describe("TwelveLabs configuration errors", () => {
+  it("classify as MISSING_API_KEY / MISSING_INDEX_ID", () => {
+    const missing = (env: Record<string, string>) => {
+      try {
+        readTwelveLabsConfig({ env });
+      } catch (err) {
+        return classifyTwelveLabsError(err, "index").code;
+      }
+    };
+    expect(missing({})).toBe("MISSING_API_KEY");
+    expect(missing({ TWELVELABS_API_KEY: "k" })).toBe("MISSING_INDEX_ID");
   });
 });
 
@@ -72,7 +64,7 @@ describe("TwelveLabs index catalog", () => {
     });
   });
 
-  it("walks every page and reads the custom id from raw user_metadata", async () => {
+  it("walks every page and keeps the claimed ScorePlay id from raw user_metadata (as a hint)", async () => {
     const asset = (id: string, filename: string, scoreplayId: string) => ({
       id,
       status: "ready",
@@ -82,8 +74,8 @@ describe("TwelveLabs index catalog", () => {
     const sdk = fakeSdk({ assets: [[asset("v1", "a.mp4", "100")], [asset("v2", "b.mp4", "200")]] });
     const c = await loadCatalog(sdk, "idx-pages");
     expect(c.entries).toEqual([
-      { videoId: "v1", filename: "a.mp4", durationSec: 30.2, status: "ready", customId: "100" },
-      { videoId: "v2", filename: "b.mp4", durationSec: 30.2, status: "ready", customId: "200" },
+      { videoId: "v1", filename: "a.mp4", durationSec: 30.2, status: "ready", claimedScoreplayId: "100" },
+      { videoId: "v2", filename: "b.mp4", durationSec: 30.2, status: "ready", claimedScoreplayId: "200" },
     ]);
     expect(c.searchOptions).toEqual(["visual", "audio"]);
   });
@@ -102,8 +94,8 @@ describe("TwelveLabs moment search", () => {
     );
     expect(retrieve).toHaveBeenCalledWith("t-1", { includeUserMetadata: true });
     expect(moments).toEqual([
-      { videoId: "v1", start: 903.7666, end: 912.6331, rank: 1, thumbnailUrl: undefined, customId: "130850832", query: "defender block" },
-      { videoId: "v2", start: 0, end: 7.87, rank: 2, thumbnailUrl: undefined, customId: undefined, query: "defender block" },
+      { videoId: "v1", start: 903.7666, end: 912.6331, rank: 1, thumbnailUrl: undefined, query: "defender block" },
+      { videoId: "v2", start: 0, end: 7.87, rank: 2, thumbnailUrl: undefined, query: "defender block" },
     ]);
   });
 

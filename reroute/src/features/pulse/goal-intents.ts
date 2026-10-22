@@ -1,11 +1,14 @@
-import type { Sport } from "./clubs";
-import type { GoalIntent, ParsedObjective, Product } from "./types";
+import { CLUBS, type Sport } from "./clubs";
+import { ChannelSchema, type Club, type GoalIntent, type GoalPlan, type GoalUsage, type ParsedObjective, type Product } from "./types";
 
 /**
  * What footage serves a business objective. Each product maps to a few visual intents, each a
  * TwelveLabs Marengo query with a weight (how directly it serves the objective) and the reason shown
  * to the user. These are search *questions*, not answers: the moments come from the live index, and
  * a different objective asks different questions of the same library. Hackathon heuristics, editable.
+ *
+ * Labels and reasons never say whose shirt, fans or player is on screen: Marengo cannot verify a
+ * club, and ScorePlay carries no verified player→team data for this footage.
  */
 
 type IntentKey =
@@ -21,23 +24,23 @@ type IntentKey =
 
 const PHRASES: Record<IntentKey, { label: string; why: string; query: Record<Sport, string> }> = {
   kit: {
-    label: "Player in the shirt",
-    why: "It puts the club shirt — the product — on screen, worn by a player",
+    label: "Shirt close-up",
+    why: "It puts a match shirt and crest on screen — check whose shirt it is before it sells merchandise (team not verified)",
     query: {
-      football: "close-up of a player wearing the club shirt with the crest visible",
-      basketball: "close-up of a player wearing the team jersey with the logo visible",
+      football: "close-up of a player's shirt with the crest visible",
+      basketball: "close-up of a player's jersey with the logo visible",
     },
   },
   celebration: {
     label: "Celebration",
-    why: "Peak emotion is when fans most want to wear the colours and share the moment",
+    why: "Peak emotion is the moment supporters most want to relive and share",
     query: { football: "players celebrating a goal together", basketball: "players celebrating a basket together" },
   },
   "fans-colours": {
-    label: "Fans in club colours",
-    why: "It shows supporters wearing club merchandise — the buyer, in the product",
+    label: "Supporters in colours",
+    why: "It shows supporters wearing team colours — the buyer, in the product (which club's supporters is not verified)",
     query: {
-      football: "fans in the away end celebrating in club shirts and scarves",
+      football: "fans in the stands celebrating in football shirts and scarves",
       basketball: "fans in the arena cheering in team jerseys",
     },
   },
@@ -66,7 +69,7 @@ const PHRASES: Record<IntentKey, { label: string; why: string; query: Record<Spo
   },
   atmosphere: {
     label: "Stadium atmosphere",
-    why: "The matchday atmosphere is what a ticket buys",
+    why: "The matchday atmosphere travels well with audiences who were not there",
     query: { football: "fans singing in the stadium before kick-off", basketball: "the arena crowd cheering before tip-off" },
   },
   "to-camera": {
@@ -78,10 +81,10 @@ const PHRASES: Record<IntentKey, { label: string; why: string; query: Record<Spo
 
 /** Intents and weights per objective product; `default` when the objective names no product. */
 const PLAN: Record<Product | "default", [IntentKey, number][]> = {
-  merch: [["kit", 1], ["celebration", 0.9], ["fans-colours", 0.85], ["player-fan-bond", 0.6]],
+  merch: [["kit", 1], ["fans-colours", 0.9], ["player-fan-bond", 0.8], ["celebration", 0.6]],
   jersey: [["kit", 1], ["celebration", 0.8], ["fans-colours", 0.7], ["to-camera", 0.5]],
   tickets: [["atmosphere", 1], ["fans-colours", 0.9], ["player-fan-bond", 0.8], ["celebration", 0.6]],
-  engagement: [["score", 1], ["celebration", 0.9], ["near-miss", 0.7], ["save", 0.7], ["atmosphere", 0.4]],
+  engagement: [["score", 1], ["near-miss", 0.8], ["save", 0.7], ["celebration", 0.6], ["atmosphere", 0.4]],
   followers: [["score", 1], ["celebration", 0.8], ["to-camera", 0.7], ["near-miss", 0.5]],
   subscriptions: [["score", 1], ["near-miss", 0.8], ["save", 0.7], ["celebration", 0.6]],
   sponsor: [["celebration", 0.9], ["atmosphere", 0.8], ["player-fan-bond", 0.6]],
@@ -99,8 +102,48 @@ export function goalIntents(objective: ParsedObjective, sport: Sport): GoalInten
 }
 
 /**
- * The fixture the user referred to ("… from the Manchester United match", "against Arsenal"), as
- * written. Presentation and season context only — footage is never filtered by filename words.
+ * A GLOBAL objective is checked in each of these territories separately (REROUTE licences are per
+ * territory; there is no "worldwide" verdict): the club's home market plus the largest Premier League
+ * social audiences we target — US, France, Spain, Germany, India, Nigeria. Edit here to change.
+ */
+export const GLOBAL_TERRITORIES = ["GB", "US", "FR", "ES", "DE", "IN", "NG"] as const;
+
+/** Objectives that sell something are commercial use; reach/engagement objectives are editorial. */
+const COMMERCIAL: Record<Product, boolean> = {
+  merch: true,
+  jersey: true,
+  tickets: true,
+  subscriptions: true,
+  sponsor: true,
+  engagement: false,
+  followers: false,
+};
+
+/** What REROUTE will be asked: every proposed channel × territory, for the selected club's competition. */
+export function goalPlan(objective: ParsedObjective, club: Club): GoalPlan {
+  const c = CLUBS[club];
+  const usage: GoalUsage = objective.product && COMMERCIAL[objective.product.key] ? "COMMERCIAL" : "EDITORIAL";
+  const [territories, territoryBasis] =
+    objective.scope === "MARKET" && objective.market
+      ? [[objective.market.code], `${objective.market.label}, as stated in the objective (“${objective.market.matched}”).`]
+      : objective.scope === "GLOBAL"
+        ? [[...GLOBAL_TERRITORIES], `Global objective: checked separately in ${GLOBAL_TERRITORIES.join(", ")} (PULSE's documented global list).`]
+        : [[c.editorialIntent.territory], `No market in the objective: the club's home territory (${c.editorialIntent.territory}).`];
+  return {
+    club,
+    scope: objective.scope,
+    territories,
+    territoryBasis,
+    usage,
+    channels: [...ChannelSchema.options],
+    competition: c.competition,
+  };
+}
+
+/**
+ * The fixture the user referred to ("… from the Manchester United game", "against Arsenal"), as
+ * written. MediaMapping's search restricts the footage to videos naming it (tags/filename) or reports
+ * that it was not found.
  */
 export function parseMatch(raw: string): string | undefined {
   const text = raw.replace(/\s+/g, " ");

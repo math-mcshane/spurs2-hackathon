@@ -1,30 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { customIdFromMetadata, mapSearchClips, parsePegasusObservations, PegasusParseError } from "./parse";
+import type { MediaRef } from "@/lib/contracts";
+import { claimedScoreplayId, mapSearchClips, parsePegasusObservations, PegasusParseError } from "./parse";
 
-describe("customIdFromMetadata", () => {
-  it("reads custom_id from user_metadata and ignores empty values", () => {
-    expect(customIdFromMetadata({ custom_id: " sp-1 " })).toBe("sp-1");
-    expect(customIdFromMetadata({ custom_id: "" })).toBeUndefined();
-    expect(customIdFromMetadata(undefined)).toBeUndefined();
+describe("claimedScoreplayId", () => {
+  it("reads the claimed id from user_metadata and ignores empty values", () => {
+    expect(claimedScoreplayId({ scoreplay_id: " sp-1 " })).toBe("sp-1");
+    expect(claimedScoreplayId({ custom_id: "" })).toBeUndefined();
+    expect(claimedScoreplayId(undefined)).toBeUndefined();
   });
 });
 
 describe("mapSearchClips", () => {
   const clips = [
-    { videoId: "v1", start: 1, end: 4, rank: 1, userMetadata: { custom_id: "sp-1" } },
+    { videoId: "v1", start: 1, end: 4, rank: 1 },
     { videoId: "v2", start: 2, end: 5, rank: 2 },
     { videoId: "v3", start: 0, end: 3, rank: 3, thumbnailUrl: "t.jpg" },
     { videoId: "v4", start: 0, end: 3, rank: 4 },
+    { videoId: "v5", start: 0, end: 3, rank: 5 },
   ];
-  const resolve = (v: string) => ({ v1: "sp-1", v3: "sp-3", v4: "sp-4" })[v];
+  const ref = (sp: string | null, tl: string | undefined, method: MediaRef["method"]): MediaRef => ({
+    scoreplayMediaId: sp,
+    twelvelabsVideoId: tl,
+    method,
+    candidates: [],
+    checkedAt: "2026-10-22T00:00:00.000Z",
+  });
+  const refs: Record<string, MediaRef> = {
+    v1: ref("sp-1", "v1", "FILENAME_DURATION"),
+    v3: ref("sp-3", "v3", "AUTHORITATIVE_ID"),
+    v4: ref("sp-4", "v4", "FILENAME_DURATION"),
+    v5: ref(null, undefined, "AMBIGUOUS"),
+  };
+  const resolve = (v: string) => refs[v];
 
-  it("drops unmapped hits, never fabricating ids, and re-ranks", () => {
-    const { hits, unmapped } = mapSearchClips(clips, resolve, { origin: "LIVE" });
-    expect(unmapped).toEqual(["v2"]);
-    expect(hits.map((h) => [h.scoreplayMediaId, h.rank])).toEqual([
-      ["sp-1", 1],
-      ["sp-3", 2],
-      ["sp-4", 3],
+  it("drops unlinkable hits, never fabricating ids, records the mapping, and re-ranks", () => {
+    const { hits, dropped } = mapSearchClips(clips, resolve, { origin: "LIVE" });
+    expect(dropped).toEqual([
+      { twelvelabsVideoId: "v2", method: "UNMAPPED" },
+      { twelvelabsVideoId: "v5", method: "AMBIGUOUS" },
+    ]);
+    expect(hits.map((h) => [h.scoreplayMediaId, h.rank, h.mapping])).toEqual([
+      ["sp-1", 1, "FILENAME_DURATION"],
+      ["sp-3", 2, "AUTHORITATIVE_ID"],
+      ["sp-4", 3, "FILENAME_DURATION"],
     ]);
     expect(hits.every((h) => h.origin === "LIVE")).toBe(true);
   });

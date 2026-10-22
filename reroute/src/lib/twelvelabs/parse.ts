@@ -2,18 +2,18 @@
  * Pure TwelveLabs → REROUTE mapping. No I/O; unit-tested in parse.test.ts.
  */
 import { z } from "zod";
-import type { DataOrigin, Evidence, SearchHit } from "@/lib/contracts";
+import { isEvidenceLinkable, type DataOrigin, type Evidence, type MediaMappingMethod, type MediaRef, type SearchHit } from "@/lib/contracts";
+
+/** user_metadata keys under which an index may claim a ScorePlay media id (first match wins). */
+const CLAIM_KEYS = ["custom_id", "customId", "scoreplay_id", "scoreplayMediaId", "scoreplay_media_id"] as const;
 
 /**
- * user_metadata keys that may carry the ScorePlay media id. The Builder Brief calls it `custom_id`;
- * TwelveLabs v1.3 has no `custom_id` field on videos/indexed assets, so it lives in `user_metadata`.
- * First match wins. Confirm the exact key with organizers (see API_NOTES.md).
+ * The ScorePlay id an index *claims* in `user_metadata`. A hint for lib/media only: the premiere-league
+ * index carries ids from a cloned workspace, so a claim is trusted only after it resolves here.
  */
-export const CUSTOM_ID_KEYS = ["custom_id", "customId", "scoreplay_id", "scoreplayMediaId", "scoreplay_media_id"] as const;
-
-export function customIdFromMetadata(meta: Record<string, unknown> | undefined | null): string | undefined {
+export function claimedScoreplayId(meta: Record<string, unknown> | undefined | null): string | undefined {
   if (!meta) return undefined;
-  for (const key of CUSTOM_ID_KEYS) {
+  for (const key of CLAIM_KEYS) {
     const v = meta[key];
     if (typeof v === "string" && v.trim()) return v.trim();
     if (typeof v === "number" && Number.isFinite(v)) return String(v);
@@ -28,28 +28,30 @@ export interface RawSearchClip {
   end?: number;
   rank?: number;
   thumbnailUrl?: string;
-  userMetadata?: Record<string, unknown>;
 }
 
+export type DroppedHit = { twelvelabsVideoId: string; method: MediaMappingMethod };
+
 /**
- * Map raw clips to SearchHits. Clips whose video has no ScorePlay id are DROPPED (never given a
- * fabricated id); their TwelveLabs video ids are returned in `unmapped` so callers can log them.
+ * Map raw clips to SearchHits through resolved MediaRefs. Clips whose video is not evidence-linkable
+ * are DROPPED (never given an id) and reported in `dropped`.
  */
 export function mapSearchClips(
   clips: RawSearchClip[],
-  resolveCustomId: (videoId: string, clip: RawSearchClip) => string | undefined,
+  refFor: (videoId: string) => MediaRef | undefined,
   opts: { origin: DataOrigin; excludeMediaIds?: string[]; limit?: number },
-): { hits: SearchHit[]; unmapped: string[] } {
+): { hits: SearchHit[]; dropped: DroppedHit[] } {
   const exclude = new Set(opts.excludeMediaIds ?? []);
   const hits: SearchHit[] = [];
-  const unmapped: string[] = [];
+  const dropped: DroppedHit[] = [];
   for (const clip of clips) {
     if (!clip.videoId || typeof clip.start !== "number" || typeof clip.end !== "number") continue;
-    const scoreplayMediaId = resolveCustomId(clip.videoId, clip);
-    if (!scoreplayMediaId) {
-      unmapped.push(clip.videoId);
+    const ref = refFor(clip.videoId);
+    if (!ref || !isEvidenceLinkable(ref)) {
+      dropped.push({ twelvelabsVideoId: clip.videoId, method: ref?.method ?? "UNMAPPED" });
       continue;
     }
+    const scoreplayMediaId = ref.scoreplayMediaId!;
     if (exclude.has(scoreplayMediaId)) continue;
     hits.push({
       scoreplayMediaId,
@@ -60,10 +62,11 @@ export function mapSearchClips(
       ...(typeof clip.rank === "number" ? { score: clip.rank } : {}),
       ...(clip.thumbnailUrl ? { thumbnailUrl: clip.thumbnailUrl } : {}),
       origin: opts.origin,
+      mapping: ref.method,
     });
     if (opts.limit && hits.length >= opts.limit) break;
   }
-  return { hits, unmapped };
+  return { hits, dropped };
 }
 
 // ---------- Pegasus structured observations ----------

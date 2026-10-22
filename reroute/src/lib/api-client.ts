@@ -11,6 +11,7 @@ import {
   AssetsResponseSchema,
   DecideResponseSchema,
   EvidenceSchema,
+  MediaRefSchema,
   RenderResponseSchema,
   ResolveResponseSchema,
   RightsReceiptSchema,
@@ -33,28 +34,37 @@ export class ApiClientError extends Error {
   }
 }
 
-/** GET /api/policies */
+/** GET /api/policies — no global "active" policy: decisions select one per asset + publish intent. */
 export const PolicySummarySchema = z.object({
   id: z.string(),
   version: z.string(),
+  title: z.string(),
+  kind: z.enum(["VERIFIED", "DEMO"]),
+  /** = kind === "DEMO". */
   fictional: z.boolean(),
-  title: z.string().optional(),
-  source: z.string().optional(),
-  disclaimer: z.string().optional(),
+  club: z.string(),
+  competitions: z.array(z.string()),
+  provenance: z.string().optional(),
+  validFrom: z.string(),
+  validUntil: z.string(),
+  source: z.string(),
+  disclaimer: z.string(),
 });
 export type PolicySummary = z.infer<typeof PolicySummarySchema>;
 export const PoliciesResponseSchema = z.object({
   policies: z.array(PolicySummarySchema),
-  activeId: z.string(),
 });
 export type PoliciesResponse = z.infer<typeof PoliciesResponseSchema>;
 
-/** GET /api/assets/[id] */
+/** GET /api/assets/[id]?club= */
 export const AssetDetailResponseSchema = z.object({
   asset: AssetSchema,
   observations: z.array(EvidenceSchema),
-  analysis: z.enum(["AVAILABLE", "NOT_CONFIGURED", "FAILED"]),
+  /** UNLINKABLE = the ScorePlay ↔ TwelveLabs identity is not proven, so no analysis is attached. */
+  analysis: z.enum(["AVAILABLE", "NOT_CONFIGURED", "FAILED", "UNLINKABLE"]),
   analysisDetail: z.string().optional(),
+  media: MediaRefSchema.optional(),
+  notes: z.array(z.string()).default([]),
 });
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 

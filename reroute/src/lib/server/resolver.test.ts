@@ -1,164 +1,176 @@
 import { describe, expect, it } from "vitest";
-import type { Asset, EditPlan, Evidence, PublishIntent, SearchHit, VideoIntelligence } from "@/lib/contracts";
+import type { Asset, EditPlan, Evidence, MediaRef, PublishIntent, SearchHit, VideoIntelligence } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
-import { loadPolicy } from "@/lib/rights";
 import type { ContextDeps } from "./context";
-import { decideEdit } from "./decide";
+import { decideCampaign, decideEdit } from "./decide";
 import { resolve } from "./resolver";
 
-const policy = loadPolicy("demo-spurs-fr-sponsored");
 const now = new Date("2026-10-22T12:00:00Z");
-const intent: PublishIntent = {
-  territory: "FR",
+const commercial: PublishIntent = {
+  territory: "GB",
   platform: "instagram",
-  usage: "SPONSORED",
-  competition: "NBA",
+  usage: "COMMERCIAL",
+  competition: "Premier League",
+  club: "tottenham",
   publishAt: "2026-11-01T18:00:00Z",
 };
 
-function asset(id: string, facts: Asset["facts"], durationSec = 120): Asset {
-  return { id, title: `Asset ${id}`, kind: "video", durationSec, tags: [], facts, metadata: {}, origin: "LIVE" };
+function thfc(id: string, title: string, durationSec: number, facts: Partial<Asset["facts"]> = {}): Asset {
+  return {
+    id,
+    title,
+    kind: "video",
+    durationSec,
+    tags: ["partner content", "Premier League", "Tottenham Hotspur", "Manchester United"],
+    facts: { competition: "Premier League", teams: ["Tottenham Hotspur", "Manchester United"], ...facts },
+    metadata: {},
+    origin: "LIVE",
+  };
 }
+const squad = { people: ["Dominic Solanke-Mitchell"], peopleTeams: { "Dominic Solanke-Mitchell": ["Tottenham Hotspur FC"] } };
 
-const knownFacts = { competition: "NBA", team: "San Antonio Spurs", people: [], sponsors: [] };
 const assets: Record<string, Asset> = {
-  src: asset("src", knownFacts),
-  clean: asset("clean", knownFacts),
-  // Sponsors never recorded in ScorePlay → unknown → must not be eligible.
-  unknown: asset("unknown", { competition: "NBA", team: "San Antonio Spurs", people: [] }),
-  // Known facts but TwelveLabs has no analysis for it (observations() throws).
-  unanalyzed: asset("unanalyzed", knownFacts),
+  goal: thfc("goal", "Goal Man United 9x16 (A) v1.mp4", 30, squad),
+  goalDup: thfc("goalDup", "Goal Man United 4x5 (A) v2.mp4", 30.2, squad), // rendition of the original
+  fans: thfc("fans", "Slide 6 - Away End Singing Pre-KO.mov", 10),
+  boards: thfc("boards", "Slide 17 - Stadium GV.mov", 7.5),
+  nba: {
+    id: "nba",
+    title: "Vic dunk.mp4",
+    kind: "video",
+    durationSec: 12,
+    tags: ["NBA"],
+    facts: { competition: "NBA", teams: ["San Antonio Spurs (SAS)"], people: ["Victor Wembanyama"], sponsors: [] },
+    metadata: {},
+    origin: "LIVE",
+  },
 };
 
+const rubric = (id: string, answer: string): Evidence => ({ scoreplayMediaId: id, observation: `player_focus ${answer}`, source: "TWELVELABS", label: `rubric:player_focus:${answer}` });
+const brand = (id: string, name: string): Evidence => ({ scoreplayMediaId: id, start: 0, end: 30, observation: `${name}: LED board`, source: "TWELVELABS", label: `brand:${name}`, confidence: 0.9 });
 const observations: Record<string, Evidence[]> = {
-  src: [
-    {
-      scoreplayMediaId: "src",
-      start: 4,
-      end: 9,
-      observation: "Courtside board shows a rival sponsor's branding",
-      source: "HUMAN",
-      origin: "HUMAN",
-      label: "brand:rival-sponsor",
-    },
-  ],
-  clean: [],
-  unknown: [],
+  goal: [rubric("goal", "group"), brand("goal", "snapdragon")],
+  goalDup: [rubric("goalDup", "group")],
+  fans: [rubric("fans", "no_players")],
+  boards: [rubric("boards", "no_players"), brand("boards", "snapdragon")],
+  nba: [],
 };
 
-const edit: EditPlan = {
-  id: "edit-1",
-  title: "Spurs 15s",
-  derived: false,
-  segments: [
-    { scoreplayMediaId: "src", start: 0, end: 4 },
-    { scoreplayMediaId: "src", start: 4, end: 9, label: "fast break dunk" },
-    { scoreplayMediaId: "src", start: 9, end: 15 },
-  ],
-};
+const edit: EditPlan = { id: "merch", title: "Merch promo", derived: false, segments: [{ scoreplayMediaId: "goal", start: 5, end: 10, label: "celebrating fans" }] };
 
-function hit(scoreplayMediaId: string, start: number, end: number, rank: number): SearchHit {
-  return { scoreplayMediaId, twelvelabsVideoId: `tl-${scoreplayMediaId}`, start, end, rank, origin: "LIVE" };
-}
+const ref = (id: string, method: MediaRef["method"] = "FILENAME_DURATION"): MediaRef => ({
+  scoreplayMediaId: id,
+  twelvelabsVideoId: method === "FILENAME_DURATION" ? `tl-${id}` : undefined,
+  method,
+  candidates: [],
+  checkedAt: now.toISOString(),
+});
+const hit = (scoreplayMediaId: string, start: number, end: number, rank: number): SearchHit => ({
+  scoreplayMediaId,
+  twelvelabsVideoId: `tl-${scoreplayMediaId}`,
+  start,
+  end,
+  rank,
+  origin: "LIVE",
+  mapping: "FILENAME_DURATION",
+});
 
-function deps(hits: SearchHit[], queries: string[] = []): ContextDeps {
+function deps(opts: { hits?: SearchHit[]; queries?: string[]; refs?: Record<string, MediaRef>; human?: () => Promise<Evidence[]> } = {}): ContextDeps {
   const video: VideoIntelligence = {
-    async search(query, opts) {
-      queries.push(query);
-      return hits.slice(0, opts?.limit);
+    async search(query) {
+      opts.queries?.push(query);
+      return opts.hits ?? [];
     },
-    async observations(id) {
-      const found = observations[id];
-      if (!found) throw new AppError("NOT_FOUND", `no analysis for ${id}`);
-      return found;
+    async observations(r) {
+      return observations[r.scoreplayMediaId!] ?? [];
     },
   };
   return {
     getAsset: async (id) => {
-      const found = assets[id];
-      if (!found) throw new AppError("NOT_FOUND", `asset ${id}`);
-      return found;
+      if (!assets[id]) throw new AppError("NOT_FOUND", `no asset ${id}`);
+      return assets[id];
     },
     video: () => video,
-    humanObservations: async () => [],
+    mediaRef: async (id) => opts.refs?.[id] ?? ref(id),
+    humanObservations: opts.human ?? (async () => []),
   };
 }
 
-const run = (hits: SearchHit[], extra: { query?: string; limit?: number; queries?: string[] } = {}) =>
-  resolve(
-    { edit, intent, segmentIndex: 1, query: extra.query, limit: extra.limit ?? 3 },
-    { deps: deps(hits, extra.queries), policy, now },
-  );
-
 describe("resolve", () => {
-  it("finds an eligible alternative and re-evaluates the proposed edit as ALLOWED", async () => {
+  it("CLIP blocker: re-checks every candidate alone and in the full edit, excludes the original and its renditions", async () => {
     const queries: string[] = [];
-    const result = await run([hit("unknown", 30, 33, 1), hit("clean", 40, 46, 2)], { queries });
+    const hits = [hit("goal", 12, 18, 1), hit("goalDup", 0, 5, 2), hit("boards", 0, 5, 3), hit("fans", 2, 6, 4), hit("nba", 0, 4, 5)];
+    const result = await resolve({ edit, intent: commercial, segmentIndex: 0, limit: 5 }, { deps: deps({ hits, queries }), now });
 
-    expect(queries).toEqual(["fast break dunk"]);
-    expect(result.query).toBe("fast break dunk");
-    expect(result.best).toBeDefined();
-    const best = result.best!;
-    expect(best.eligible).toBe(true);
-    expect(best.hit.scoreplayMediaId).toBe("clean");
-    expect(best.segmentDecision.verdict).toBe("ALLOWED");
-    expect(best.editDecision.decision.verdict).toBe("ALLOWED");
-    expect(best.editDecision.segments).toHaveLength(3);
-    expect(best.editDecision.segments.every((s) => s.decision.verdict === "ALLOWED")).toBe(true);
+    expect(queries).toEqual(["celebrating fans"]); // query = segment label
+    expect(result.blocker).toMatchObject({ scope: "CLIP", dimensions: ["sponsor"] });
+    expect(result.candidates.map((c) => c.hit.scoreplayMediaId)).toEqual(["fans", "boards", "nba"]);
 
-    // Minimal change: only the blocked segment swapped, trimmed to its 5 s around the hit's midpoint.
-    expect(best.proposedEdit.derived).toBe(true);
-    expect(best.proposedEdit.derivedFrom).toBe("edit-1");
-    expect(best.proposedEdit.segments[0]).toEqual(edit.segments[0]);
-    expect(best.proposedEdit.segments[2]).toEqual(edit.segments[2]);
-    expect(best.proposedEdit.segments[1]).toMatchObject({ scoreplayMediaId: "clean", start: 40.5, end: 45.5 });
+    const [fans, boards, nba] = result.candidates;
+    expect(fans).toMatchObject({ eligible: true, segmentDecision: { verdict: "ALLOWED", clearance: "DEMO" } });
+    expect(fans.editDecision.decision).toMatchObject({ verdict: "ALLOWED", clearance: "DEMO", policyFictional: true });
+    expect(result.best?.hit.scoreplayMediaId).toBe("fans");
 
-    // Eligible ranks first even though Marengo ranked it second.
-    expect(result.candidates.map((c) => c.hit.scoreplayMediaId)).toEqual(["clean", "unknown"]);
+    expect(boards.eligible).toBe(false);
+    expect(boards.segmentDecision.verdict).toBe("BLOCKED"); // third-party brand, independently re-checked
+
+    // Another club's footage: evaluated under ITS own selection → no policy for a Tottenham publication.
+    expect(nba.eligible).toBe(false);
+    expect(nba.segmentDecision).toMatchObject({ verdict: "NEEDS_REVIEW", policyId: "none" });
   });
 
-  it("never marks a candidate with unknown rights facts eligible or best", async () => {
-    const result = await run([hit("unknown", 30, 33, 1)]);
-
-    expect(result.candidates).toHaveLength(1);
-    const [candidate] = result.candidates;
-    expect(candidate.eligible).toBe(false);
-    expect(candidate.segmentDecision.verdict).toBe("NEEDS_REVIEW");
-    expect(candidate.editDecision.decision.verdict).toBe("NEEDS_REVIEW");
-    // Extended from 3 s to the blocked segment's 5 s.
-    expect(candidate.proposedEdit.segments[1]).toMatchObject({ start: 29, end: 34 });
-    expect(result.best).toBeUndefined();
+  it("CAMPAIGN blocker: no search, no candidates, a concrete suggestion", async () => {
+    const queries: string[] = [];
+    const intent = { ...commercial, usage: "EDITORIAL" as const, territory: "IN" };
+    const result = await resolve({ edit, intent, segmentIndex: 0, limit: 3 }, { deps: deps({ hits: [hit("fans", 0, 5, 1)], queries }), now });
+    expect(queries).toEqual([]);
+    expect(result.candidates).toEqual([]);
+    expect(result.blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
+    expect(result.blocker.suggestion).toMatch(/GB, IE, US, CA, AU, NZ/);
   });
 
-  it("excludes candidates overlapping the blocked range of the same asset", async () => {
-    const result = await run([
-      hit("src", 5, 8, 1), // inside the blocked range
-      hit("src", 9, 10, 2), // fitted to 5 s it would overlap 4–9 s
-      hit("src", 60, 65, 3), // same asset, elsewhere: allowed
-    ]);
-
-    expect(result.candidates).toHaveLength(1);
-    const [candidate] = result.candidates;
-    expect(candidate.hit.rank).toBe(3);
-    expect(candidate.proposedEdit.segments[1]).toMatchObject({ scoreplayMediaId: "src", start: 60, end: 65 });
-    expect(candidate.eligible).toBe(true);
+  it("works for NEEDS_REVIEW segments (ambiguous media identity ⇒ MEDIA_IDENTITY, CLIP)", async () => {
+    const result = await resolve(
+      { edit, intent: commercial, segmentIndex: 0, limit: 3 },
+      { deps: deps({ hits: [hit("fans", 0, 5, 1)], refs: { goal: ref("goal", "AMBIGUOUS") } }), now },
+    );
+    expect(result.blocker.scope).toBe("CLIP");
+    expect(result.best?.hit.scoreplayMediaId).toBe("fans");
   });
 
-  it("caps candidates without video analysis at NEEDS_REVIEW", async () => {
-    const result = await run([hit("unanalyzed", 10, 15, 1)]);
+  it("nothing to resolve for an ALLOWED segment", async () => {
+    const intent = { ...commercial, usage: "EDITORIAL" as const };
+    const result = await resolve({ edit, intent, segmentIndex: 0, limit: 3 }, { deps: deps(), now });
+    expect(result).toMatchObject({ blocker: { scope: "NONE" }, candidates: [] });
+  });
+});
 
-    const [candidate] = result.candidates;
-    expect(candidate.eligible).toBe(false);
-    expect(candidate.segmentDecision.verdict).toBe("NEEDS_REVIEW");
-    expect(candidate.segmentDecision.reasons.some((r) => r.ruleId === "analysis-unavailable")).toBe(true);
-    expect(result.best).toBeUndefined();
+describe("decideEdit / decideCampaign", () => {
+  it("ambiguous mapping ⇒ NEEDS_REVIEW with MEDIA_IDENTITY, and the MediaRef is recorded", async () => {
+    const d = await decideEdit(edit, { ...commercial }, { deps: deps({ refs: { goal: ref("goal", "AMBIGUOUS") } }), now });
+    expect(d.decision.verdict).toBe("NEEDS_REVIEW");
+    expect(d.decision.reasons.filter((r) => r.outcome !== "PERMIT").every((r) => r.basis === "MEDIA_IDENTITY")).toBe(true);
+    expect(d.media).toEqual([expect.objectContaining({ scoreplayMediaId: "goal", method: "AMBIGUOUS" })]);
   });
 
-  it("keeps the original edit BLOCKED for this intent (sanity)", async () => {
-    const decision = await decideEdit(edit, intent, { deps: deps([]), policy, now });
-    expect(decision.decision.verdict).toBe("BLOCKED");
-    expect(decision.segments.map((s) => s.decision.verdict)).toEqual(["ALLOWED", "BLOCKED", "ALLOWED"]);
-    const organic = await decideEdit(edit, { ...intent, usage: "ORGANIC" }, { deps: deps([]), policy, now });
-    expect(organic.decision.verdict).toBe("ALLOWED");
+  it("unconfigured reviewer-observation store degrades with a note instead of failing", async () => {
+    const human = async () => {
+      throw new AppError("NOT_CONFIGURED", "SUPABASE_URL is not set");
+    };
+    const d = await decideEdit(edit, { ...commercial, usage: "EDITORIAL" }, { deps: deps({ human }), now });
+    expect(d.decision.verdict).toBe("ALLOWED");
+    expect(d.notes[0]).toMatch(/Reviewer observations are unavailable/);
+  });
+
+  it("overall = worst verdict across intents; clearance VERIFIED only if every intent is VERIFIED", async () => {
+    const editorial = { ...commercial, usage: "EDITORIAL" as const };
+    const fans: EditPlan = { ...edit, segments: [{ scoreplayMediaId: "fans", start: 0, end: 5 }] };
+    const ok = await decideCampaign({ edit: fans, intents: [editorial, { ...editorial, territory: "US" }] }, { deps: deps(), now });
+    expect(ok.overall).toMatchObject({ verdict: "ALLOWED", clearance: "DEMO", policyFictional: true });
+    expect(ok.media).toHaveLength(1);
+
+    const mixed = await decideCampaign({ edit, intents: [editorial, commercial, { ...editorial, territory: "IN" }] }, { deps: deps(), now });
+    expect(mixed.perIntent.map((p) => p.decision.decision.verdict)).toEqual(["ALLOWED", "BLOCKED", "NEEDS_REVIEW"]);
+    expect(mixed.overall).toMatchObject({ verdict: "BLOCKED", clearance: "NONE" });
   });
 });

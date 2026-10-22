@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { EditDecision } from "@/lib/contracts";
+import { canPublish, DEMO_CLEARANCE_LABEL, type EditDecision } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { decideEdit } from "@/lib/server/decide";
 import { buildCampaignDraft, campaignView } from "../campaign-builder";
@@ -281,18 +281,30 @@ export async function act(req: Exclude<ActionRequest, { action: "draftCampaign" 
       if (req.action === "publish" && entry.status !== "APPROVED") {
         throw new AppError("BAD_REQUEST", "Only approved opportunities can be recorded as published");
       }
-      const rights = rightsCheckFrom(await decideEdit(sent.edit, sent.intent), sent.scoreplayAssetId);
-      const allowed = rights.state === "ALLOWED";
+      const decided = await decideEdit(sent.edit, sent.intent);
+      const rights = rightsCheckFrom(decided, sent.scoreplayAssetId);
+      // One rule with the Studio: a human may approve anything REROUTE did not block; recording a
+      // publication requires `canPublish` (verified clearance + approval) — demo clearance never qualifies.
+      const permitted =
+        req.action === "approve"
+          ? rights.state !== "BLOCKED"
+          : req.action === "publish"
+            ? canPublish({ decision: decided.decision, humanReviewStatus: "APPROVED" })
+            : true;
       const at = new Date().toISOString();
       await updateLedger(req.id, (e) => {
-        if (!allowed || req.action === "recheck") return { ...e, rights };
+        if (!permitted || req.action === "recheck") return { ...e, rights };
         if (req.action === "approve") return { ...e, rights, status: "APPROVED", approvedAt: at, approvedBy: req.reviewer };
         return { ...e, rights, status: "PUBLISHED", publishedAt: at, publishEvidenceUrl: req.evidenceUrl };
       });
-      if (!allowed && req.action !== "recheck") {
+      if (!permitted) {
         throw new AppError(
           "FORBIDDEN",
-          `REROUTE verdict is ${rights.state}; only an ALLOWED verdict can be ${req.action === "approve" ? "approved" : "recorded as published"}. Resolve it in REROUTE first.`,
+          req.action === "approve"
+            ? "REROUTE blocked this use; a blocked opportunity cannot be approved. Resolve it in REROUTE first."
+            : decided.decision.clearance === "DEMO"
+              ? `${DEMO_CLEARANCE_LABEL}: it can never be recorded as published.`
+              : `REROUTE verdict is ${rights.state}; only a verified clearance can be recorded as published.`,
         );
       }
       break;

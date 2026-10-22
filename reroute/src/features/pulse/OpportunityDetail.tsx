@@ -435,7 +435,7 @@ function CandidateList({ o, selected, onSelect }: { o: OpportunityView; selected
             </p>
             {c.mapping?.via === "FILENAME_DURATION" && (
               <p className="font-mono text-[10px] text-amber-300/80" title={c.mapping.filename}>
-                indexed under ScorePlay id {c.mapping.indexedScoreplayId ?? "?"} (other workspace) → linked by exact filename + duration
+                linked to TwelveLabs by exact filename + duration
               </p>
             )}
           </div>

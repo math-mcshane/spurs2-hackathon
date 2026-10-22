@@ -3,7 +3,7 @@
 import { ArrowRightIcon, CheckIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { RANKING, clock } from "../moment-ranking";
+import { clock } from "../moment-ranking";
 import type { RecommendationView } from "../types";
 import { MomentPreview } from "./MomentPreview";
 import { RightsPill } from "./parts";
@@ -18,12 +18,16 @@ export function MomentCard({
   position,
   selected,
   busy,
+  loading,
   onChoose,
 }: {
   rec: RecommendationView;
   position: number;
   selected: boolean;
+  /** Any action is running: choosing is disabled. */
   busy: boolean;
+  /** This card's own action is running. */
+  loading: boolean;
   onChoose: () => void;
 }) {
   const c = rec.candidate;
@@ -48,7 +52,7 @@ export function MomentCard({
               {rec.season && ` · ${rec.season}`}
             </p>
           </div>
-          <RightsPill rights={rec.rights} />
+          <RightsPill state={rec.rights.state} clearance={rec.rights.clearance} />
         </div>
 
         <div className="flex flex-wrap gap-1">
@@ -74,26 +78,9 @@ export function MomentCard({
           </div>
         </dl>
 
-        <details className="text-[11px] text-zinc-500">
-          <summary className="cursor-pointer hover:text-zinc-300">Scoring details</summary>
-          <div className="mt-1.5 space-y-1 rounded-md border border-white/8 bg-black/30 p-2 font-mono">
-            <p>
-              score {rec.score} = ({RANKING.relevance} × relevance {rec.breakdown.relevance} + {RANKING.readiness} × readiness {rec.breakdown.readiness}) ×{" "}
-              {rec.breakdown.contextFactor}
-            </p>
-            <p className="font-sans">{rec.breakdown.notes.relevance}</p>
-            <p className="font-sans">{rec.breakdown.notes.readiness}</p>
-            <p className="font-sans">{rec.breakdown.notes.context}</p>
-            <p className="font-sans text-zinc-600">
-              ScorePlay {c.scoreplayAssetId} · TwelveLabs {c.twelveLabsVideoId}
-              {c.mapping?.via === "FILENAME_DURATION" && " · linked by exact filename + duration"}
-            </p>
-          </div>
-        </details>
-
-        <Button className="mt-auto w-full" variant={selected ? "outline" : "default"} disabled={busy} onClick={onChoose}>
-          {busy ? <Loader2Icon className="animate-spin" /> : selected ? <CheckIcon /> : <ArrowRightIcon />}
-          {selected ? "In your campaign" : "Build campaign with this moment"}
+        <Button className="mt-auto w-full" variant={selected ? "outline" : "default"} disabled={busy || selected} onClick={onChoose}>
+          {loading ? <Loader2Icon className="animate-spin" /> : selected ? <CheckIcon /> : <ArrowRightIcon />}
+          {selected ? "In your campaign" : "Use this moment"}
         </Button>
       </div>
     </article>

@@ -1,64 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { ActivityIcon, ShieldAlertIcon } from "lucide-react";
+import { ArrowLeftIcon, ShieldAlertIcon } from "lucide-react";
+import { DEMO_CLEARANCE_LABEL } from "@/lib/contracts";
 import type { PoliciesResponse } from "@/lib/api-client";
 import { ErrorState } from "./shared";
 
-export function AppHeader({
-  policies,
-  policiesError,
-  pulseEnabled = false,
-}: {
-  policies: PoliciesResponse | null;
-  policiesError: unknown;
-  pulseEnabled?: boolean;
-}) {
-  const active = policies?.policies.find((p) => p.id === policies.activeId);
+/** Advanced rights desk header. The policy is selected per asset + intent, so the banner lists what is bundled. */
+export function AppHeader({ policies, policiesError, reviewer }: { policies: PoliciesResponse | null; policiesError: unknown; reviewer?: React.ReactNode }) {
+  const fictional = policies?.policies.filter((p) => p.fictional) ?? [];
   return (
     <header className="border-b border-white/8 bg-zinc-950/80 backdrop-blur">
-      <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
         <div className="flex items-baseline gap-3">
           <span className="font-mono text-lg font-black tracking-[0.3em] text-zinc-50">
             RE<span className="text-red-500">●</span>ROUTE
           </span>
-          <span className="hidden text-xs text-zinc-400 sm:inline">
-            Turns a rights restriction into a clear decision and a creative path forward.
-          </span>
+          <span className="hidden text-xs text-zinc-400 sm:inline">Advanced rights desk — segment-level decisions, evidence and receipts.</span>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[10px] text-zinc-500">
-          {pulseEnabled && (
-            <Link
-              href="/pulse"
-              className="mr-2 flex items-center gap-1 rounded-sm border border-sky-500/40 px-1.5 py-0.5 tracking-widest text-sky-300 hover:bg-sky-500/10"
-            >
-              <ActivityIcon className="size-3" aria-hidden /> PULSE
-            </Link>
-          )}
-          <span className="inline-block size-1.5 rounded-full bg-red-500 shadow-[0_0_6px] shadow-red-500" aria-hidden />
-          RIGHTS DESK
-          {active && (
-            <span className="text-zinc-400">
-              · policy <span className="text-zinc-200">{active.id}</span> v{active.version}
-            </span>
-          )}
+        <div className="flex items-center gap-4">
+          {reviewer}
+          <Link href="/" className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-100">
+            <ArrowLeftIcon className="size-3.5" aria-hidden /> Back to the campaign studio
+          </Link>
         </div>
       </div>
-      {active?.fictional && (
+      {fictional.length > 0 && (
         <div
           role="note"
-          aria-label="Fictional demo policy"
+          aria-label="Demo policies"
           className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-amber-500/40 bg-amber-500/15 px-4 py-1.5 text-xs text-amber-200"
         >
           <ShieldAlertIcon className="size-4 text-amber-400" aria-hidden />
-          <strong className="font-mono tracking-[0.2em] text-amber-300">FICTIONAL DEMO POLICY</strong>
-          <span>
-            {active.title ?? active.id} · version {active.version}
-            {active.source ? ` · source: ${active.source}` : ""}
-          </span>
+          <strong className="font-mono tracking-[0.12em] text-amber-300">{DEMO_CLEARANCE_LABEL}</strong>
           <span className="text-amber-200/80">
-            {active.disclaimer ??
-              "Rules are invented for demonstration. They are not real Spurs, Tottenham, NBA or Premier League rights."}
+            The policy is selected per asset and publish intent. Bundled demo policies: {fictional.map((p) => `${p.id} v${p.version}`).join(", ")}. Their
+            rules are invented for demonstration and never authorize publication.
           </span>
         </div>
       )}

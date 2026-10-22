@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { detectOpportunities } from "../detect-opportunities";
 import { buildView } from "../rank-opportunities";
-import { linkToIndex, lookupMedia, type MediaDeps } from "../server/media-lookup";
-import type { DiscoveredVideo, ScorePlayHttp } from "../server/scoreplay-discovery";
+import { lookupMedia, type MediaDeps } from "../server/media-lookup";
+import type { ScorePlayHttp } from "../server/scoreplay-discovery";
 import { TwelveLabsError, type AssetPage, type TwelveLabsSdk } from "../server/twelvelabs-moments";
 import { SPONSOR_BRIEFS, fixtureSignals } from "../signal-adapter";
 
@@ -11,22 +11,21 @@ const opp = (id: string) =>
   detectOpportunities(fixtureSignals(), SPONSOR_BRIEFS, { now: NOW, replayClock: NOW }, NOW.toISOString()).find((o) => o.id === id)!;
 
 /** ScorePlay: Tottenham team tag → two videos in *this* workspace (ids differ from the index's). */
+const LIBRARY = [
+  { ID: 130851361, name: "Full Match.mp4", type: "video", media_duration: 6334.8e9 },
+  { ID: 130851357, name: "9x16_DEF_ACTIONS_VS_MNU.mp4", type: "video", media_duration: 120.6e9 },
+];
 const scoreplay = (status = 200): ScorePlayHttp => ({
   apiKey: "k",
-  fetch: (async (input: string | URL | Request, init?: RequestInit) => {
+  fetch: (async (input: string | URL | Request) => {
     const url = new URL(String(input));
-    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    const byId = /\/media\/(\d+)$/.exec(url.pathname);
     const json = url.pathname.endsWith("/tag/search")
       ? { tags: [{ ID: 10797055, name: "tottenham hotspur fc" }] }
-      : body.any_tag_options
-        ? {
-            media: [
-              { ID: 130851361, name: "Full Match.mp4", type: "video", media_duration: 6334.8e9 },
-              { ID: 130851357, name: "9x16_DEF_ACTIONS_VS_MNU.mp4", type: "video", media_duration: 120.6e9 },
-            ],
-            count: 2,
-          }
-        : { media: [], count: 0 };
+      : byId
+        ? LIBRARY.find((m) => String(m.ID) === byId[1])
+        : // Like the real API, search truncates durations to whole seconds; GET /media/{id} is exact.
+          { media: LIBRARY.map((m) => ({ ...m, media_duration: Math.floor(m.media_duration / 1e9) * 1e9 })), count: LIBRARY.length };
     return new Response(JSON.stringify(json), { status });
   }) as unknown as typeof fetch,
 });
@@ -52,30 +51,19 @@ function twelvelabs(search: TwelveLabsSdk["search"]["create"], assets = [indexed
   const indexId = `idx-${++indexSeq}`; // the catalog is cached per index id
   return () => ({ sdk, indexId });
 }
-
-const video = (id: string, title: string, durationSec: number): DiscoveredVideo => ({
-  asset: { id, title, kind: "video", durationSec, tags: [], facts: {}, metadata: {}, origin: "LIVE" },
-  discoveredBy: "TEAM_TAG",
-});
-
-describe("ScorePlay ↔ TwelveLabs mapping", () => {
-  it("prefers the index custom id, else one exact filename with the same duration; never guesses", () => {
-    const catalog = [
-      { videoId: "tl-a", filename: "a.mp4", durationSec: 30, customId: "100" },
-      { videoId: "tl-b", filename: "b.mp4", durationSec: 18.5, customId: "999" },
-      { videoId: "tl-c1", filename: "dup.mp4", durationSec: 10, customId: "x" },
-      { videoId: "tl-c2", filename: "dup.mp4", durationSec: 10, customId: "y" },
-      { videoId: "tl-d", filename: "d.mp4", durationSec: 60, customId: "z" },
-    ];
-    const { links, ambiguous } = linkToIndex(
-      [video("100", "renamed.mp4", 30), video("200", "b.mp4", 18), video("300", "dup.mp4", 10), video("400", "d.mp4", 45), video("500", "none.mp4", 5)],
-      catalog,
-    );
-    expect(links.map((l) => [l.video.asset.id, l.entry.videoId, l.via])).toEqual([
-      ["100", "tl-a", "CUSTOM_ID"],
-      ["200", "tl-b", "FILENAME_DURATION"],
-    ]);
-    expect(ambiguous).toEqual(["300"]);
+describe("media identity", () => {
+  it("reports ambiguous and unindexed ScorePlay videos as a MAPPING_FAILED attempt and never links them", async () => {
+    const create = vi.fn(async () => ({ data: [] }));
+    const r = await lookupMedia(opp("opp-tottenham-defensive-wall"), {
+      scoreplay: scoreplay(),
+      twelvelabs: twelvelabs(create, [indexed("tl-a", "Full Match.mp4", 6335.1, "1"), indexed("tl-b", "Full Match.mp4", 6334.9, "2")]),
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(r.intelligence).toMatchObject({ status: "NOT_INDEXED", code: "MAPPING_FAILED" });
+    const attempt = r.attempts.find((a) => a.code === "MAPPING_FAILED")!;
+    expect(attempt.detail).toMatch(/1 ambiguous .*130851361 ↔ tl-a\/tl-b/);
+    expect(attempt.detail).toMatch(/1 not in index premiere-league \(130851357\)/);
+    expect(r.candidates.every((c) => c.foundBy === "SCOREPLAY_METADATA_FALLBACK" && !c.twelveLabsVideoId)).toBe(true);
   });
 });
 
@@ -92,7 +80,7 @@ describe("media pipeline", () => {
       endSeconds: 912.6331,
       rank: 1,
       foundBy: "TWELVELABS",
-      mapping: { via: "FILENAME_DURATION", indexedScoreplayId: "130850832", filename: "Full Match.mp4" },
+      mapping: { via: "FILENAME_DURATION", filename: "Full Match.mp4" },
     });
     // Remaining ScorePlay videos are still offered, clearly labeled as metadata matches.
     expect(r.candidates[1]).toMatchObject({ scoreplayAssetId: "130851357", foundBy: "SCOREPLAY_METADATA_FALLBACK" });

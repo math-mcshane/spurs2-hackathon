@@ -1,3 +1,6 @@
+import { isEvidenceLinkable, type MediaRef } from "@/lib/contracts";
+import { listScorePlayCatalog, listTwelveLabsCatalog, resolverForIndex, type MediaCatalog } from "@/lib/media";
+import { readTwelveLabsConfig } from "@/lib/twelvelabs/config";
 import type { DetectedOpportunity, MediaCandidate, MediaLookup, TwelveLabsIssue } from "../types";
 import { ScorePlayDiscoveryError, defaultScorePlayHttp, discoverVideos, type DiscoveredVideo, type Discovery, type ScorePlayHttp } from "./scoreplay-discovery";
 import {
@@ -5,59 +8,88 @@ import {
   classifyTwelveLabsError,
   createTwelveLabsSdk,
   loadCatalog,
-  readTwelveLabsConfig,
   searchMoments,
-  type CatalogEntry,
+  type IndexCatalog,
   type TwelveLabsSdk,
 } from "./twelvelabs-moments";
 
 const LIMIT = 3;
-/** TwelveLabs and ScorePlay report the same file's duration with rounding differences. */
-const DURATION_TOLERANCE_SEC = 1.5;
 /** One full search page: enough moments to usually span several distinct videos. */
 const MOMENT_POOL = 50;
 
 export interface MediaDeps {
   scoreplay: ScorePlayHttp;
-  /** Throws TwelveLabsError MISSING_API_KEY / MISSING_INDEX_ID when not configured. */
+  /** Throws when not configured (classified as MISSING_API_KEY / MISSING_INDEX_ID). */
   twelvelabs(): { sdk: TwelveLabsSdk; indexId: string };
 }
 
-const defaultDeps = (): MediaDeps => ({
+/** Deps for a club's index (per-club override, else the shared one). */
+export const defaultMediaDeps = (club?: string): MediaDeps => ({
   scoreplay: defaultScorePlayHttp(),
   twelvelabs: () => {
-    const config = readTwelveLabsConfig();
+    const config = readTwelveLabsConfig({ club });
     return { sdk: createTwelveLabsSdk(config.apiKey), indexId: config.indexId };
   },
 });
 
-export type IndexLink = { video: DiscoveredVideo; entry: CatalogEntry; via: "CUSTOM_ID" | "FILENAME_DURATION" };
+export type OpenIndex = { sdk: TwelveLabsSdk; indexId: string; catalog: IndexCatalog; media: MediaCatalog };
 
-/**
- * The indexed TwelveLabs video for a ScorePlay video: the index's custom id (`user_metadata.scoreplay_id`)
- * when it equals this asset's id; otherwise exactly one indexed file with the same filename and
- * duration. Ambiguous or missing matches are not linked — an id is never guessed.
- */
-export function linkToIndex(videos: readonly DiscoveredVideo[], catalog: readonly CatalogEntry[]): { links: IndexLink[]; ambiguous: string[] } {
-  const links: IndexLink[] = [];
-  const ambiguous: string[] = [];
+/** The index summary plus lib/media's canonical ScorePlay ↔ TwelveLabs catalog for it (shared cache per index). */
+export async function openIndex(deps: MediaDeps): Promise<OpenIndex> {
+  const { sdk, indexId } = deps.twelvelabs();
+  const catalog = await loadCatalog(sdk, indexId);
+  const resolver = resolverForIndex(indexId, () => ({
+    indexId,
+    scoreplay: (tl) => listScorePlayCatalog(deps.scoreplay, tl),
+    twelvelabs: ({ fresh }) => listTwelveLabsCatalog(sdk, indexId, fresh),
+  }));
+  return { sdk, indexId, catalog, media: await resolver.catalog() };
+}
+
+export type IndexLink = { video: DiscoveredVideo; ref: MediaRef };
+
+/** Discovered ScorePlay videos split by their canonical MediaRef: linkable, AMBIGUOUS, or UNMAPPED. */
+export function linkDiscovered(videos: readonly DiscoveredVideo[], media: MediaCatalog): { links: IndexLink[]; ambiguous: MediaRef[]; unmapped: MediaRef[] } {
+  const out = { links: [] as IndexLink[], ambiguous: [] as MediaRef[], unmapped: [] as MediaRef[] };
   for (const video of videos) {
-    const byId = catalog.find((e) => e.customId === video.asset.id);
-    if (byId) {
-      links.push({ video, entry: byId, via: "CUSTOM_ID" });
-      continue;
-    }
-    const same = catalog.filter(
-      (e) =>
-        e.filename === video.asset.title &&
-        e.durationSec !== undefined &&
-        video.asset.durationSec !== undefined &&
-        Math.abs(e.durationSec - video.asset.durationSec) <= DURATION_TOLERANCE_SEC,
-    );
-    if (same.length === 1) links.push({ video, entry: same[0], via: "FILENAME_DURATION" });
-    else if (same.length > 1) ambiguous.push(video.asset.id);
+    const ref: MediaRef = media.bySp.get(video.asset.id) ?? {
+      scoreplayMediaId: video.asset.id,
+      twelvelabsIndexId: media.indexId,
+      method: "UNMAPPED",
+      candidates: [],
+      checkedAt: media.loadedAt,
+    };
+    if (isEvidenceLinkable(ref)) out.links.push({ video, ref });
+    else if (ref.method === "AMBIGUOUS") out.ambiguous.push(ref);
+    else out.unmapped.push(ref);
   }
-  return { links, ambiguous };
+  return out;
+}
+
+/** A MAPPING_FAILED attempt naming the ScorePlay videos that could not be linked, or undefined when all linked. */
+export function mappingAttempt(ambiguous: readonly MediaRef[], unmapped: readonly MediaRef[], indexLabel: string): MediaLookup["attempts"][number] | undefined {
+  if (ambiguous.length + unmapped.length === 0) return undefined;
+  const amb = ambiguous.map((r) => `${r.scoreplayMediaId} ↔ ${r.candidates.map((c) => c.twelvelabsVideoId ?? `SP ${c.scoreplayMediaId}`).join("/")}`);
+  const parts = [
+    ambiguous.length ? `${ambiguous.length} ambiguous (same filename+duration on several videos: ${amb.slice(0, 5).join("; ")})` : "",
+    unmapped.length ? `${unmapped.length} not in index ${indexLabel} (${unmapped.slice(0, 5).map((r) => r.scoreplayMediaId).join(", ")}${unmapped.length > 5 ? ", …" : ""})` : "",
+  ].filter(Boolean);
+  return { service: "TwelveLabs", query: "media identity", outcome: "EMPTY", code: "MAPPING_FAILED", detail: `${parts.join("; ")} — not used as evidence` };
+}
+
+/** Classify a failure inside the TwelveLabs stage (which also lists the ScorePlay catalog for mapping). */
+export function stageIssue(err: unknown): { service: "TwelveLabs" | "ScorePlay"; code: string; intelligenceCode: TwelveLabsIssue; message: string } {
+  if (err instanceof ScorePlayDiscoveryError) return { service: "ScorePlay", code: err.code, intelligenceCode: "UPSTREAM_UNAVAILABLE", message: err.message };
+  const issue = err instanceof TwelveLabsError ? err : classifyTwelveLabsError(err, "search");
+  return { service: "TwelveLabs", code: issue.code, intelligenceCode: issue.code, message: issue.message };
+}
+
+/** The UI-facing mapping summary of a linked video. */
+export function candidateMapping(link: IndexLink): NonNullable<MediaCandidate["mapping"]> {
+  return {
+    via: link.ref.method === "AUTHORITATIVE_ID" ? "AUTHORITATIVE_ID" : "FILENAME_DURATION",
+    filename: link.ref.match?.twelvelabsFilename ?? link.video.asset.title,
+  };
 }
 
 function metadataCandidate(v: DiscoveredVideo): MediaCandidate {
@@ -92,7 +124,7 @@ function describe(d: Discovery): string {
  * When TwelveLabs cannot contribute, ScorePlay videos are returned as SCOREPLAY_METADATA_FALLBACK
  * and the reason is stated — never replaced by simulated results.
  */
-export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = defaultDeps()): Promise<MediaLookup> {
+export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = defaultMediaDeps()): Promise<MediaLookup> {
   const searchedAt = new Date().toISOString();
   const attempts: MediaLookup["attempts"] = [];
   const spec = [...opp.discovery.terms, ...opp.discovery.filenameHints].join(", ");
@@ -123,17 +155,12 @@ export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = de
   }
 
   try {
-    const { sdk, indexId } = deps.twelvelabs();
-    const catalog = await loadCatalog(sdk, indexId);
-    const { links, ambiguous } = linkToIndex(discovery.videos, catalog.entries);
+    const { sdk, indexId, catalog, media } = await openIndex(deps);
+    const indexLabel = catalog.indexName ?? indexId;
+    const { links, ambiguous, unmapped } = linkDiscovered(discovery.videos, media);
+    const mapping = mappingAttempt(ambiguous, unmapped, indexLabel);
+    if (mapping) attempts.push(mapping);
     if (links.length === 0) {
-      attempts.push({
-        service: "TwelveLabs",
-        query: opp.semanticQuery,
-        outcome: "EMPTY",
-        code: ambiguous.length ? "MAPPING_FAILED" : undefined,
-        detail: `index ${catalog.indexName ?? indexId}: 0 of ${discovery.videos.length} ScorePlay videos indexed${ambiguous.length ? `; ambiguous filename matches for ${ambiguous.join(", ")}` : ""}`,
-      });
       return fallback(
         "NOT_INDEXED",
         `These ScorePlay videos are not in the video-intelligence index — ${FALLBACK_SUFFIX}`,
@@ -143,12 +170,12 @@ export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = de
 
     const searchOptions = catalog.searchOptions.includes("visual") ? (["visual"] as const) : (["audio"] as const);
     const moments = await searchMoments(sdk, indexId, opp.semanticQuery, {
-      videoIds: links.map((l) => l.entry.videoId),
+      videoIds: links.map((l) => l.ref.twelvelabsVideoId!),
       limit: MOMENT_POOL,
       searchOptions: [...searchOptions],
     });
-    const byVideo = new Map(links.map((l) => [l.entry.videoId, l]));
-    const unmapped = moments.filter((m) => !byVideo.has(m.videoId)).length;
+    const byVideo = new Map(links.map((l) => [l.ref.twelvelabsVideoId!, l]));
+    const dropped = moments.filter((m) => !byVideo.has(m.videoId)).length;
     const seen = new Set<string>();
     const found: MediaCandidate[] = [];
     for (const m of moments) {
@@ -165,18 +192,18 @@ export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = de
         query: m.query,
         foundBy: "TWELVELABS",
         origin: "LIVE",
-        mapping: { via: link.via, indexedScoreplayId: link.entry.customId, filename: link.entry.filename ?? link.video.asset.title },
+        mapping: candidateMapping(link),
       });
     }
     attempts.push({
       service: "TwelveLabs",
       query: opp.semanticQuery,
       outcome: found.length ? "OK" : "EMPTY",
-      code: found.length ? undefined : unmapped ? "MAPPING_FAILED" : "NO_SEARCH_RESULTS",
-      detail: `index ${catalog.indexName ?? indexId}: ${links.length}/${discovery.videos.length} ScorePlay videos indexed (${links.filter((l) => l.via === "CUSTOM_ID").length} by custom id, ${links.filter((l) => l.via === "FILENAME_DURATION").length} by exact filename+duration); ${moments.length} moment(s), ${unmapped} unmapped`,
+      code: found.length ? undefined : dropped ? "MAPPING_FAILED" : "NO_SEARCH_RESULTS",
+      detail: `index ${indexLabel}: ${links.length}/${discovery.videos.length} ScorePlay videos linked (${links.filter((l) => l.ref.method === "AUTHORITATIVE_ID").length} by verified id, ${links.filter((l) => l.ref.method === "FILENAME_DURATION").length} by exact filename+duration); ${moments.length} moment(s), ${dropped} dropped as unlinkable`,
     });
     if (found.length === 0) {
-      return fallback("NO_MATCHING_MOMENT", `No matching moment found inside the indexed videos — ${FALLBACK_SUFFIX}`, unmapped ? "MAPPING_FAILED" : "NO_SEARCH_RESULTS");
+      return fallback("NO_MATCHING_MOMENT", `No matching moment found inside the indexed videos — ${FALLBACK_SUFFIX}`, dropped ? "MAPPING_FAILED" : "NO_SEARCH_RESULTS");
     }
     const fill = discovery.videos.filter((v) => !seen.has(v.asset.id)).map(metadataCandidate);
     return {
@@ -190,9 +217,9 @@ export async function lookupMedia(opp: DetectedOpportunity, deps: MediaDeps = de
       candidates: [...found, ...fill].slice(0, LIMIT),
     };
   } catch (err) {
-    const issue = err instanceof TwelveLabsError ? err : classifyTwelveLabsError(err, "search");
-    console.warn(`[pulse] TwelveLabs unavailable for ${opp.id}: ${issue.code} — ${issue.message}`);
-    attempts.push({ service: "TwelveLabs", query: opp.semanticQuery, outcome: "ERROR", code: issue.code, detail: issue.message });
-    return fallback("UNAVAILABLE", `Media intelligence unavailable — ${FALLBACK_SUFFIX}`, issue.code);
+    const issue = stageIssue(err);
+    console.warn(`[pulse] media intelligence unavailable for ${opp.id}: ${issue.code} — ${issue.message}`);
+    attempts.push({ service: issue.service, query: opp.semanticQuery, outcome: "ERROR", code: issue.code, detail: issue.message });
+    return fallback("UNAVAILABLE", `Media intelligence unavailable — ${FALLBACK_SUFFIX}`, issue.intelligenceCode);
   }
 }

@@ -1,7 +1,15 @@
 import { z } from "zod";
+import { CLUBS } from "./clubs";
 import type { Club, CommerceDestination, MarketCode, Product } from "./types";
 
 const URL_SCHEMA = z.url({ protocol: /^https$/ });
+
+/** A producer-entered destination must be https on the club's own domain (or a subdomain of it). */
+export function onClubDomain(club: Club, url: string): boolean {
+  if (!URL_SCHEMA.safeParse(url).success) return false;
+  const host = new URL(url).hostname.toLowerCase();
+  return CLUBS[club].domains.some((d) => host === d || host.endsWith(`.${d}`));
+}
 
 /**
  * Club-configured store/ticketing links: `PULSE_COMMERCE_DESTINATIONS` =

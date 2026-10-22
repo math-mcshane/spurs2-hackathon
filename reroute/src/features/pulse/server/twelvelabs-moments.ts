@@ -1,6 +1,7 @@
 import { TwelveLabs } from "twelvelabs-js";
 import { z } from "zod";
-import { customIdFromMetadata } from "@/lib/twelvelabs/parse";
+import { claimedScoreplayId } from "@/lib/twelvelabs/parse";
+import { TwelveLabsConfigError } from "@/lib/twelvelabs/config";
 import type { TwelveLabsIssue } from "../types";
 
 /** Shape of a `TwelvelabsApiError` (twelvelabs-js 1.3.6): HTTP `statusCode` and the API body's `code`. */
@@ -34,25 +35,10 @@ export class TwelveLabsError extends Error {
   }
 }
 
-export type TwelveLabsConfig = { apiKey: string; indexId: string; keyVariable: "TWELVELABS_API_KEY" | "TWELVE_LABS_API_KEY" };
-
-/**
- * Canonical: `TWELVELABS_API_KEY` + `TWELVELABS_INDEX_ID` (what REROUTE reads). `TWELVE_LABS_API_KEY`
- * is accepted as a legacy alias because the repository's root `.env.local` uses it.
- */
-export function readTwelveLabsConfig(env: Record<string, string | undefined> = process.env): TwelveLabsConfig {
-  const canonical = env.TWELVELABS_API_KEY?.trim();
-  const alias = env.TWELVE_LABS_API_KEY?.trim();
-  const apiKey = canonical || alias;
-  if (!apiKey) throw new TwelveLabsError("MISSING_API_KEY", "TWELVELABS_API_KEY is not set");
-  const indexId = env.TWELVELABS_INDEX_ID?.trim();
-  if (!indexId) throw new TwelveLabsError("MISSING_INDEX_ID", "TWELVELABS_INDEX_ID is not set");
-  return { apiKey, indexId, keyVariable: canonical ? "TWELVELABS_API_KEY" : "TWELVE_LABS_API_KEY" };
-}
-
 /** Maps SDK/HTTP failures (TwelvelabsApiError carries `statusCode` and `body.code`) onto PULSE issue codes. */
 export function classifyTwelveLabsError(err: unknown, during: "index" | "search"): TwelveLabsError {
   if (err instanceof TwelveLabsError) return err;
+  if (err instanceof TwelveLabsConfigError) return new TwelveLabsError(err.missing === "API_KEY" ? "MISSING_API_KEY" : "MISSING_INDEX_ID", err.message);
   const shape = ApiErrorShape.safeParse(err);
   const status = shape.success ? shape.data.statusCode : undefined;
   const apiCode = (shape.success && shape.data.body?.code) || "";
@@ -125,7 +111,8 @@ export async function videoStream(sdk: TwelveLabsSdk, indexId: string, videoId: 
   }
 }
 
-export type CatalogEntry = { videoId: string; filename?: string; durationSec?: number; status?: string; customId?: string };
+/** `claimedScoreplayId` is the index's `user_metadata` id: a hint for lib/media, never an identity on its own. */
+export type CatalogEntry = { videoId: string; filename?: string; durationSec?: number; status?: string; claimedScoreplayId?: string };
 export type IndexCatalog = { indexId: string; indexName?: string; models: string[]; searchOptions: string[]; entries: CatalogEntry[] };
 
 const CATALOG_TTL_MS = 10 * 60_000;
@@ -141,8 +128,13 @@ function toEntry(raw: unknown): CatalogEntry | undefined {
     filename: a.systemMetadata?.filename,
     durationSec: a.systemMetadata?.duration,
     status: a.status,
-    customId: meta ? customIdFromMetadata(meta) : undefined,
+    claimedScoreplayId: meta ? claimedScoreplayId(meta) : undefined,
   };
+}
+
+/** Drop the cached catalog so the next `loadCatalog` re-lists the index. */
+export function invalidateCatalog(indexId: string): void {
+  catalogCache.delete(indexId);
 }
 
 /** Index summary + every indexed asset (paginated). EMPTY_INDEX when nothing is indexed. Cached 10 min. */
@@ -181,7 +173,7 @@ export function loadCatalog(sdk: TwelveLabsSdk, indexId: string, now = Date.now(
   return catalog;
 }
 
-export type Moment = { videoId: string; start: number; end: number; rank: number; thumbnailUrl?: string; customId?: string; query: string };
+export type Moment = { videoId: string; start: number; end: number; rank: number; thumbnailUrl?: string; query: string };
 
 /**
  * Marengo moments for `query`, optionally restricted to `videoIds` (documented filter
@@ -214,7 +206,6 @@ export async function searchMoments(
           end: c.end,
           rank: c.rank ?? moments.length + 1,
           thumbnailUrl: c.thumbnailUrl,
-          customId: c.userMetadata ? customIdFromMetadata(c.userMetadata) : undefined,
           query,
         });
       }

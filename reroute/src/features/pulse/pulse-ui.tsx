@@ -39,7 +39,7 @@ export const RIGHTS_TEXT_CLASS: Record<RightsState, string> = {
   BLOCKED: "text-red-300",
 };
 
-const DISCOVERED: Record<MediaCandidate["discoveredBy"], string> = { FILENAME: "filename", PLAYER_TAG: "player tag", TEAM_TAG: "team tag" };
+const DISCOVERED: Record<MediaCandidate["discoveredBy"], string> = { FILENAME: "filename", PLAYER_TAG: "player tag", TEAM_TAG: "team tag", INDEX_SEARCH: "index search" };
 
 /** How a candidate was found, in product language. */
 export function evidenceLabel(c: MediaCandidate): string {
@@ -167,29 +167,29 @@ export function ScoreDetails({ score }: { score: ScoreBreakdown }) {
   );
 }
 
+/** Header of the fan-signal board (behind PULSE_BOARD_ENABLED). Always labeled SIMULATED: its signals are fixtures. */
 export function PulseHeader({ right }: { right?: React.ReactNode }) {
   return (
     <header className="border-b border-white/8 bg-zinc-950/80 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex items-baseline gap-3">
-          <Link href="/pulse" className="font-mono text-lg font-black tracking-[0.3em] text-zinc-50">
+          <Link href="/" className="font-mono text-lg font-black tracking-[0.3em] text-zinc-50">
             PU<span className="text-sky-400">●</span>LSE
           </Link>
-          <span className="hidden text-xs text-zinc-400 sm:inline">One goal → three moments → one campaign, rights-checked by REROUTE.</span>
+          <Badge variant="outline" className={cn(tag, "border-amber-500/70 bg-amber-500/15 text-amber-300")}>
+            SIMULATED SIGNAL BOARD
+          </Badge>
         </div>
         <div className="flex items-center gap-3">
           {right}
           <nav aria-label="PULSE" className="flex items-center gap-3 text-[11px]">
-            <Link href="/pulse" className="text-zinc-400 hover:text-zinc-100">
+            <Link href="/" className="text-zinc-400 hover:text-zinc-100">
               Campaign studio
             </Link>
-            <Link href="/pulse/board" className="text-zinc-400 hover:text-zinc-100" title="Fan-signal opportunity board (simulated signals), metrics and diagnostics">
+            <Link href="/pulse/board" className="text-zinc-400 hover:text-zinc-100" title="Fan-signal opportunity board (simulated signals)">
               Signal board
             </Link>
           </nav>
-          <Link href="/" className="font-mono text-[11px] tracking-widest text-zinc-400 hover:text-zinc-100">
-            RE<span className="text-red-500">●</span>ROUTE →
-          </Link>
         </div>
       </div>
     </header>

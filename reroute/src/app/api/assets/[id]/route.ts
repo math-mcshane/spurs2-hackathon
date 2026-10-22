@@ -1,16 +1,17 @@
 import { connection, type NextRequest } from "next/server";
-import { DecisionContext } from "@/lib/server/context";
+import { DecisionContext, defaultDeps } from "@/lib/server/context";
 import { route } from "@/lib/server/http";
 
 /**
- * GET /api/assets/[id] → { asset, observations, analysis, analysisDetail? }.
- * observations = TwelveLabs (LIVE/CACHED) merged with HUMAN; `analysis` tells the UI whether
- * machine analysis exists (anything but AVAILABLE caps verdicts at NEEDS_REVIEW).
+ * GET /api/assets/[id]?club= → { asset, observations, analysis, analysisDetail?, media?, notes }.
+ * observations = TwelveLabs (LIVE/CACHED, via the MediaRef in `media`) merged with HUMAN. `analysis` says
+ * whether machine analysis exists (UNLINKABLE = ScorePlay↔TwelveLabs identity not proven).
  */
-export const GET = route(async (_req: NextRequest, ctx: RouteContext<"/api/assets/[id]">) => {
+export const GET = route(async (req: NextRequest, ctx: RouteContext<"/api/assets/[id]">) => {
   await connection();
   const { id } = await ctx.params;
-  const decision = new DecisionContext();
+  const club = new URL(req.url).searchParams.get("club") ?? undefined;
+  const decision = new DecisionContext(defaultDeps(club));
   await decision.ensure([id]);
   const analysis = decision.analysis[id];
   return Response.json({
@@ -18,5 +19,7 @@ export const GET = route(async (_req: NextRequest, ctx: RouteContext<"/api/asset
     observations: decision.observations[id],
     analysis: analysis.status,
     ...(analysis.status === "AVAILABLE" ? {} : { analysisDetail: analysis.detail }),
+    ...(decision.media[id] ? { media: decision.media[id] } : {}),
+    notes: decision.notes,
   });
 });

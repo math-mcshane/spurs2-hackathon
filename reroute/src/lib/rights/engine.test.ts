@@ -2,97 +2,117 @@ import { describe, expect, it } from "vitest";
 import {
   DecisionSchema,
   EditDecisionSchema,
-  MANDATORY_DIMENSIONS,
+  canPublish,
   type Asset,
+  type Decision,
   type EditPlan,
   type Evidence,
   type PublishIntent,
 } from "@/lib/contracts";
 import demoSpurs from "./policies/demo-spurs-fr-sponsored.json";
 import demoTottenham from "./policies/demo-tottenham-pl.json";
-import { evaluateEdit, evaluateSegment, listPolicies, loadPolicy, PolicySchema, type Policy } from "./index";
+import {
+  PolicySchema,
+  classifyBlocker,
+  evaluateEdit,
+  listPolicies,
+  loadPolicy,
+  selectPolicy,
+  type AnalysisStatus,
+} from "./index";
 
 const now = new Date("2026-10-22T12:00:00Z");
-const spursPolicy = loadPolicy("demo-spurs-fr-sponsored");
-const thfcPolicy = loadPolicy("demo-tottenham-pl");
+const ANALYSED: AnalysisStatus = { status: "AVAILABLE" };
+const NOT_ANALYSED: AnalysisStatus = { status: "NOT_CONFIGURED", detail: "TWELVELABS_API_KEY is not set" };
 
-function asset(id: string, facts: Asset["facts"], tags: string[] = []): Asset {
-  return { id, title: id, kind: "video", durationSec: 15, tags, facts, metadata: {}, origin: "LIVE" };
+const THFC_TAGS = ["partner content", "Premier League", "Tottenham Hotspur", "Manchester United", "Match"];
+function thfc(id: string, facts: Partial<Asset["facts"]> = {}, extraTags: string[] = []): Asset {
+  return {
+    id,
+    title: `Clip ${id}`,
+    kind: "video",
+    durationSec: 20,
+    tags: [...THFC_TAGS, ...extraTags],
+    facts: { competition: "Premier League", teams: ["Tottenham Hotspur", "Manchester United"], ...facts },
+    metadata: {},
+    origin: "LIVE",
+  };
 }
-
-const spursGame = asset("sp-game", {
-  competition: "NBA",
-  team: "San Antonio Spurs",
-  people: ["Victor Wembanyama"],
-  sponsors: [],
+const nba = (id: string, facts: Partial<Asset["facts"]> = {}): Asset => ({
+  id,
+  title: `NBA ${id}`,
+  kind: "video",
+  durationSec: 20,
+  tags: ["NBA"],
+  facts: { competition: "NBA", teams: ["San Antonio Spurs (SAS)", "Sacramento Kings (SAC)"], people: ["Victor Wembanyama"], sponsors: [], ...facts },
+  metadata: {},
+  origin: "LIVE",
 });
-const spursAlt = asset("sp-alt", { competition: "NBA", team: "San Antonio Spurs", people: [], sponsors: [] });
 
-const rivalBrand: Evidence = {
-  scoreplayMediaId: "sp-game",
-  start: 4,
-  end: 9,
-  observation: "Rival-sponsor courtside board visible",
-  source: "HUMAN",
-  label: "brand:rival-sponsor",
-};
+const SQUAD = { "Dominic Solanke-Mitchell": ["Tottenham Hotspur FC"], "Micky van de Ven": ["Tottenham Hotspur FC"] };
+const playerClip = thfc("goal", { people: ["Dominic Solanke-Mitchell", "Micky van de Ven"], peopleTeams: SQUAD });
+const highlights = thfc("hl", { people: ["Dominic Solanke-Mitchell"], peopleTeams: SQUAD }, ["Highlights"]);
+const fullMatch = thfc("full", {}, ["Full Match"]);
+const crowd = thfc("crowd");
 
-const organic: PublishIntent = {
-  territory: "FR",
+const ev = (id: string, label: string, extra: Partial<Evidence> = {}): Evidence => ({
+  scoreplayMediaId: id,
+  start: 2,
+  end: 6,
+  observation: `${label.split(":").pop()}: seen`,
+  source: "TWELVELABS",
+  label,
+  confidence: 0.9,
+  origin: "LIVE",
+  ...extra,
+});
+const rubric = (id: string, answer: string): Evidence => ({
+  scoreplayMediaId: id,
+  observation: `Rubric player_focus: ${answer}`,
+  source: "TWELVELABS",
+  label: `rubric:player_focus:${answer}`,
+  origin: "LIVE",
+});
+
+const base: PublishIntent = {
+  territory: "GB",
   platform: "instagram",
-  usage: "ORGANIC",
-  competition: "NBA",
+  usage: "EDITORIAL",
+  competition: "Premier League",
+  club: "tottenham",
   publishAt: "2026-11-01T18:00:00Z",
 };
-const sponsored: PublishIntent = { ...organic, usage: "SPONSORED" };
+const commercial: PublishIntent = { ...base, usage: "COMMERCIAL" };
 
-const demoEdit: EditPlan = {
-  id: "edit-1",
-  title: "15s Spurs edit",
-  derived: false,
-  segments: [
-    { scoreplayMediaId: "sp-game", start: 0, end: 4 },
-    { scoreplayMediaId: "sp-game", start: 4, end: 9 },
-    { scoreplayMediaId: "sp-game", start: 9, end: 15 },
-  ],
-};
-
-function decideEdit(edit: EditPlan, intent: PublishIntent, extra: Partial<{ assets: Record<string, Asset>; policy: Policy }> = {}) {
+function decide(asset: Asset, intent: PublishIntent, opts: { observations?: Evidence[]; analysis?: AnalysisStatus } = {}): Decision {
+  const edit: EditPlan = { id: `e-${asset.id}`, title: "t", derived: false, segments: [{ scoreplayMediaId: asset.id, start: 0, end: 10 }] };
   const result = evaluateEdit({
     edit,
-    assets: extra.assets ?? { "sp-game": spursGame, "sp-alt": spursAlt },
-    observations: { "sp-game": [rivalBrand] },
+    assets: { [asset.id]: asset },
+    observations: { [asset.id]: opts.observations ?? [] },
+    analysis: { [asset.id]: opts.analysis ?? ANALYSED },
     intent,
-    policy: extra.policy ?? spursPolicy,
     now,
   });
   EditDecisionSchema.parse(result); // always honours the shared contract
-  return result;
+  for (const r of result.decision.reasons) expect(r.basis, `${r.ruleId} has a basis`).toBeDefined();
+  return DecisionSchema.parse(result.segments[0].decision);
 }
 
-function decideSegment(a: Asset, intent: PublishIntent, observations: Evidence[] = [], policy = spursPolicy) {
-  const decision = evaluateSegment({
-    segment: { scoreplayMediaId: a.id, start: 0, end: 15 },
-    asset: a,
-    observations,
-    intent,
-    policy,
-    now,
-  });
-  DecisionSchema.parse(decision);
-  return decision;
-}
+const open = (d: Decision) => d.reasons.filter((r) => r.outcome !== "PERMIT");
 
 describe("bundled policies", () => {
-  it.each([demoSpurs, demoTottenham])("$id validates against PolicySchema and is labelled fictional", (raw) => {
+  it.each([demoSpurs, demoTottenham])("$id validates, is DEMO and says so", (raw) => {
     const policy = PolicySchema.parse(raw);
-    expect(policy.fictional).toBe(true);
+    expect(policy.kind).toBe("DEMO");
     expect(policy.disclaimer).toContain("FICTIONAL DEMO POLICY");
   });
 
-  it("lists policies and loads the Spurs demo policy by default", () => {
-    expect(listPolicies().map((p) => p.id).sort()).toEqual(["demo-spurs-fr-sponsored", "demo-tottenham-pl"]);
-    expect(loadPolicy().id).toBe(process.env.REROUTE_POLICY_ID || "demo-spurs-fr-sponsored");
+  it("lists policies with kind/club; there is no default policy", () => {
+    expect(listPolicies().map((p) => [p.id, p.kind, p.club])).toEqual([
+      ["demo-spurs-fr-sponsored", "DEMO", "spurs"],
+      ["demo-tottenham-pl", "DEMO", "tottenham"],
+    ]);
     expect(() => loadPolicy("nope")).toThrow(/Unknown rights policy/);
   });
 
@@ -102,154 +122,177 @@ describe("bundled policies", () => {
   });
 });
 
-describe("demo scenario", () => {
-  it("ORGANIC / FR / instagram on the demo edit → ALLOWED with every dimension permitted", () => {
-    const { decision, segments } = decideEdit(demoEdit, organic);
-    expect(decision.verdict).toBe("ALLOWED");
-    expect(decision.missingFacts).toEqual([]);
-    expect(decision.policyFictional).toBe(true);
-    expect(decision.policyId).toBe("demo-spurs-fr-sponsored");
-    expect(decision.evaluatedAt).toBe(now.toISOString());
-    for (const s of segments) {
-      const permitted = new Set(s.decision.reasons.filter((r) => r.outcome === "PERMIT").map((r) => r.dimension));
-      expect([...permitted].sort()).toEqual([...MANDATORY_DIMENSIONS].sort());
-    }
+describe("policy selection", () => {
+  it("selects the Tottenham PL policy for Tottenham footage published by Tottenham", () => {
+    const { policy, selection } = selectPolicy(base, [playerClip]);
+    expect(policy?.id).toBe("demo-tottenham-pl");
+    expect(selection).toMatchObject({ policyId: "demo-tottenham-pl", kind: "DEMO" });
   });
 
-  it("switching ORGANIC → SPONSORED flips the same edit to BLOCKED, only on 4–9 s", () => {
-    expect(decideEdit(demoEdit, organic).decision.verdict).toBe("ALLOWED");
-    const { decision, segments } = decideEdit(demoEdit, sponsored);
-    expect(decision.verdict).toBe("BLOCKED");
-    expect(segments.map((s) => s.decision.verdict)).toEqual(["ALLOWED", "BLOCKED", "ALLOWED"]);
-
-    const deny = segments[1].decision.reasons.find((r) => r.outcome === "DENY");
-    expect(deny).toMatchObject({
-      ruleId: "SPURS-3-rival-sponsor-exclusivity",
-      dimension: "sponsor",
-      scoreplayMediaId: "sp-game",
-      start: 4,
-      end: 9,
-    });
-    expect(segments[1].decision.evidence).toContainEqual(rivalBrand);
-    expect(decision.reasons.filter((r) => r.outcome === "DENY")).toHaveLength(1);
+  it("never evaluates Tottenham (Premier League) footage under the San Antonio Spurs NBA policy", () => {
+    const spursIntent: PublishIntent = { ...base, club: "spurs", competition: "NBA", territory: "US" };
+    const { policy, selection } = selectPolicy(spursIntent, [playerClip]);
+    expect(policy).toBeNull();
+    expect(selection.considered.find((c) => c.policyId === "demo-spurs-fr-sponsored")).toMatchObject({ applicable: false });
+    const d = decide(playerClip, spursIntent);
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(d.policyId).toBe("none");
+    expect(d.reasons.every((r) => r.basis === "POLICY_SELECTION")).toBe(true);
+    expect(d.reasons.map((r) => r.explanation).join(" ")).toMatch(/Tottenham Hotspur|Manchester United/);
   });
 
-  it("evidence outside a segment's range does not affect it", () => {
-    const d = evaluateSegment({
-      segment: { scoreplayMediaId: "sp-game", start: 9, end: 15 },
-      asset: spursGame,
-      observations: [rivalBrand, { ...rivalBrand, start: 0, end: 4 }],
-      intent: sponsored,
-      policy: spursPolicy,
-      now,
-    });
-    expect(d.verdict).toBe("ALLOWED");
-    expect(d.evidence).not.toContainEqual(rivalBrand);
+  it("no publishing club ⇒ NEEDS_REVIEW (POLICY_SELECTION) and a CAMPAIGN blocker", () => {
+    const d = decide(playerClip, { ...base, club: undefined });
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(d.reasons[0]).toMatchObject({ basis: "POLICY_SELECTION", dimension: "policy" });
+    expect(classifyBlocker(d, { ...base, club: undefined }).scope).toBe("CAMPAIGN");
   });
 
-  it("evidence without timecodes applies to the whole asset", () => {
-    const untimed = { ...rivalBrand, start: undefined, end: undefined };
-    const d = decideSegment(spursGame, sponsored, [untimed]);
-    expect(d.verdict).toBe("BLOCKED");
-  });
-
-  it("a replacement segment from a different asset is judged on its own facts", () => {
-    const rerouted: EditPlan = {
-      ...demoEdit,
-      id: "edit-1-reroute",
-      derived: true,
-      derivedFrom: "edit-1",
-      segments: [demoEdit.segments[0], { scoreplayMediaId: "sp-alt", start: 20, end: 25 }, demoEdit.segments[2]],
-    };
-    expect(decideEdit(rerouted, sponsored).decision.verdict).toBe("ALLOWED");
-
-    const unknownAlt = asset("sp-alt", { team: "San Antonio Spurs", people: [], sponsors: [] }); // competition unknown
-    const result = decideEdit(rerouted, sponsored, { assets: { "sp-game": spursGame, "sp-alt": unknownAlt } });
-    expect(result.segments.map((s) => s.decision.verdict)).toEqual(["ALLOWED", "NEEDS_REVIEW", "ALLOWED"]);
-    expect(result.decision.verdict).toBe("NEEDS_REVIEW");
-    expect(result.decision.missingFacts.join("\n")).toMatch(/Competition of asset sp-alt is not recorded/);
-  });
-
-  it("a derived edit gets no inherited verdict: it is re-evaluated in full", () => {
-    const derived: EditPlan = { ...demoEdit, id: "edit-1-copy", derived: true, derivedFrom: "edit-1" };
-    expect(decideEdit(derived, sponsored).decision.verdict).toBe("BLOCKED");
-  });
-
-  it("segments whose asset metadata was not loaded → NEEDS_REVIEW", () => {
-    const edit: EditPlan = { ...demoEdit, segments: [{ scoreplayMediaId: "missing", start: 0, end: 3 }] };
-    const { decision } = decideEdit(edit, organic);
-    expect(decision.verdict).toBe("NEEDS_REVIEW");
-    expect(decision.missingFacts).toEqual(["ScorePlay asset missing metadata was not loaded"]);
+  it("footage without the required provenance tag is not covered (CLIP blocker)", () => {
+    const foreign = { ...crowd, id: "nopartner", tags: crowd.tags.filter((t) => t !== "partner content") };
+    const d = decide(foreign, base);
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(d.reasons[0]).toMatchObject({ basis: "POLICY_SELECTION", dimension: "provenance" });
+    expect(classifyBlocker(d, base).scope).toBe("CLIP");
   });
 });
 
-describe("three-state semantics", () => {
-  it("explicit verified DENY → BLOCKED (territory geo-block, sponsored TikTok)", () => {
-    expect(decideSegment(spursGame, { ...organic, territory: "GB" }).verdict).toBe("BLOCKED");
-    expect(decideSegment(spursGame, { ...sponsored, platform: "tiktok" }).verdict).toBe("BLOCKED");
+describe("Tottenham demo policy", () => {
+  it("EDITORIAL match footage: ALLOWED with DEMO clearance, never publishable", () => {
+    const d = decide(playerClip, base, { analysis: NOT_ANALYSED });
+    expect(d.verdict).toBe("ALLOWED");
+    expect(d.clearance).toBe("DEMO");
+    expect(d.policyFictional).toBe(true);
+    expect(canPublish({ decision: d, humanReviewStatus: "APPROVED" })).toBe(false);
   });
 
-  it.each([
-    ["unknown platform", { ...organic, platform: "tiktok" }, /does not cover platform "tiktok"/],
-    ["unknown territory", { ...organic, territory: "JP" }, /does not cover territory "JP"/],
-    ["competition conflict", { ...organic, competition: "Premier League" }, /intended competition is Premier League/],
-  ] as const)("%s → NEEDS_REVIEW, never ALLOWED", (_name, intent, missing) => {
-    const d = decideSegment(spursGame, intent);
+  it("COMMERCIAL use of broadcast highlights is BLOCKED with a human-readable reason (CLIP blocker)", () => {
+    const d = decide(highlights, commercial);
+    expect(d.verdict).toBe("BLOCKED");
+    const deny = d.reasons.find((r) => r.outcome === "DENY")!;
+    expect(deny).toMatchObject({ ruleId: "THFC-6-no-broadcast-footage-in-ads", dimension: "usage", basis: "LEGAL_ENTITLEMENT" });
+    expect(deny.explanation).toMatch(/may not be used to sell merchandise/);
+    expect(classifyBlocker(d, commercial).scope).toBe("CLIP");
+  });
+
+  it("missing analysis is a TECHNICAL gap, not a missing licence", () => {
+    const d = decide(playerClip, commercial, { analysis: NOT_ANALYSED });
     expect(d.verdict).toBe("NEEDS_REVIEW");
-    expect(d.missingFacts.join("\n")).toMatch(missing);
+    const gaps = open(d);
+    expect([...new Set(gaps.map((r) => r.dimension))].sort()).toEqual(["people", "sponsor"]);
+    for (const r of gaps) {
+      expect(r.basis).toBe("TECHNICAL_OBSERVATION");
+      expect(r.explanation).toMatch(/video was not analysed/);
+    }
   });
 
-  it.each([
-    ["competition", { ...spursGame.facts, competition: undefined }],
-    ["people", { ...spursGame.facts, people: undefined }],
-    ["sponsors", { ...spursGame.facts, sponsors: undefined }],
-  ] as const)("unknown %s fact → NEEDS_REVIEW (no false ALLOWED)", (_name, facts) => {
-    const d = decideSegment(asset("sp-x", facts), organic);
+  it("an unproven ScorePlay↔TwelveLabs link is MEDIA_IDENTITY", () => {
+    const d = decide(playerClip, commercial, { analysis: { status: "UNLINKABLE", detail: "2 candidate videos match" } });
     expect(d.verdict).toBe("NEEDS_REVIEW");
-    expect(d.reasons.some((r) => r.outcome === "MISSING")).toBe(true);
+    expect(open(d).every((r) => r.basis === "MEDIA_IDENTITY")).toBe(true);
   });
 
-  it("unknown competition makes a competition-scoped DENY uncertain, not ignored", () => {
-    const d = decideSegment(asset("sp-x", { people: [], sponsors: [] }), { ...organic, territory: "GB" });
+  it("COMMERCIAL: own-squad players (verified in ScorePlay) + official partner ⇒ ALLOWED (DEMO)", () => {
+    const obs = [rubric("goal", "group"), ev("goal", "brand:aia"), ev("goal", "person:solanke")];
+    const d = decide(playerClip, commercial, { observations: obs });
+    expect(d.verdict).toBe("ALLOWED");
+    expect(d.clearance).toBe("DEMO");
+  });
+
+  it("COMMERCIAL: an identified person whose club ScorePlay does not verify ⇒ MISSING legal entitlement", () => {
+    const obs = [rubric("goal", "group"), ev("goal", "person:bruno-fernandes")];
+    const d = decide(playerClip, commercial, { observations: obs });
     expect(d.verdict).toBe("NEEDS_REVIEW");
-    expect(d.reasons).toContainEqual(
-      expect.objectContaining({ ruleId: "SPURS-4-gb-geo-block", outcome: "MISSING", dimension: "territory" }),
-    );
+    expect(open(d)).toEqual([
+      expect.objectContaining({ dimension: "people", basis: "LEGAL_ENTITLEMENT", ruleId: "subject:person:bruno-fernandes" }),
+    ]);
   });
 
-  it("an empty policy never allows anything", () => {
-    const empty: Policy = { ...spursPolicy, id: "empty", rules: [] };
-    const d = decideSegment(spursGame, organic, [], empty);
+  it("COMMERCIAL: a player registered to another club is not covered by the image-rights pool", () => {
+    const rival = thfc("rival", { people: ["Bruno Fernandes"], peopleTeams: { "Bruno Fernandes": ["Manchester United"] } });
+    const d = decide(rival, commercial, { observations: [rubric("rival", "single_player")] });
+    expect(open(d)[0].explanation).toMatch(/registered to Manchester United/);
+  });
+
+  it("COMMERCIAL: a third-party brand seen with confidence ≥ 0.6 ⇒ BLOCKED; below 0.6 it cannot block", () => {
+    const strong = decide(playerClip, commercial, { observations: [rubric("goal", "group"), ev("goal", "brand:snapdragon", { confidence: 0.85 })] });
+    expect(strong.verdict).toBe("BLOCKED");
+    expect(strong.reasons.find((r) => r.outcome === "DENY")).toMatchObject({ ruleId: "THFC-13-partner-exclusivity", start: 2, end: 6 });
+
+    const weak = decide(playerClip, commercial, { observations: [rubric("goal", "group"), ev("goal", "brand:snapdragon", { confidence: 0.4 })] });
+    expect(weak.verdict).toBe("NEEDS_REVIEW");
+    expect(weak.reasons.find((r) => r.ruleId === "THFC-13-partner-exclusivity")).toMatchObject({ outcome: "MISSING", basis: "TECHNICAL_OBSERVATION" });
+  });
+
+  it("COMMERCIAL crowd shot: no listed player + analysis finds none ⇒ stadium clause ⇒ ALLOWED (DEMO)", () => {
+    const d = decide(crowd, commercial, { observations: [rubric("crowd", "no_players")] });
+    expect(d.verdict).toBe("ALLOWED");
+    expect(d.reasons.some((r) => r.ruleId === "THFC-10-stadium-conditions-of-entry" && r.outcome === "PERMIT")).toBe(true);
+    // Players on screen but unidentified ⇒ never ALLOWED.
+    expect(decide(crowd, commercial, { observations: [rubric("crowd", "group")] }).verdict).toBe("NEEDS_REVIEW");
+  });
+
+  it("unlicensed territory ⇒ NEEDS_REVIEW and a CAMPAIGN blocker with the licensed territories", () => {
+    const intent = { ...base, territory: "IN" };
+    const d = decide(playerClip, intent);
     expect(d.verdict).toBe("NEEDS_REVIEW");
-    expect(d.reasons.map((r) => r.ruleId)).toEqual(MANDATORY_DIMENSIONS.map((dim) => `no-rule:${dim}`));
+    expect(open(d)).toEqual([expect.objectContaining({ dimension: "territory", basis: "LEGAL_ENTITLEMENT" })]);
+    const blocker = classifyBlocker(d, intent);
+    expect(blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
+    expect(blocker.suggestion).toMatch(/GB, IE, US, CA, AU, NZ/);
   });
 
-  it("expired permission (publishAt after validUntil) is not a permit", () => {
-    const d = decideSegment(spursGame, { ...organic, publishAt: "2027-01-15T10:00:00Z" });
+  it("full-match recordings are geo-restricted to the home market (CLIP blocker)", () => {
+    const intent = { ...base, territory: "US" };
+    const d = decide(fullMatch, intent);
+    expect(d.verdict).toBe("BLOCKED");
+    expect(classifyBlocker(d, intent).scope).toBe("CLIP");
+    expect(decide(fullMatch, base).verdict).toBe("ALLOWED");
+  });
+
+  it("publishAt outside the licence term ⇒ BLOCKED (expiry) and a CAMPAIGN blocker", () => {
+    const late = { ...base, publishAt: "2027-08-01T10:00:00Z" };
+    const d = decide(playerClip, late);
+    expect(d.verdict).toBe("BLOCKED");
+    expect(d.reasons.find((r) => r.outcome === "DENY")).toMatchObject({ ruleId: "policy-term", dimension: "expiry" });
+    expect(classifyBlocker(d, late)).toMatchObject({ scope: "CAMPAIGN" });
+    expect(classifyBlocker(d, late).suggestion).toMatch(/2026-07-01 and 2027-06-30/);
+  });
+
+  it("unknown is never ALLOWED: competition not recorded ⇒ NEEDS_REVIEW", () => {
+    const d = decide(thfc("nocomp", { competition: undefined }), base);
     expect(d.verdict).toBe("NEEDS_REVIEW");
-    expect(d.reasons.some((r) => r.outcome === "PERMIT")).toBe(false);
-    expect(d.missingFacts.join("\n")).toMatch(/SPURS-1-nba-social-license expired on 2026-12-31/);
+    expect(d.clearance).toBe("NONE");
   });
 
-  it("a person seen in the segment must be covered by a permission", () => {
-    const presser = asset("thfc-presser", { competition: "Premier League", people: [], sponsors: [] }, ["Press Conference"]);
-    const intent: PublishIntent = { ...organic, competition: "Premier League" };
-    const spokesperson: Evidence = { scoreplayMediaId: "thfc-presser", observation: "Club spokesperson at the desk", source: "HUMAN", label: "person:club-spokesperson" };
-    const coach: Evidence = { scoreplayMediaId: "thfc-presser", start: 2, end: 30, observation: "Head coach speaking", source: "TWELVELABS", label: "person:Head Coach" };
+  it("an asset that could not be loaded ⇒ NEEDS_REVIEW (MEDIA_IDENTITY)", () => {
+    const edit: EditPlan = { id: "x", title: "x", derived: false, segments: [{ scoreplayMediaId: "missing", start: 0, end: 5 }] };
+    const r = evaluateEdit({ edit, assets: {}, observations: {}, analysis: {}, intent: base, now });
+    expect(r.decision.verdict).toBe("NEEDS_REVIEW");
+    expect(r.decision.reasons[0].basis).toBe("MEDIA_IDENTITY");
+  });
+});
 
-    expect(decideSegment(presser, intent, [spokesperson], thfcPolicy).verdict).toBe("ALLOWED");
-    const d = decideSegment(presser, intent, [spokesperson, coach], thfcPolicy);
-    expect(d.verdict).toBe("NEEDS_REVIEW");
-    expect(d.missingFacts).toContain("No permission in policy demo-tottenham-pl covers person:head-coach");
-    expect(d.evidence).toContainEqual(coach);
+describe("San Antonio Spurs demo policy", () => {
+  const organic: PublishIntent = { territory: "FR", platform: "instagram", usage: "ORGANIC", competition: "NBA", club: "spurs", publishAt: "2026-11-01T18:00:00Z" };
 
-    expect(decideSegment(presser, { ...intent, usage: "SPONSORED" }, [spokesperson], thfcPolicy).verdict).toBe("BLOCKED");
+  it("organic NBA footage in FR: ALLOWED (DEMO)", () => {
+    expect(decide(nba("g"), organic, { analysis: NOT_ANALYSED })).toMatchObject({ verdict: "ALLOWED", clearance: "DEMO", policyId: "demo-spurs-fr-sponsored" });
   });
 
-  it("Tottenham match footage: organic allowed, sponsored not permitted → NEEDS_REVIEW", () => {
-    const match = asset("thfc-match", { competition: "Premier League", people: ["Son"], sponsors: ["Kit sponsor"] }, ["match"]);
-    const intent: PublishIntent = { ...organic, territory: "GB", competition: "Premier League" };
-    expect(decideSegment(match, intent, [], thfcPolicy).verdict).toBe("ALLOWED");
-    expect(decideSegment(match, { ...intent, usage: "SPONSORED" }, [], thfcPolicy).verdict).toBe("NEEDS_REVIEW");
+  it("HUMAN-flagged rival sponsor in a SPONSORED post ⇒ BLOCKED; analysis gap ⇒ cannot rule it out", () => {
+    const rival: Evidence = { scoreplayMediaId: "g", start: 1, end: 3, observation: "Rival board", source: "HUMAN", label: "brand:rival-sponsor" };
+    const sponsored = { ...organic, usage: "SPONSORED" as const };
+    expect(decide(nba("g"), sponsored, { observations: [rival] }).verdict).toBe("BLOCKED");
+    const gap = decide(nba("g"), sponsored, { analysis: NOT_ANALYSED });
+    expect(gap.verdict).toBe("NEEDS_REVIEW");
+    expect(open(gap)[0]).toMatchObject({ ruleId: "SPURS-3-rival-sponsor-exclusivity", basis: "TECHNICAL_OBSERVATION" });
+  });
+
+  it("GB geo-block ⇒ BLOCKED, CAMPAIGN blocker", () => {
+    const gb = { ...organic, territory: "GB" };
+    const d = decide(nba("g"), gb);
+    expect(d.verdict).toBe("BLOCKED");
+    expect(classifyBlocker(d, gb).scope).toBe("CAMPAIGN");
   });
 });

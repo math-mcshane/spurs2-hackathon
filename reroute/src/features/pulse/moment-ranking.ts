@@ -1,5 +1,5 @@
 import type { GoalIntent, MediaCandidate, MomentMatch, ParsedObjective, Preview, Recommendation } from "./types";
-import type { Asset } from "@/lib/contracts";
+import { isEvidenceLinkable, type Asset, type MediaRef } from "@/lib/contracts";
 
 /**
  * Ranks live TwelveLabs moments against a business objective. Pure: the server passes in what the
@@ -19,11 +19,11 @@ export const RANKING = { relevance: 0.85, readiness: 0.15, k: 5, earlierSeason: 
 /** One hit as returned by the TwelveLabs adapter. */
 export type RawMoment = { videoId: string; start: number; end: number; rank: number; thumbnailUrl?: string };
 
-/** A TwelveLabs video tied to a ScorePlay asset (see `linkToIndex`). */
+/** A TwelveLabs video tied to a ScorePlay asset by the canonical MediaResolver (`linkCatalogs`). */
 export type LinkedVideo = {
   asset: Asset;
   discoveredBy: MediaCandidate["discoveredBy"];
-  mapping: NonNullable<MediaCandidate["mapping"]>;
+  media: MediaRef;
 };
 
 export type RankingContext = {
@@ -90,7 +90,8 @@ export function rankMoments(
   for (const { intent, moments } of results) {
     for (const m of moments) {
       const link = links.get(m.videoId);
-      if (!link || !(m.end > m.start)) continue;
+      // Only a canonical 1:1 link may carry TwelveLabs evidence onto a ScorePlay asset.
+      if (!link || !isEvidenceLinkable(link.media) || !(m.end > m.start)) continue;
       const match = { intent: intent.key, label: intent.label, query: intent.query, rank: m.rank, start: m.start, end: m.end, weight: intent.weight, why: intent.why, thumbnailUrl: m.thumbnailUrl };
       const home = clusters.find((c) => c.videoId === m.videoId && c.matches.some((x) => overlaps(x, m)));
       if (home) home.matches.push(match);
@@ -139,11 +140,13 @@ export function rankMoments(
       rank: primary.rank,
       query: primary.query,
       origin: "LIVE",
-      mapping: c.link.mapping,
+      mapping: { via: c.link.media.method as "AUTHORITATIVE_ID" | "FILENAME_DURATION", filename: c.link.media.match?.twelvelabsFilename ?? asset.title },
     };
     return {
       key: `${asset.id}@${primary.start}-${primary.end}`,
       candidate,
+      media: c.link.media,
+      duplicates: [],
       headline: primary.label,
       score,
       breakdown: {
@@ -173,28 +176,41 @@ export function rankMoments(
     };
   });
 
-  return diversify(ranked.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key)));
+  return dedupe(diversify(ranked.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))));
 }
 
-const sameFile = (a: Recommendation, b: Recommendation) =>
+/** Probable re-upload: a different ScorePlay asset of the same length, cut at the same timecode. */
+export const probableDuplicate = (a: Recommendation, b: Recommendation) =>
   a.candidate.scoreplayAssetId !== b.candidate.scoreplayAssetId &&
   a.candidate.durationSec !== undefined &&
   b.candidate.durationSec !== undefined &&
   Math.abs(a.candidate.durationSec - b.candidate.durationSec) <= 0.5 &&
-  Math.abs((a.candidate.startSeconds ?? 0) - (b.candidate.startSeconds ?? 0)) <= 0.1;
+  Math.abs((a.candidate.startSeconds ?? 0) - (b.candidate.startSeconds ?? 0)) <= 1 &&
+  Math.abs((a.candidate.endSeconds ?? 0) - (b.candidate.endSeconds ?? 0)) <= 1;
 
 /**
- * Order for presentation: the best moment of each distinct asset first (re-uploads of the same file —
- * same duration and same moment — count as one asset), then everything else by score.
+ * Order for presentation: the best moment of each distinct asset first (re-uploads of the same file
+ * count as one asset), then everything else by score.
  */
 export function diversify(sorted: readonly Recommendation[]): Recommendation[] {
   const lead: Recommendation[] = [];
   const rest: Recommendation[] = [];
   for (const r of sorted) {
-    const dup = lead.some((l) => l.candidate.scoreplayAssetId === r.candidate.scoreplayAssetId || sameFile(l, r));
+    const dup = lead.some((l) => l.candidate.scoreplayAssetId === r.candidate.scoreplayAssetId || probableDuplicate(l, r));
     (dup ? rest : lead).push(r);
   }
   return [...lead, ...rest];
+}
+
+/** Folds probable duplicates into the first (best-placed) moment: listed in its `duplicates`, never proposed twice. */
+export function dedupe(ordered: readonly Recommendation[]): Recommendation[] {
+  const kept: Recommendation[] = [];
+  for (const r of ordered) {
+    const original = kept.find((k) => probableDuplicate(k, r));
+    if (original) original.duplicates = [...original.duplicates, r.key];
+    else kept.push({ ...r, duplicates: [...r.duplicates] });
+  }
+  return kept;
 }
 
 /** Attaches a playable reference, or says plainly why there is none and what to do instead. */

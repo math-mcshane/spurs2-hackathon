@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { discoverVideos, resolveTags, searchMediaPages, ScorePlayDiscoveryError, type ScorePlayHttp } from "../server/scoreplay-discovery";
+import { discoverVideos, namesTerm, resolveTags, searchMediaPages, ScorePlayDiscoveryError, type ScorePlayHttp } from "../server/scoreplay-discovery";
 
 type Call = { method: string; path: string; query: URLSearchParams; body?: Record<string, unknown> };
 
@@ -96,6 +96,8 @@ describe("ScorePlay discovery", () => {
         json:
           q === "Harper"
             ? { players: [{ ID: 736860, full_name: "Dylan Harper" }, { ID: 1, full_name: "Someone Else" }], tags: [] }
+            : q === "SAS"
+              ? { tags: [{ ID: 10797033, name: "san antonio spurs (sas)" }, { ID: 7, name: "Kansas City" }, { ID: 8, name: "SASKATOON" }], players: [] }
             : q === "Tottenham Hotspur"
               ? { tags: [{ ID: 10797055, name: "tottenham hotspur fc" }], players: [] }
               : { tags: [], players: [] },
@@ -112,6 +114,14 @@ describe("ScorePlay discovery", () => {
     expect(r.players).toEqual([{ id: 736860, name: "Dylan Harper" }]);
     expect(r.unresolved).toEqual(["bench reaction"]);
     expect(calls[0].query.get("query")).toBe("Harper");
+  });
+
+  it("matches terms as whole words, never as substrings", async () => {
+    const { http } = fakeHttp(library);
+    const r = await resolveTags(http, ["SAS"]);
+    expect(r.tags).toEqual([{ id: 10797033, name: "san antonio spurs (sas)" }]);
+    expect(namesTerm("Kansas", "SAS")).toBe(false);
+    expect(namesTerm("tottenham hotspur fc", "Tottenham Hotspur")).toBe(true);
   });
 
   it("queries filename words and player IDs for videos only, de-duplicated, filename matches first", async () => {

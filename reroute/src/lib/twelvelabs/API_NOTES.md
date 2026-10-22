@@ -7,12 +7,12 @@ Docs: https://docs.twelvelabs.io/v1.3/llms.txt · Search: https://docs.twelvelab
 - `groupBy: "clip"` (default) → each `SearchItem`: `videoId`, `start`, `end` (seconds), `rank` (1 = best; there is no numeric score in v1.3 — we put `rank` into `SearchHit.score`), `thumbnailUrl`, `transcription`, `userMetadata` (only when `includeUserMetadata: true`).
 - `pageLimit` ≤ 50; next pages via `search.retrieve(pageToken)`. `filter` (stringified JSON) can filter on `id` or user metadata.
 
-## The `custom_id` mapping (verified against SDK types)
-- There is **no `custom_id` field on videos or indexed assets** in v1.3. `custom_id` exists only on analyze tasks/batches, data connectors and imports.
-- Per-video custom data is `user_metadata` (`GET/PUT /indexes/{index}/videos/{video}`; also on indexed assets). We therefore read the ScorePlay id from `user_metadata` keys, first match wins: `custom_id`, `customId`, `scoreplay_id`, `scoreplayMediaId`, `scoreplay_media_id` (`parse.ts#CUSTOM_ID_KEYS`).
-- Search: request `includeUserMetadata: true`; if a clip comes back without it, we `videos.retrieve` the video (cached in memory + on disk). Hits with no mapping are dropped and logged, never given an id.
-- Reverse lookup (ScorePlay id → TL video): `indexes.videos.list(indexId, { userMetadata: { custom_id: id } })` (list supports user-metadata query filters), tried for each key.
-- If organizers stored the id elsewhere (e.g. `filename`, an import `custom_id`, or an indexed-asset field), only `CUSTOM_ID_KEYS`/`findVideoByCustomId` need to change. Run the smoke script: it prints each video's `user_metadata`.
+## ScorePlay ↔ TwelveLabs identity (lib/media `MediaResolver`)
+- There is **no `custom_id` field on videos or indexed assets** in v1.3. The premiere-league index stores `user_metadata.scoreplay_id`, but those ids belong to a **cloned** ScorePlay workspace (0/58 resolve here, constant −529 offset). They are read only as a hint (`parse.ts#claimedScoreplayId`) and trusted (`AUTHORITATIVE_ID`) only if the id exists in this workspace with the same filename.
+- Canonical link: normalized filename (NFC, trimmed, case-insensitive, extension kept) + |Δduration| ≤ 0.5 s, unique in both directions (`FILENAME_DURATION`); otherwise `AMBIGUOUS` (candidates exposed) or `UNMAPPED`. Live: 58/58 Tottenham videos link 1:1 (max Δ 0.037 s).
+- ScorePlay `POST /media/search` truncates `media_duration` to whole seconds; filename-matching assets are re-read with `GET /media/{id}` for the exact value.
+- Search hits are mapped through the resolver (`SearchHit.mapping`); unlinkable hits are dropped and reported (`searchWithDiagnostics().dropped`). `observations(ref)` analyzes `ref.twelvelabsVideoId` directly and refuses unlinkable refs with `NOT_FOUND "MEDIA_IDENTITY: …"`.
+- Config: `lib/twelvelabs/config.ts` — `TWELVELABS_API_KEY` (legacy `TWELVE_LABS_API_KEY` only if unset); index `PULSE_TWELVELABS_INDEX_ID_<CLUB>` else `TWELVELABS_INDEX_ID`.
 
 ## Pegasus — `client.analyze` (sync, `stream: false`)
 - `POST /v1.3/analyze`: `modelName` `pegasus1.6` | `pegasus1.5`, `video: { type: "asset_id", assetId }` (or `url` / `base64_string`), `prompt`, `temperature`, `maxTokens` (default 4096), `responseFormat: { type: "json_schema", jsonSchema }`.
@@ -27,11 +27,10 @@ Adapted from `twelvelabs_sampleprompts` (NBA + PL rulebooks): `broadcast_source`
 - Observations are facts only; they never grant permission.
 
 ## Record / replay
-Every live response → `.cache/twelvelabs/<sha256>.json` (request + value). `TWELVELABS_REPLAY=true` or a network error (no HTTP response) → recorded value with `origin: "CACHED"`; cache miss → `UPSTREAM` error. HTTP errors are never masked by cache.
+Every live response → `.cache/twelvelabs/<sha256>.json` (request + value; analyze keyed by TL video id + model/prompt key). `TWELVELABS_REPLAY=true` or a network error (no HTTP response) → recorded value with `origin: "CACHED"`; cache miss → `UPSTREAM` error. HTTP errors are never masked by cache. Pegasus output is also stored durably via Persistence's `observationCache` (falls back to memory when unavailable) and served as `CACHED`.
 
 ## Open questions for TwelveLabs staff / organizers
-1. Exactly where is the ScorePlay id stored on the pre-built index — `user_metadata.custom_id`? another key? filename?
-2. Do the index's videos have an `asset_id` (needed for `/analyze` in SDK 1.3.6), or is legacy `video_id` analyze still accepted?
-3. Is Pegasus enabled on the shared index / key (index `models`), and which version (1.5 vs 1.6)?
-4. Which `search_options` the index supports (we use `visual`; `audio`/`transcription` only if enabled).
-5. Rate limits/quotas on the hackathon key for analyze calls.
+1. Do the index's videos have an `asset_id` (needed for `/analyze` in SDK 1.3.6), or is legacy `video_id` analyze still accepted? (Live 2026-10-22: Pegasus analyze succeeded for video `6ad911f2960d8ea7bdd04cfe`.)
+2. Is Pegasus enabled on the shared index / key (index `models`), and which version (1.5 vs 1.6)?
+3. Which `search_options` the index supports (we use `visual`; `audio`/`transcription` only if enabled).
+4. Rate limits/quotas on the hackathon key for analyze calls.

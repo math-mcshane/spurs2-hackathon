@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "REROUTE · Every clip, cleared",
+  title: "PULSE × REROUTE · Rights-checked campaigns",
   description:
-    "Checks a ScorePlay asset against a publishing intent, explains restrictions, gates access and finds an independently re-checked alternative.",
+    "From a business objective to real match moments, a campaign proposal and a rights verdict per channel and territory — with an alternative when restricted, human review and an audit receipt.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
-import { RenderRequestSchema, type EditPlan, type RenderResponseSchema } from "@/lib/contracts";
+import { RenderRequestSchema, canPublish, type EditPlan, type RenderResponseSchema } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { getScorePlayClient } from "@/lib/scoreplay";
 import { requireReviewer } from "@/lib/server/auth";
@@ -13,7 +13,9 @@ import { createReceipt, updateReceipt } from "@/lib/server/store";
 /**
  * POST /api/render — derivative MP4, only if MEDIA_PROCESSING_APPROVED=true AND the access gate
  * grants RENDER (fresh server-side verdict ALLOWED). The output is a NEW asset with its own
- * decision and a PENDING review receipt; uploaded to ScorePlay only if that is permitted.
+ * decision and a PENDING review receipt. It is uploaded to ScorePlay only when that receipt passes
+ * `canPublish` (verified clearance + human approval) AND SCOREPLAY_UPLOAD_APPROVED=true — a fresh
+ * PENDING receipt never does, so demo/unreviewed derivatives are never uploaded.
  */
 export const POST = route(async (req: Request) => {
   await requireReviewer(req);
@@ -43,7 +45,7 @@ export const POST = route(async (req: Request) => {
   let receipt = await createReceipt({ id, edit: derivative, intent, decision, media });
 
   const scoreplay = getScorePlayClient();
-  if (scoreplay.uploadDerivative) {
+  if (scoreplay.uploadDerivative && canPublish(receipt)) {
     try {
       const uploaded = await scoreplay.uploadDerivative({ path: file, title: derivative.title }, receipt);
       receipt = await updateReceipt(id, (r) => ({ ...r, derivativeAssetId: uploaded.id }));

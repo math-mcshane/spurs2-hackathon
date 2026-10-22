@@ -39,6 +39,10 @@ import { applicabilityFailures, noPolicyReasons, selectPolicy } from "./select";
 /** AI observations below this confidence may raise a question (MISSING) but never block (DENY). */
 export const MIN_DENY_CONFIDENCE = 0.6;
 
+/** A publish date older than `now` minus this grace is treated as a stale intent (NEEDS_REVIEW, CAMPAIGN scope). */
+export const PAST_PUBLISH_GRACE_MS = 5 * 60_000;
+export const PAST_PUBLISH_RULE_ID = "intent:publish-date-past";
+
 /** Whether machine video analysis is usable for an asset. UNLINKABLE = media identity not proven. */
 export type AnalysisStatus =
   | { status: "AVAILABLE" }
@@ -96,6 +100,8 @@ type Tri = "YES" | "NO" | "UNKNOWN";
 interface Unknown {
   what: string;
   basis: ReasonBasis;
+  /** Set when the unknown is a missing ScorePlay fact about the asset (→ CLIP-scope reason ids `fact:<fact>:<rule>`). */
+  fact?: "competition" | "team" | "people";
 }
 
 interface Subject {
@@ -115,6 +121,7 @@ interface SegmentContext {
   intent: PublishIntent;
   policy: Policy;
   publishAt: Date;
+  now: Date;
   people: Subject[];
   brands: Subject[];
   /** Evidence that triggered or was covered by a rule (reported in the Decision). */
@@ -207,20 +214,27 @@ function checkRule(rule: Rule, ctx: SegmentContext): RuleCheck {
   if (match.competition) {
     const fact = asset.facts.competition?.trim();
     if (!fact) {
-      unknowns.push({ basis: "LEGAL_ENTITLEMENT", what: "the clip's competition is not recorded in ScorePlay" });
+      unknowns.push({ basis: "LEGAL_ENTITLEMENT", fact: "competition", what: "the clip's competition is not recorded in ScorePlay" });
       parts.push("UNKNOWN");
     } else parts.push(match.competition.some((p) => sameSlug(fact, p)) ? "YES" : "NO");
   }
   if (match.team) {
     const teams = asset.facts.teams;
     if (!teams?.length) {
-      unknowns.push({ basis: "LEGAL_ENTITLEMENT", what: "the clip's club is not tagged in ScorePlay" });
+      unknowns.push({ basis: "LEGAL_ENTITLEMENT", fact: "team", what: "the clip's club is not tagged in ScorePlay" });
       parts.push("UNKNOWN");
     } else parts.push(teams.some((t) => match.team!.some((p) => sameClub(t, p))) ? "YES" : "NO");
   }
   if (match.assetIds) parts.push(match.assetIds.includes(asset.id) ? "YES" : "NO");
   if (match.assetTags) parts.push(asset.tags.some((tag) => match.assetTags!.some((p) => matchesPattern(tag, p))) ? "YES" : "NO");
-  if (match.noListedPeople) parts.push(asset.facts.people?.length ? "NO" : "YES");
+  if (match.noListedPeople) {
+    // YES only when ScorePlay positively lists no player (map.ts: people = []); unknown list ⇒ UNKNOWN.
+    const people = asset.facts.people;
+    if (!people) {
+      unknowns.push({ basis: "LEGAL_ENTITLEMENT", fact: "people", what: "ScorePlay does not say whether players appear in the clip" });
+      parts.push("UNKNOWN");
+    } else parts.push(people.length ? "NO" : "YES");
+  }
   if (match.otherClubPeople) parts.push(ctx.people.some((p) => p.club === "OTHER") ? "YES" : "NO");
   if (match.evidenceLabels) {
     const except = match.evidenceLabelsExcept ?? [];
@@ -285,6 +299,9 @@ function reason(
 }
 
 const day = (iso: string) => iso.slice(0, 10);
+
+/** Reason id for a rule whose applicability is uncertain: asset-fact gaps get a CLIP-scope `fact:` id. */
+const uncertainRuleId = (c: RuleCheck) => (c.unknowns[0]?.fact ? `fact:${c.unknowns[0].fact}:${c.rule.id}` : c.rule.id);
 
 function nearMiss(c: RuleCheck, publishAt: string): { basis: ReasonBasis; text: string } {
   if (c.selector === "UNKNOWN") {
@@ -364,6 +381,19 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
           [focus],
         ),
       );
+    } else if (!ctx.asset.facts.people) {
+      // "Nobody identifiable" needs ScorePlay to positively list no player; analysis alone is not enough.
+      out.push(
+        reason(
+          ctx,
+          "fact:people",
+          dim,
+          "MISSING",
+          "LEGAL_ENTITLEMENT",
+          `The video analysis found no identifiable player, but ScorePlay does not say whether players appear in "${ctx.asset.title}", so ${usage} use cannot be cleared.`,
+          [focus],
+        ),
+      );
     } else ctx.used.add(focus);
   }
   return out;
@@ -402,7 +432,7 @@ function evaluateDimension(dim: Dimension, ctx: SegmentContext, all: RuleCheck[]
   for (const c of checks) {
     if (c.rule.effect === "DENY" && c.selector === "UNKNOWN" && applies(c)) {
       missing.push(
-        reason(ctx, c.rule.id, dim, "MISSING", c.unknowns[0].basis, `This restriction may apply but cannot be ruled out because ${c.unknowns.map((u) => u.what).join(" and ")}. ${c.rule.explanation}`),
+        reason(ctx, uncertainRuleId(c), dim, "MISSING", c.unknowns[0].basis, `This restriction may apply but cannot be ruled out because ${c.unknowns.map((u) => u.what).join(" and ")}. ${c.rule.explanation}`),
       );
     }
   }
@@ -413,7 +443,7 @@ function evaluateDimension(dim: Dimension, ctx: SegmentContext, all: RuleCheck[]
     if (near.length > 0) {
       for (const c of near) {
         const m = nearMiss(c, ctx.intent.publishAt);
-        missing.push(reason(ctx, c.rule.id, dim, "MISSING", m.basis, m.text));
+        missing.push(reason(ctx, c.selector === "UNKNOWN" ? uncertainRuleId(c) : c.rule.id, dim, "MISSING", m.basis, m.text));
       }
     } else {
       missing.push(reason(ctx, `no-rule:${dim}`, dim, "MISSING", "LEGAL_ENTITLEMENT", `No rule in ${ctx.policy.title} grants ${dim} for this clip and intent.`));
@@ -441,7 +471,19 @@ function policyReasons(ctx: SegmentContext): Reason[] {
     out.push(reason(ctx, "selection:provenance", "provenance", "PERMIT", "POLICY_SELECTION", `Provenance: ${a.provenance.description}.`));
   }
   const t = ctx.publishAt.getTime();
-  if (t < Date.parse(a.validFrom) || t > Date.parse(a.validUntil)) {
+  if (t < ctx.now.getTime() - PAST_PUBLISH_GRACE_MS) {
+    // A date already gone is an intent problem, not a licence verdict: ask for a current date (never BLOCKED by the term).
+    out.push(
+      reason(
+        ctx,
+        PAST_PUBLISH_RULE_ID,
+        "expiry",
+        "MISSING",
+        "LEGAL_ENTITLEMENT",
+        `The publish date ${day(intent.publishAt)} is in the past — re-check with a current publish date.`,
+      ),
+    );
+  } else if (t < Date.parse(a.validFrom) || t > Date.parse(a.validUntil)) {
     out.push(
       reason(
         ctx,
@@ -533,6 +575,7 @@ export function evaluateSegment({ segment, asset, observations, analysis, intent
     intent,
     policy,
     publishAt,
+    now,
     ...buildSubjects(asset, evidence, policy),
     used: new Set(),
   };

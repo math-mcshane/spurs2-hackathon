@@ -126,7 +126,7 @@ describe("mapMediaToAsset", () => {
       tags: ["Parc des Princes"],
       thumbnailUrl: DOC_MEDIA_EXAMPLE.thumbnail_url,
     });
-    expect(asset.facts).toEqual({ recordedAt: "2025-05-31T22:01:27.000Z" });
+    expect(asset.facts).toEqual({ people: [], recordedAt: "2025-05-31T22:01:27.000Z" }); // full tag list, no player tag
     expect(asset.facts.competition).toBeUndefined(); // event path/name is NOT parsed into a competition
     expect(asset.durationSec).toBeUndefined(); // duration 0 = unknown
     expect(asset.previewUrl).not.toBe(DOC_MEDIA_EXAMPLE.original_url); // never the original download
@@ -198,12 +198,20 @@ describe("mapMediaToAsset", () => {
     expect(asset.metadata.teams).toEqual(["San Antonio Spurs", "Los Angeles Lakers"]);
   });
 
-  it("never turns missing people/sponsor tags into an empty (= cleared) list", () => {
+  it("never turns missing sponsor tags into an empty (= cleared) list", () => {
     for (const tags of [null, [], [optionTag(900, "NBA")]]) {
       const asset = mapMediaToAsset(video({ tags, player_ids: undefined, sponsor_ids: undefined }), FILTERS);
-      expect(asset.facts.people).toBeUndefined();
       expect(asset.facts.sponsors).toBeUndefined();
     }
+  });
+
+  it("people = [] only when ScorePlay positively lists no player; unloaded/hidden/id-only lists stay unknown", () => {
+    const people = (overrides: Record<string, unknown>) => mapMediaToAsset(video({ player_ids: undefined, ...overrides }), FILTERS).facts.people;
+    expect(people({ tags: [optionTag(900, "NBA")] })).toEqual([]); // GET /media/{id}: tags loaded, none is a player
+    expect(people({ tags: [] })).toBeUndefined(); // search results carry `tags: []` → not loaded
+    expect(people({ tags: null })).toBeUndefined();
+    expect(people({ tags: [optionTag(900, "NBA"), { ...playerTag(11, "x"), hidden: true }] })).toBeUndefined(); // hidden player
+    expect(people({ tags: [optionTag(900, "NBA")], player_ids: [11] })).toBeUndefined(); // id without a tag
   });
 
   it("leaves people unknown when player_ids lists players the tags do not resolve", () => {

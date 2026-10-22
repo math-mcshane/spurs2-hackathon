@@ -14,7 +14,7 @@ const fans: Asset = {
   kind: "video",
   durationSec: 10,
   tags: ["partner content", "Premier League", "Tottenham Hotspur"],
-  facts: { competition: "Premier League", teams: ["Tottenham Hotspur"] },
+  facts: { competition: "Premier League", teams: ["Tottenham Hotspur"], people: [] },
   metadata: {},
   origin: "LIVE",
 };

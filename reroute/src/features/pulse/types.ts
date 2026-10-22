@@ -702,7 +702,8 @@ export const GoalPlanSchema = z.object({
   /** Every territory is evaluated separately (GLOBAL = an explicit documented list). */
   territories: z.array(z.string().min(2)).min(1),
   territoryBasis: z.string(),
-  usage: GoalUsageSchema,
+  /** COMMERCIAL/EDITORIAL from the objective; a REROUTE remedy may switch it to another licensed usage. */
+  usage: UsageSchema,
   channels: z.array(ChannelSchema).min(1),
   competition: z.string(),
 });
@@ -732,7 +733,8 @@ export const GoalEvaluationSchema = z.object({
   campaignId: z.string(),
   campaignVersion: z.number().int().positive(),
   key: z.string(),
-  media: MediaRefSchema,
+  /** MediaRefs the decision actually used (re-resolved by REROUTE at decision time). */
+  media: z.array(MediaRefSchema),
   edit: EditPlanSchema,
   overall: DecisionSchema,
   perIntent: z.array(IntentDecisionSchema).min(1),
@@ -752,6 +754,13 @@ export const AlternativeCandidateSchema = z.object({
   clearance: ClearanceSchema,
   eligible: z.boolean(),
   reasons: z.array(ReasonBriefSchema),
+  /** ScorePlay title (filename) of the candidate asset, resolved server-side. */
+  title: z.string(),
+  /** Canonical link of the candidate asset at search time (re-resolved again before it is used). */
+  media: MediaRefSchema,
+  thumbnailUrl: z.string().optional(),
+  /** Playable reference, resolved per request — never stored. */
+  preview: PreviewSchema.optional(),
 });
 export type AlternativeCandidate = z.infer<typeof AlternativeCandidateSchema>;
 
@@ -767,6 +776,8 @@ export const GoalAlternativesSchema = z.object({
   blocker: BlockerSchema,
   /** Empty when the blocker is CAMPAIGN-scoped: another clip cannot fix it. */
   candidates: z.array(AlternativeCandidateSchema),
+  /** CAMPAIGN blockers only: the licensed subset of the campaign's uses REROUTE proposes to keep. */
+  remedy: z.object({ territories: z.array(z.string()).optional(), platforms: z.array(z.string()).optional(), usage: UsageSchema.optional() }).optional(),
 });
 export type GoalAlternatives = z.infer<typeof GoalAlternativesSchema>;
 
@@ -781,7 +792,7 @@ export const GoalCampaignSchema = CampaignDraftSchema.extend({
   /** Every channel × territory REROUTE is asked about. */
   intents: z.array(PublishIntentSchema).min(1),
   /** Why this version exists. */
-  origin: z.enum(["PROPOSAL", "SELECTED", "DESTINATION", "ALTERNATIVE"]),
+  origin: z.enum(["PROPOSAL", "SELECTED", "DESTINATION", "ALTERNATIVE", "REMEDY"]),
 });
 export type GoalCampaign = z.infer<typeof GoalCampaignSchema>;
 
@@ -886,6 +897,8 @@ export const ReviewStatusSchema = z.enum(["NOT_SUBMITTED", "PENDING", "APPROVED"
 export type ReviewStatus = z.infer<typeof ReviewStatusSchema>;
 
 export const GoalViewSchema = z.object({
+  /** Run document version: send it back as `expectedVersion` on every action (stale → CONFLICT). */
+  version: z.number().int().positive(),
   run: GoalRunSchema.pick({
     id: true,
     club: true,
@@ -907,8 +920,18 @@ export const GoalViewSchema = z.object({
   rights: RightsViewSchema,
   /** Why the latest evaluation is not ALLOWED, classified by REROUTE's resolver (after "Find another way"). */
   blocker: BlockerSchema.optional(),
-  /** Latest "Find another way" for the current moment. */
+  /** "Find another way" for the LATEST evaluation only (stale searches are never shown or usable). */
   alternatives: GoalAlternativesSchema.optional(),
+  /** CAMPAIGN blocker only: restrict the campaign to its licensed uses (`applyRemedy`), then check again. */
+  remedy: z
+    .object({
+      label: z.string(),
+      description: z.string(),
+      territories: z.array(z.string()).optional(),
+      platforms: z.array(z.string()).optional(),
+      usage: UsageSchema.optional(),
+    })
+    .optional(),
   /** Audit trail of every recorded evaluation, oldest first. */
   evaluations: z.array(
     z.object({
@@ -943,13 +966,17 @@ export type GoalView = z.infer<typeof GoalViewSchema>;
 
 const httpsUrl = z.url({ protocol: /^https$/ });
 
+/** Every action on an existing run carries the run version the user saw; a stale one is rejected (CONFLICT). */
+const onRun = { id: z.string(), expectedVersion: z.number().int().positive() };
+
 export const GoalActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("run"), goal: z.string().trim().min(3).max(280), club: ClubSchema }),
-  z.object({ action: z.literal("select"), id: z.string(), key: z.string() }),
-  z.object({ action: z.literal("draft"), id: z.string(), commerceUrl: httpsUrl.optional() }),
-  z.object({ action: z.literal("checkRights"), id: z.string() }),
-  z.object({ action: z.literal("findAlternatives"), id: z.string() }),
-  z.object({ action: z.literal("useAlternative"), id: z.string(), key: z.string() }),
-  z.object({ action: z.literal("submitForReview"), id: z.string() }),
+  z.object({ action: z.literal("select"), ...onRun, key: z.string() }),
+  z.object({ action: z.literal("draft"), ...onRun, commerceUrl: httpsUrl.optional() }),
+  z.object({ action: z.literal("checkRights"), ...onRun }),
+  z.object({ action: z.literal("findAlternatives"), ...onRun }),
+  z.object({ action: z.literal("useAlternative"), ...onRun, key: z.string() }),
+  z.object({ action: z.literal("applyRemedy"), ...onRun }),
+  z.object({ action: z.literal("submitForReview"), ...onRun }),
 ]);
 export type GoalAction = z.infer<typeof GoalActionSchema>;

@@ -71,7 +71,8 @@ async function call<S extends z.ZodType>(
     throw new ScorePlayDiscoveryError("UPSTREAM_UNAVAILABLE", `ScorePlay ${method} ${path}: ${err instanceof Error ? err.message : "network error"}`);
   }
   if (!res.ok) {
-    const detail = (await res.text().catch(() => "")).slice(0, 200);
+    // The response body stays in server logs; the user-visible message carries only method, path and status.
+    console.warn(`[pulse] ScorePlay ${method} ${path} → HTTP ${res.status}:`, (await res.text().catch(() => "")).slice(0, 200));
     const code: ScorePlayIssue =
       res.status === 401 || res.status === 403
         ? "UNAUTHORIZED"
@@ -80,7 +81,7 @@ async function call<S extends z.ZodType>(
           : res.status === 400 || res.status === 422
             ? "BAD_REQUEST"
             : "UPSTREAM_UNAVAILABLE";
-    throw new ScorePlayDiscoveryError(code, `ScorePlay ${method} ${path} → HTTP ${res.status}: ${detail}`);
+    throw new ScorePlayDiscoveryError(code, `ScorePlay ${method} ${path} → HTTP ${res.status}`);
   }
   const parsed = schema.safeParse(await res.json().catch(() => undefined));
   if (!parsed.success) throw new ScorePlayDiscoveryError("INVALID_RESPONSE", `ScorePlay ${method} ${path}: unexpected response shape`);

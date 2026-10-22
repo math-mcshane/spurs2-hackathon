@@ -68,7 +68,7 @@ describe("linkCatalogs", () => {
     expect(unmapped[0]).not.toHaveProperty("twelvelabsVideoId");
   });
 
-  it("ignores a user_metadata id from another workspace; trusts one that resolves here with the same filename", () => {
+  it("uses a user_metadata id only to corroborate a unique filename+duration match, never to create a link", () => {
     // Foreign id (cloned workspace): not an identity — the filename+duration rule decides.
     const foreign = linkCatalogs([sp("130851361", "full.mp4", 100)], [tl("v", "full.mp4", 100, "130850832")]);
     expect(foreign.refs[0]).toMatchObject({ scoreplayMediaId: "130851361", method: "FILENAME_DURATION" });
@@ -77,10 +77,19 @@ describe("linkCatalogs", () => {
     const wrongFile = linkCatalogs([sp("1", "a.mp4", 10), sp("2", "b.mp4", 20)], [tl("v", "b.mp4", 20, "1")]);
     expect(wrongFile.refs).toEqual([expect.objectContaining({ scoreplayMediaId: "2", twelvelabsVideoId: "v", method: "FILENAME_DURATION" })]);
 
-    // A resolving id with the same filename is authoritative, even if a sibling file shares name+duration.
-    const ok = linkCatalogs([sp("1", "a.mp4", 10), sp("2", "a.mp4", 10)], [tl("v", "a.mp4", 10, "1")]);
+    // Same filename but the wrong duration: the claim does not link.
+    const wrongDuration = linkCatalogs([sp("1", "a.mp4", 10)], [tl("v", "a.mp4", 30, "1")]);
+    expect(wrongDuration.refs).toEqual([]);
+    expect(wrongDuration.unmapped.map((r) => r.method)).toEqual(["UNMAPPED", "UNMAPPED"]);
+
+    // A claim cannot break a tie between same-name, same-duration siblings.
+    const tie = linkCatalogs([sp("1", "a.mp4", 10), sp("2", "a.mp4", 10)], [tl("v", "a.mp4", 10, "1")]);
+    expect(tie.refs).toEqual([]);
+    expect(tie.ambiguous.map((r) => r.scoreplayMediaId)).toEqual(["1", "2", null]);
+
+    // A claim that agrees with the unique match is authoritative.
+    const ok = linkCatalogs([sp("1", "a.mp4", 10), sp("2", "b.mp4", 10)], [tl("v", "a.mp4", 10.2, "1")]);
     expect(ok.refs).toEqual([expect.objectContaining({ scoreplayMediaId: "1", twelvelabsVideoId: "v", method: "AUTHORITATIVE_ID" })]);
-    expect(ok.unmapped.map((r) => r.scoreplayMediaId)).toEqual(["2"]);
   });
 });
 

@@ -71,8 +71,8 @@ export const STEPS: { key: StepKey; label: string }[] = [
 /** Where the user is in the journey; each item jumps to its section. */
 export function Stepper({ states }: { states: Record<StepKey, StepState> }) {
   return (
-    <nav aria-label="Progress">
-      <ol className="flex items-center gap-1 overflow-x-auto text-[11px] sm:gap-1.5">
+    <nav aria-label="Progress" className="w-full min-w-0 max-w-full overflow-x-auto">
+      <ol className="flex w-max max-w-none items-center gap-1 text-[11px] sm:gap-1.5">
         {STEPS.map((s, i) => {
           const st = states[s.key];
           return (
@@ -89,7 +89,8 @@ export function Stepper({ states }: { states: Record<StepKey, StepState> }) {
                 )}
               >
                 {st === "done" ? <CheckIcon className="size-3" aria-hidden /> : <span className="font-mono">{i + 1}</span>}
-                {s.label}
+                {/* Phones show only the current step's name; the others keep their number (and an sr-only name). */}
+                <span className={cn(st !== "current" && "sr-only sm:not-sr-only")}>{s.label}</span>
                 <span className="sr-only">{st === "done" ? " (done)" : st === "current" ? " (current step)" : " (not started)"}</span>
               </a>
             </li>

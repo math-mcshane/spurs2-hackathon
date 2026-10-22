@@ -11,12 +11,14 @@ import {
   type PublishIntent,
   type RightsReceipt,
 } from "@/lib/contracts";
+import { AppError } from "@/lib/errors";
 import {
   campaigns,
   events,
   humanObservationRecords,
   receiptRecords,
   type AuditEvent,
+  type ReceiptRow,
   type ReviewRecord,
 } from "@/lib/server/repositories";
 import { casUpdate } from "@/lib/server/repositories/shared";
@@ -30,8 +32,15 @@ import { z } from "zod";
 
 export type { ReviewRecord };
 
-/** Receipt as returned by the API: the contract shape plus the review audit trail. */
-export type StoredReceipt = RightsReceipt & { reviews: ReviewRecord[] };
+/**
+ * Receipt as returned by the API: the contract shape plus the review audit trail and, for campaign receipts,
+ * the campaign version it covers.
+ */
+export type StoredReceipt = RightsReceipt & { reviews: ReviewRecord[]; campaignVersion?: number };
+
+async function stored(row: ReceiptRow): Promise<StoredReceipt> {
+  return { ...row.receipt, campaignVersion: row.campaignVersion, reviews: await receiptRecords.listReviews(row.receipt.id) };
+}
 
 /** Audit actor for changes made by the server itself rather than a signed-in reviewer. */
 export const SYSTEM_ACTOR = "system";
@@ -56,22 +65,30 @@ async function mutateReceipt(id: string, mutate: (r: RightsReceipt) => RightsRec
 // ---------- Receipts ----------
 
 /** `id` may be preallocated (render writes `.renders/<id>.mp4` before the receipt exists). */
-export async function createReceipt(input: {
-  id?: string;
-  edit: EditPlan;
-  intent: PublishIntent;
-  decision: Decision;
-  /** Campaign this receipt belongs to (goal flow); omitted for the advanced rights desk. */
-  campaignId?: string;
-  /** MediaRefs whose evidence informed the decision. */
-  media?: MediaRef[];
-  actor?: string;
-}): Promise<StoredReceipt> {
+export async function createReceipt(
+  input: {
+    id?: string;
+    edit: EditPlan;
+    /** The use the decision is keyed on (the worst use for a campaign). */
+    intent: PublishIntent;
+    /** Every use the decision covers; a campaign receipt approves all of them. */
+    intents?: PublishIntent[];
+    decision: Decision;
+    /** MediaRefs whose evidence informed the decision. */
+    media?: MediaRef[];
+    actor?: string;
+  } & (
+    | { campaignId?: undefined; campaignVersion?: undefined }
+    /** Goal flow: the campaign and the exact version this receipt covers (must be the current one). */
+    | { campaignId: string; campaignVersion: number }
+  ),
+): Promise<StoredReceipt> {
   const receipt: RightsReceipt = RightsReceiptSchema.parse({
     id: input.id ?? randomUUID(),
     campaignId: input.campaignId,
     sourceAssetIds: [...new Set(input.edit.segments.map((s) => s.scoreplayMediaId))],
     intent: input.intent,
+    intents: input.intents,
     decision: input.decision,
     edit: input.edit,
     media: z.array(MediaRefSchema).parse(input.media ?? []),
@@ -79,8 +96,14 @@ export async function createReceipt(input: {
     createdAt: new Date().toISOString(),
     writeback: [],
   });
-  await receiptRecords.insert(receipt);
-  if (receipt.campaignId) await campaigns.setState(receipt.campaignId, { receiptId: receipt.id, reviewStatus: "PENDING" });
+  if (input.campaignId !== undefined) {
+    const { currentVersion } = await campaigns.get(input.campaignId);
+    if (currentVersion !== input.campaignVersion) {
+      throw new AppError("CONFLICT", `Campaign is at version ${currentVersion}; version ${input.campaignVersion} can no longer be submitted`);
+    }
+  }
+  await receiptRecords.insert(receipt, input.campaignVersion);
+  if (input.campaignId !== undefined) await campaigns.setState(input.campaignId, { receiptId: receipt.id, reviewStatus: "PENDING" });
   await events.append({
     subjectType: "receipt",
     subjectId: receipt.id,
@@ -88,25 +111,26 @@ export async function createReceipt(input: {
     actor: input.actor ?? SYSTEM_ACTOR,
     payload: {
       campaignId: receipt.campaignId ?? null,
+      campaignVersion: input.campaignVersion ?? null,
       verdict: receipt.decision.verdict,
       clearance: receipt.decision.clearance,
       policyId: receipt.decision.policyId,
       policyFictional: receipt.decision.policyFictional,
       sourceAssetIds: receipt.sourceAssetIds,
+      uses: (receipt.intents ?? [receipt.intent]).length,
     },
   });
-  return { ...receipt, reviews: [] };
+  return { ...receipt, campaignVersion: input.campaignVersion, reviews: [] };
 }
 
 export async function getReceipt(id: string): Promise<StoredReceipt> {
-  const [{ receipt }, reviews] = await Promise.all([receiptRecords.load(id), receiptRecords.listReviews(id)]);
-  return { ...receipt, reviews };
+  return stored(await receiptRecords.load(id));
 }
 
 /** Latest receipt created for a campaign, or null if it was never submitted. */
 export async function findReceiptForCampaign(campaignId: string): Promise<StoredReceipt | null> {
-  const receipt = await receiptRecords.latestForCampaign(campaignId);
-  return receipt && { ...receipt, reviews: await receiptRecords.listReviews(receipt.id) };
+  const row = await receiptRecords.latestForCampaign(campaignId);
+  return row && stored(row);
 }
 
 /**
@@ -121,8 +145,8 @@ export async function findReceiptFor(q: { editId: string; intent: PublishIntent;
     i.competition === q.intent.competition &&
     i.club === q.intent.club &&
     Date.parse(i.publishAt) === Date.parse(q.intent.publishAt);
-  const receipt = (await receiptRecords.findForEdit(q.editId, q.policyVersion)).find((r) => sameUse(r.intent));
-  return receipt ? { ...receipt, reviews: await receiptRecords.listReviews(receipt.id) } : null;
+  const row = (await receiptRecords.findForEdit(q.editId, q.policyVersion)).find((r) => sameUse(r.receipt.intent));
+  return row ? stored(row) : null;
 }
 
 /** Hash-chained audit events recorded for one receipt, in chain order. */
@@ -132,23 +156,34 @@ export function listReceiptAudit(id: string): Promise<AuditEvent[]> {
 
 /** Apply a mutation to one receipt; the result is re-validated against the contract before saving. */
 export async function updateReceipt(id: string, mutate: (r: RightsReceipt) => RightsReceipt): Promise<StoredReceipt> {
-  const next = await mutateReceipt(id, mutate);
-  return { ...next, reviews: await receiptRecords.listReviews(id) };
+  await mutateReceipt(id, mutate);
+  return getReceipt(id);
 }
 
-/** Record a human review decision (status + reviewer + time) on a receipt. */
+/**
+ * Record a human review decision (status + reviewer + time) on a receipt. Reviews are final: a receipt that
+ * is no longer PENDING cannot be reviewed again (CONFLICT), so APPROVED/REJECTED never flip.
+ */
 export async function recordReview(
   id: string,
   review: { status: Exclude<HumanReviewStatus, "PENDING">; reviewer: string },
   guard: (r: RightsReceipt) => void,
 ): Promise<StoredReceipt> {
-  const at = new Date().toISOString();
+  let at = "";
   const next = await mutateReceipt(id, (current) => {
+    if (current.humanReviewStatus !== "PENDING") {
+      throw new AppError("CONFLICT", `Receipt ${id} was already ${current.humanReviewStatus}; reviews are final`);
+    }
     guard(current);
+    // Stamped inside the winning read-modify-write, so `at` order matches the order reviews actually landed.
+    at = new Date().toISOString();
     return { ...current, humanReviewStatus: review.status };
   });
   await receiptRecords.addReview(id, { status: review.status, reviewer: review.reviewer, at });
-  if (next.campaignId) await campaigns.setState(next.campaignId, { reviewStatus: review.status });
+  // The campaign row only mirrors the review while this receipt is still its current submission.
+  if (next.campaignId && (await campaigns.get(next.campaignId)).receiptId === id) {
+    await campaigns.setState(next.campaignId, { reviewStatus: review.status });
+  }
   await events.append({
     subjectType: "receipt",
     subjectId: id,
@@ -156,7 +191,7 @@ export async function recordReview(
     actor: review.reviewer,
     payload: { status: review.status, verdict: next.decision.verdict, clearance: next.decision.clearance },
   });
-  return { ...next, reviews: await receiptRecords.listReviews(id) };
+  return getReceipt(id);
 }
 
 // ---------- HUMAN observations ----------

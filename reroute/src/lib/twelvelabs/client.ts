@@ -25,6 +25,10 @@ const PEGASUS_MODEL = "pegasus1.6";
 /** Durable observation-cache key: model + prompt + schema (a prompt change invalidates old results). */
 const PEGASUS_MODEL_KEY = `${PEGASUS_MODEL}:${cacheKey({ prompt: PEGASUS_PROMPT, schema: PEGASUS_JSON_SCHEMA })}`;
 const MAX_PAGE_LIMIT = 50;
+/** Marengo `queryText` limit is 500 tokens; capped in characters at the client boundary. */
+const MAX_QUERY_CHARS = 500;
+/** How long a failed Pegasus analysis is replayed instead of re-paying for it. */
+const FAILURE_TTL_MS = 5 * 60_000;
 
 type PegasusOutput = { data: string; finishReason?: string };
 
@@ -73,11 +77,12 @@ function defaultObservationStore(): ObservationStore {
 
 const isPegasusOutput = (v: unknown): v is PegasusOutput => !!v && typeof v === "object" && "data" in v && typeof v.data === "string";
 
+/** User-visible error: operation + HTTP status only. The upstream body/message is logged server-side, never returned. */
 function upstream(what: string, err: unknown): AppError {
   if (err instanceof AppError) return err;
   const status = err instanceof Error && "statusCode" in err ? ` (HTTP ${String(err.statusCode)})` : "";
-  const msg = err instanceof Error ? err.message : String(err);
-  return new AppError("UPSTREAM", `TwelveLabs ${what} failed${status}: ${msg}`, { cause: err });
+  console.warn(`[twelvelabs] ${what} failed${status}:`, err instanceof Error ? err.message : String(err));
+  return new AppError("UPSTREAM", `TwelveLabs ${what} failed${status}`, { cause: err });
 }
 
 interface VideoInfo {
@@ -103,6 +108,10 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
   private readonly apiKey: string;
   private readonly resolver: MediaResolver;
   private readonly store: ObservationStore;
+  /** One Pegasus analysis per video at a time; concurrent callers share it. */
+  private readonly inflight = new Map<string, Promise<{ value: PegasusOutput; origin: DataOrigin }>>();
+  /** Recent analysis failures, replayed for FAILURE_TTL_MS so repeated requests don't re-pay. */
+  private readonly failures = new Map<string, { at: number; error: AppError }>();
 
   constructor(opts: { club?: string; config?: TwelveLabsConfig; resolver?: MediaResolver; observationStore?: ObservationStore } = {}) {
     const config = opts.config ?? readTwelveLabsConfig({ club: opts.club });
@@ -170,6 +179,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
 
   /** Marengo search with the mapping report: hits carry resolved ScorePlay ids; unlinkable videos are in `dropped`. */
   async searchWithDiagnostics(query: string, opts: { limit?: number; excludeMediaIds?: string[] } = {}): Promise<SearchResult> {
+    if (query.length > MAX_QUERY_CHARS) throw new AppError("BAD_REQUEST", `Search query exceeds ${MAX_QUERY_CHARS} characters`);
     const limit = Math.max(1, Math.min(opts.limit ?? 5, MAX_PAGE_LIMIT));
     // Over-fetch: unlinkable/excluded clips are dropped after the call.
     const pageLimit = Math.min(MAX_PAGE_LIMIT, limit * 4 + (opts.excludeMediaIds?.length ?? 0));
@@ -207,18 +217,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
     }
     const videoId = ref.twelvelabsVideoId!;
     const scoreplayMediaId = ref.scoreplayMediaId!;
-    let out: { value: PegasusOutput; origin: DataOrigin };
-    const stored = await this.store.get(videoId, PEGASUS_MODEL_KEY);
-    if (isPegasusOutput(stored)) {
-      out = { value: stored, origin: "CACHED" };
-    } else {
-      try {
-        out = await recorded({ op: "analyze", modelKey: PEGASUS_MODEL_KEY, indexId: this.indexId, videoId }, () => this.analyze(videoId));
-      } catch (err) {
-        throw upstream("Pegasus analyze", err);
-      }
-      if (out.value.finishReason !== "length") await this.store.put(videoId, PEGASUS_MODEL_KEY, out.value);
-    }
+    const out = await this.pegasus(videoId);
     if (out.value.finishReason === "length") {
       throw new AppError("UPSTREAM", "Pegasus output truncated (finish_reason=length); not using partial observations");
     }
@@ -230,6 +229,33 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
       if (err instanceof PegasusParseError) throw new AppError("UPSTREAM", err.message, { cause: err });
       throw err;
     }
+  }
+
+  /** Stored result, else one shared live analysis per video; failures are replayed for FAILURE_TTL_MS. */
+  private async pegasus(videoId: string): Promise<{ value: PegasusOutput; origin: DataOrigin }> {
+    const stored = await this.store.get(videoId, PEGASUS_MODEL_KEY);
+    if (isPegasusOutput(stored)) return { value: stored, origin: "CACHED" };
+    const failed = this.failures.get(videoId);
+    if (failed && Date.now() - failed.at < FAILURE_TTL_MS) throw failed.error;
+    let running = this.inflight.get(videoId);
+    if (!running) {
+      running = (async () => {
+        try {
+          const out = await recorded({ op: "analyze", modelKey: PEGASUS_MODEL_KEY, indexId: this.indexId, videoId }, () => this.analyze(videoId));
+          if (out.value.finishReason !== "length") await this.store.put(videoId, PEGASUS_MODEL_KEY, out.value);
+          this.failures.delete(videoId);
+          return out;
+        } catch (err) {
+          const error = upstream("Pegasus analyze", err);
+          this.failures.set(videoId, { at: Date.now(), error });
+          throw error;
+        } finally {
+          this.inflight.delete(videoId);
+        }
+      })();
+      this.inflight.set(videoId, running);
+    }
+    return running;
   }
 
   private async analyze(videoId: string): Promise<PegasusOutput> {
@@ -260,7 +286,7 @@ export class TwelveLabsVideoIntelligence implements VideoIntelligence {
       }),
     });
     const body: unknown = await resp.json().catch(() => undefined);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${JSON.stringify(body)}`);
+    if (!resp.ok) throw Object.assign(new Error(`analyze HTTP ${resp.status}: ${JSON.stringify(body)}`), { statusCode: resp.status });
     if (!isPegasusOutput(body)) throw new Error("analyze returned no data");
     const finishReason = "finish_reason" in body && typeof body.finish_reason === "string" ? body.finish_reason : undefined;
     return { data: body.data, finishReason };

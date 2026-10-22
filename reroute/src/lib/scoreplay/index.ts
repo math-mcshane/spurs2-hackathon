@@ -10,8 +10,10 @@ export {
   toScorePlayActions,
   writebackMode,
   writebackTargets,
+  WritebackPreviewSchema,
   type MediaReadBack,
   type PlannedAction,
+  type WritebackPreview,
 } from "./writeback";
 
 let client: ScorePlayHttpClient | undefined;

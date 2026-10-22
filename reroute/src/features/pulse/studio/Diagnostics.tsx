@@ -7,7 +7,7 @@ import { OriginBadge } from "@/components/reroute/shared";
 import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
 import { RANKING, clock } from "../moment-ranking";
-import { when } from "../pulse-ui";
+import { utc } from "@/components/reroute/shared";
 import type { GoalView } from "../types";
 import { CHANNEL_LABEL, duration } from "./parts";
 
@@ -35,14 +35,13 @@ function deskHref(goal: GoalView): string {
 
 function MappingRow({ label, m }: { label: string; m: MediaRef }) {
   return (
-    <tr className="border-t border-white/5 align-top">
-      <td className="py-1 pr-2 text-zinc-300">{label}</td>
-      <td className="py-1 pr-2 font-mono">{m.scoreplayMediaId ?? "—"}</td>
-      <td className="py-1 pr-2 font-mono">{m.twelvelabsVideoId ?? "—"}</td>
-      <td className={cn("py-1 pr-2 font-mono", m.method === "AMBIGUOUS" || m.method === "UNMAPPED" ? "text-amber-300" : "text-zinc-300")}>{m.method}</td>
-      <td className="py-1 pr-2 break-all">{m.match?.scoreplayFilename ?? m.match?.twelvelabsFilename ?? "—"}</td>
-      <td className="py-1 font-mono">{m.match?.durationDeltaSec !== undefined ? `${m.match.durationDeltaSec.toFixed(3)} s` : "—"}</td>
-    </tr>
+    <li className="min-w-0 border-t border-white/5 py-1 break-all first:border-t-0">
+      <span className="font-sans text-zinc-300">{label}:</span> ScorePlay {m.scoreplayMediaId ?? "—"} ↔ TwelveLabs {m.twelvelabsVideoId ?? "—"} ·{" "}
+      <span className={m.method === "AMBIGUOUS" || m.method === "UNMAPPED" ? "text-amber-300" : "text-zinc-300"}>{m.method}</span> ·{" "}
+      {m.match?.scoreplayFilename ?? m.match?.twelvelabsFilename ?? "no filename"} · Δ{" "}
+      {m.match?.durationDeltaSec !== undefined ? `${m.match.durationDeltaSec.toFixed(3)} s` : "—"}
+      {m.candidates.length > 0 && <span className="block text-amber-300/80">{m.candidates.length} competing candidates</span>}
+    </li>
   );
 }
 
@@ -51,7 +50,7 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
   const r = goal.run;
   const c = goal.campaign;
   return (
-    <details className="group rounded-xl border border-white/8 bg-zinc-950/40 text-[11px] text-zinc-400">
+    <details className="group min-w-0 rounded-xl border border-white/8 bg-zinc-950/40 text-[11px] break-words text-zinc-400">
       <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-xs text-zinc-400 hover:text-zinc-200">
         <WrenchIcon className="size-3.5" aria-hidden /> Diagnostics — how this was decided
       </summary>
@@ -95,7 +94,7 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
                 </p>
                 <ul className="mt-1 space-y-0.5">
                   {p.reasons.map((x, n) => (
-                    <li key={n} className="grid grid-cols-[4.5rem_1fr] gap-x-2">
+                    <li key={n} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2">
                       <span className={cn("font-mono text-[10px]", OUTCOME_CLS[x.outcome])}>{x.outcome}</span>
                       <span>
                         <span className="font-mono text-[10px] text-zinc-300">
@@ -132,26 +131,12 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
 
         <section>
           <H>Media mapping (ScorePlay ↔ TwelveLabs)</H>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-left">
-              <thead className="text-zinc-500">
-                <tr>
-                  <th className="py-0.5 pr-2 font-medium">Media</th>
-                  <th className="py-0.5 pr-2 font-medium">ScorePlay id</th>
-                  <th className="py-0.5 pr-2 font-medium">TwelveLabs id</th>
-                  <th className="py-0.5 pr-2 font-medium">Method</th>
-                  <th className="py-0.5 pr-2 font-medium">Filename</th>
-                  <th className="py-0.5 font-medium">Δ duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {goal.recommendations.map((rec, n) => (
-                  <MappingRow key={rec.key} label={`Moment ${n + 1}`} m={rec.media} />
-                ))}
-                {c && <MappingRow label={`Campaign v${c.version}`} m={c.mediaRef} />}
-              </tbody>
-            </table>
-          </div>
+          <ul className="font-mono text-[10px]">
+            {goal.recommendations.map((rec, n) => (
+              <MappingRow key={rec.key} label={`Moment ${n + 1}`} m={rec.media} />
+            ))}
+            {c && <MappingRow label={`Campaign v${c.version}`} m={c.mediaRef} />}
+          </ul>
         </section>
 
         <section>
@@ -191,7 +176,7 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
 
         <section>
           <H>Raw ids</H>
-          <dl className="grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-3 gap-y-0.5 font-mono text-[10px]">
+          <dl className="grid grid-cols-[minmax(5rem,auto)_minmax(0,1fr)] gap-x-3 gap-y-0.5 font-mono text-[10px]">
             <dt>goal run</dt>
             <dd className="break-all text-zinc-300">{r.id}</dd>
             {c && (
@@ -225,7 +210,7 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
             <dt>writeback</dt>
             <dd className="text-zinc-300">
               {goal.writeback.status}
-              {goal.writeback.at && ` · ${when(goal.writeback.at)}`}
+              {goal.writeback.at && ` · ${utc(goal.writeback.at)}`}
               {goal.writeback.detail && ` · ${goal.writeback.detail}`}
             </dd>
           </dl>
@@ -233,7 +218,7 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
             <ol className="mt-2 space-y-0.5 font-mono text-[10px]">
               {goal.evaluations.map((e) => (
                 <li key={e.id}>
-                  {when(e.evaluatedAt)} · {e.kind} · v{e.campaignVersion} · {e.key} → {e.verdict}/{e.clearance} · {e.id}
+                  {utc(e.evaluatedAt)} · {e.kind} · v{e.campaignVersion} · {e.key} → {e.verdict}/{e.clearance} · {e.id}
                 </li>
               ))}
             </ol>

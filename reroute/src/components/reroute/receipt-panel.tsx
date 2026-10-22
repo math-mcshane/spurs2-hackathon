@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CheckIcon, ClapperboardIcon, DatabaseIcon, FileCheck2Icon, Loader2Icon, LogInIcon, XIcon } from "lucide-react";
+import { CheckIcon, ClapperboardIcon, FileCheck2Icon, Loader2Icon, LogInIcon, XIcon } from "lucide-react";
 import type { EditPlan, PublishIntent } from "@/lib/contracts";
 import type { ReceiptView } from "@/lib/api-client";
 import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { reviewApi, type ReviewerSession, type WritebackView } from "./reviewer";
-import { ErrorState, FictionalTag, VerdictBadge, tcRange } from "./shared";
-import { WritebackLog, WritebackPlan } from "./writeback-plan";
+import { reviewApi, type ReviewerSession } from "./reviewer";
+import { ErrorState, FictionalTag, VerdictBadge, tcRange, utc } from "./shared";
+import { WritebackAction, WritebackLog } from "./writeback-plan";
 
 const REVIEW_STYLE: Record<ReceiptView["humanReviewStatus"], string> = {
   PENDING: "border-amber-500/50 bg-amber-500/10 text-amber-200",
@@ -51,7 +51,7 @@ function ReceiptSummary({ receipt, title }: { receipt: ReceiptView; title: strin
         <dt>intent</dt>
         <dd className="text-zinc-200">
           {receipt.intent.territory} / {receipt.intent.platform} / {receipt.intent.usage} / {receipt.intent.competition} /{" "}
-          {new Date(receipt.intent.publishAt).toLocaleString()}
+          {utc(receipt.intent.publishAt)}
         </dd>
         <dt>policy</dt>
         <dd className="text-zinc-200">
@@ -67,12 +67,12 @@ function ReceiptSummary({ receipt, title }: { receipt: ReceiptView; title: strin
         <dt>evidence</dt>
         <dd className="text-zinc-300">{d.evidence.length} timecoded item{d.evidence.length === 1 ? "" : "s"}</dd>
         <dt>created</dt>
-        <dd className="text-zinc-300">{new Date(receipt.createdAt).toLocaleString()}</dd>
+        <dd className="text-zinc-300">{utc(receipt.createdAt)}</dd>
         <dt>human review</dt>
         <dd className="text-zinc-300">
           {receipt.reviews.length === 0
             ? "no reviewer action yet"
-            : receipt.reviews.map((r) => `${r.status} by ${r.reviewer} @ ${new Date(r.at).toLocaleTimeString()}`).join(" · ")}
+            : receipt.reviews.map((r) => `${r.status} by ${r.reviewer} @ ${utc(r.at)}`).join(" · ")}
         </dd>
       </dl>
     </div>
@@ -94,9 +94,8 @@ export function ReceiptPanel({
   onSignIn: () => void;
   onReceipt: (r: ReceiptView) => void;
 }) {
-  const [busy, setBusy] = useState<null | "create" | "review" | "writeback" | "render">(null);
+  const [busy, setBusy] = useState<null | "create" | "review" | "render">(null);
   const [error, setError] = useState<{ op: string; err: unknown } | null>(null);
-  const [plan, setPlan] = useState<WritebackView | null>(null);
   const [render, setRender] = useState<{ receipt: ReceiptView; outputUrl?: string } | null>(null);
   const reviewer = session?.reviewer;
 
@@ -126,10 +125,7 @@ export function ReceiptPanel({
           disabled={!canCreate || busy !== null}
           onClick={async () => {
             const r = await run("create", () => api.createReceipt({ edit: edit!, intent: intent! }));
-            if (r) {
-              setPlan(null);
-              onReceipt(r);
-            }
+            if (r) onReceipt(r);
           }}
         >
           {busy === "create" ? <Loader2Icon className="animate-spin" /> : <FileCheck2Icon />}
@@ -193,29 +189,13 @@ export function ReceiptPanel({
                 <LogInIcon /> {session?.enabled === false ? "Reviewer sign-in not configured" : "Sign in to review"}
               </Button>
             )}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="ml-auto"
-              disabled={busy !== null || !reviewer}
-              title={reviewer ? undefined : "Reviewer sign-in required"}
-              onClick={async () => {
-                const r = await run("writeback", () => reviewApi.writeback(receipt.id));
-                if (r) {
-                  onReceipt(r.receipt);
-                  setPlan(r);
-                }
-              }}
-            >
-              {busy === "writeback" ? <Loader2Icon className="animate-spin" /> : <DatabaseIcon />}
-              ScorePlay writeback
-            </Button>
           </div>
           {error?.op === "review" && <ErrorState error={error.err} />}
-          {error?.op === "writeback" && <ErrorState error={error.err} service="ScorePlay" />}
 
-          {plan && <WritebackPlan result={plan} />}
+          <div className="space-y-1 border-t border-white/5 pt-2">
+            <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase">ScorePlay writeback</h3>
+            <WritebackAction receiptId={receipt.id} session={session} onSignIn={onSignIn} onDone={(r) => onReceipt(r.receipt)} />
+          </div>
           {receipt.writeback.length > 0 && (
             <div className="space-y-1">
               <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase">ScorePlay writeback attempts</h3>

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_CLEARANCE_LABEL, type Asset, type Blocker, type Candidate, type Decision, type EditPlan, type MediaRef, type PublishIntent, type Verdict } from "@/lib/contracts";
 import type { Repositories } from "@/lib/server/repositories";
 import { resetRepositoriesForTests, useMemoryRepositoriesForTests } from "@/lib/server/repositories/testing";
-import { recordReview } from "@/lib/server/store";
+import { getReceipt, recordReview } from "@/lib/server/store";
 import { buildGoalCampaign } from "../goal-campaign";
 import { GLOBAL_TERRITORIES, goalIntents, goalPlan, parseMatch } from "../goal-intents";
 import { rankMoments, type LinkedVideo, type RawMoment } from "../moment-ranking";
@@ -107,6 +107,9 @@ const decision = (verdict: Verdict, opts: { fictional?: boolean; dimension?: str
 
 const worst = (vs: Verdict[]): Verdict => (vs.includes("BLOCKED") ? "BLOCKED" : vs.includes("NEEDS_REVIEW") ? "NEEDS_REVIEW" : "ALLOWED");
 
+/** The link REROUTE re-resolves at decision time (differs from search time on purpose, to prove which one is recorded). */
+const decidedRef = (id: string) => ({ ...ref(id), checkedAt: "2026-10-22T12:30:00.000Z" });
+
 /** decideCampaign fake: the verdict depends on the asset only (what a CLIP blocker looks like). */
 function campaignDecider(byAsset: Record<string, Verdict>, opts: { fictional?: boolean } = {}): GoalDeps["decideCampaign"] {
   return vi.fn(async ({ edit, intents }: { edit: EditPlan; intents: PublishIntent[] }) => {
@@ -116,7 +119,7 @@ function campaignDecider(byAsset: Record<string, Verdict>, opts: { fictional?: b
       return { intent, decision: { edit, decision: d, segments: [{ segment: edit.segments[0], decision: d }] } };
     });
     const overall = { ...decision(worst(perIntent.map((p) => p.decision.decision.verdict)), opts) };
-    return { overall, perIntent };
+    return { overall, perIntent, media: [decidedRef(edit.segments[0].scoreplayMediaId)], notes: [] };
   });
 }
 
@@ -142,10 +145,14 @@ function deps(over: Partial<GoalDeps> = {}): GoalDeps {
     decideCampaign: campaignDecider({}),
     resolve: vi.fn(async (input) => ({ query: input.query ?? "q", blocker: CLIP, candidates: [candidate("907", 3, 8.4, "ALLOWED", input.edit)], best: undefined })),
     resolveMedia: vi.fn(async (id: string) => ref(id)),
+    preview: vi.fn(async (r: MediaRef) => ({ source: "TWELVELABS_STREAM" as const, url: `https://cdn.example/${r.twelvelabsVideoId}.m3u8`, hls: true })),
     now: () => NOW,
     ...over,
   };
 }
+
+/** The run version the user last saw. */
+const at = (v: { run: { id: string }; version: number }) => ({ id: v.run.id, expectedVersion: v.version });
 
 let repos: Repositories;
 beforeEach(() => {
@@ -185,9 +192,16 @@ describe("objective → intent", () => {
     const s = searchFor(A);
     const kit = s.pool.find((r) => r.matches[0].intent === "kit")!;
     const run = { ...runFixture(A), pool: s.pool };
-    const draft = buildGoalCampaign({ run, rec: kit, campaignId: "c", version: 1, origin: "PROPOSAL", now: NOW });
+    const draft = buildGoalCampaign({ run, rec: kit, campaignId: "c", version: 1, origin: "PROPOSAL", plan: run.plan, now: NOW });
     expect(draft.creative.hook).toBe("Matchday detail.");
     expect(JSON.stringify(draft.channels)).not.toMatch(/Wear it like they do|like they do|Our fans/);
+  });
+
+  it("bare “Spurs” is ambiguous: a Tottenham goal written with the nickname is accepted; only “San Antonio” means the NBA club", async () => {
+    expect(parseObjective("Sell Spurs shirts in the UK", NOW).club).toBeUndefined();
+    expect(parseObjective("Sell San Antonio Spurs jerseys in Mexico", NOW).club).toBe("spurs");
+    const v = await goals.runGoal("Sell Spurs shirts in the UK", "tottenham", deps());
+    expect(v.run.club).toBe("tottenham");
   });
 });
 
@@ -248,6 +262,8 @@ describe("goal → campaign → rights → alternative → review", () => {
     const d = deps();
     const v = await goals.runGoal(A, "tottenham", d);
     expect(d.search).toHaveBeenCalledWith(expect.objectContaining({ club: "tottenham", objective: expect.objectContaining({ raw: A }) }));
+    expect(v.run.id).toMatch(/^goal-[0-9a-f-]{36}$/);
+    expect(v.version).toBe(2);
     expect(v.recommendations).toHaveLength(3);
     expect(v.campaign).toMatchObject({ version: 1, origin: "PROPOSAL", key: v.recommendations[0].key, mediaRef: { method: "FILENAME_DURATION" } });
     expect(v.campaign!.campaignId).toMatch(/^[0-9a-f-]{36}$/);
@@ -260,57 +276,93 @@ describe("goal → campaign → rights → alternative → review", () => {
     expect(await repos.campaigns.listVersions(v.campaign!.campaignId)).toHaveLength(1);
   });
 
+  it("resolves previews per request and never stores them", async () => {
+    const d = deps();
+    const v = await goals.runGoal(A, "tottenham", d);
+    expect(v.recommendations[0].preview).toMatchObject({ source: "TWELVELABS_STREAM", hls: true });
+    const stored = await repos.goalRuns.get(v.run.id);
+    expect(JSON.stringify(stored)).not.toContain("cdn.example");
+    const off = await goals.getGoal(v.run.id, deps({ preview: vi.fn(async () => undefined) }));
+    expect(off!.recommendations[0].preview).toBeUndefined();
+    expect(off!.recommendations[0].previewNote).toMatch(/No browser-playable stream/);
+  });
+
+  it("unknown ids are null, not errors", async () => {
+    expect(await goals.getGoal("goal-unknown", deps())).toBeNull();
+  });
+
   it("rejects a goal naming another club than the selected one", async () => {
     await expect(goals.runGoal(A, "spurs", deps())).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("rejects actions on a stale run version and never rolls the campaign back", async () => {
+    const d = deps();
+    const v = await goals.runGoal(A, "tottenham", d);
+    const moved = await goals.selectMoment(at(v), v.recommendations[1].key, d);
+    await expect(goals.selectMoment(at(v), v.recommendations[2].key, d)).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(goals.checkGoalRights(at(v), d)).rejects.toMatchObject({ code: "CONFLICT" });
+    const now = (await goals.getGoal(v.run.id, d))!;
+    expect(now.campaign).toMatchObject({ version: 2, key: v.recommendations[1].key });
+    expect(now.version).toBe(moved.version);
   });
 
   it("accepts a club destination only on the club's domain, as a new version", async () => {
     const d = deps();
     const v = await goals.runGoal(A, "tottenham", d);
-    await expect(goals.draftGoalCampaign(v.run.id, "https://evil.example/shop", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    const next = await goals.draftGoalCampaign(v.run.id, "https://shop.tottenhamhotspur.com/", d);
+    await expect(goals.draftGoalCampaign(at(v), "https://evil.example/shop", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const next = await goals.draftGoalCampaign(at(v), "https://shop.tottenhamhotspur.com/", d);
     expect(next.campaign).toMatchObject({ version: 2, campaignId: v.campaign!.campaignId, cta: { status: "READY" } });
   });
 
-  it("checks every channel × territory and records each evaluation", async () => {
+  it("checks every channel × territory for a fresh publication slot and records the media the decision used", async () => {
     const d = deps({ decideCampaign: campaignDecider({}) });
     const v = await goals.runGoal(B, "tottenham", d);
-    const checked = await goals.checkGoalRights(v.run.id, d);
+    const later = new Date(NOW.getTime() + 3 * 86_400_000);
+    const checked = await goals.checkGoalRights(at(v), { ...d, now: () => later });
     const call = vi.mocked(d.decideCampaign).mock.calls[0][0];
     expect(call.intents).toHaveLength(3 * GLOBAL_TERRITORIES.length);
     expect(new Set(call.intents.map((i) => `${i.platform}/${i.territory}`)).size).toBe(21);
+    expect(call.intents.every((i) => Date.parse(i.publishAt) > later.getTime())).toBe(true);
     expect(call.edit.segments[0]).toMatchObject({ scoreplayMediaId: "904", start: 30, end: 37 });
     expect(checked.rights).toMatchObject({ state: "NEEDS_REVIEW", current: true, kind: "ORIGINAL" });
     expect(checked.rights.perIntent).toHaveLength(21);
     expect(checked.rights.perIntent[0].reasons[0]).toMatchObject({ basis: "LEGAL_ENTITLEMENT" });
-    expect(await repos.evaluations.listForCampaign(v.campaign!.campaignId)).toHaveLength(21);
+    const recorded = await repos.evaluations.listForCampaign(v.campaign!.campaignId);
+    expect(recorded).toHaveLength(21);
+    expect(recorded[0].media).toEqual([decidedRef("904")]);
     expect((await repos.events.list("campaign", v.campaign!.campaignId)).map((e) => e.type)).toContain("RIGHTS_EVALUATED");
   });
 
-  it("BLOCKED → resolver search → alternative swapped into a new version and re-checked independently", async () => {
+  it("BLOCKED → resolver search over every use → alternative (with title) swapped into a new version and re-checked independently", async () => {
     const decide = campaignDecider({ "901": "BLOCKED", "907": "ALLOWED" });
     const d = deps({ decideCampaign: decide });
-    const v = await goals.runGoal(A, "tottenham", d);
+    let v = await goals.runGoal(A, "tottenham", d);
     expect(v.campaign!.mediaRef.scoreplayMediaId).toBe("901");
-    const blocked = await goals.checkGoalRights(v.run.id, d);
-    expect(blocked.rights.state).toBe("BLOCKED");
-    expect(blocked.canSubmit).toBe(false);
-    await expect(goals.submitForReview(v.run.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    v = await goals.checkGoalRights(at(v), d);
+    expect(v.rights.state).toBe("BLOCKED");
+    expect(v.canSubmit).toBe(false);
+    await expect(goals.submitForReview(at(v), d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
-    const alt = await goals.findAlternatives(v.run.id, d);
+    v = await goals.findAlternatives(at(v), d);
     const resolveInput = vi.mocked(d.resolve).mock.calls[0][0];
     expect(resolveInput).toMatchObject({ segmentIndex: 0, intent: { platform: "instagram", territory: "GB", club: "tottenham" } });
-    expect(resolveInput.query).toBe(blocked.selected!.matches[0].query);
-    expect(alt.blocker).toEqual(CLIP);
-    expect(alt.alternatives!.candidates).toHaveLength(1);
+    expect(resolveInput.intents).toHaveLength(3);
+    expect(resolveInput.query).toBe(v.selected!.matches[0].query);
+    expect(v.blocker).toEqual(CLIP);
+    expect(v.alternatives!.candidates).toHaveLength(1);
+    expect(v.alternatives!.candidates[0]).toMatchObject({ title: "MNU_TOT_907.mp4", preview: { url: "https://cdn.example/tl-907.m3u8" } });
 
-    const key = alt.alternatives!.candidates[0].key;
-    const swapped = await goals.useAlternative(v.run.id, key, d);
+    const key = v.alternatives!.candidates[0].key;
+    const swapped = await goals.useAlternative(at(v), key, d);
     expect(d.resolveMedia).toHaveBeenCalledWith("907", "tottenham");
     expect(swapped.campaign).toMatchObject({ version: 2, origin: "ALTERNATIVE", key, mediaRef: { scoreplayMediaId: "907" } });
     expect(vi.mocked(decide).mock.calls).toHaveLength(2);
     expect(vi.mocked(decide).mock.calls[1][0].edit.segments[0]).toMatchObject({ scoreplayMediaId: "907", start: 3, end: 8.4 });
     expect(swapped.rights).toMatchObject({ state: "ALLOWED", kind: "ALTERNATIVE", campaignVersion: 2, clearanceLabel: DEMO_CLEARANCE_LABEL });
+    // The previous search belongs to the previous evaluation: neither shown nor usable now.
+    expect(swapped.alternatives).toBeUndefined();
+    expect(swapped.blocker).toBeUndefined();
+    await expect(goals.useAlternative(at(swapped), key, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     // What the API returns satisfies the published GoalView contract (the browser client parses it).
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(swapped))).success).toBe(true);
     expect(swapped.evaluations.map((e) => [e.kind, e.verdict])).toEqual([
@@ -321,62 +373,108 @@ describe("goal → campaign → rights → alternative → review", () => {
     expect(kinds.filter((k) => k === "ALTERNATIVE")).toHaveLength(3);
   });
 
-  it("a CAMPAIGN-scoped blocker offers no replacement clips and is never searched again", async () => {
+  it("alternatives of an earlier moment are not offered after switching moments", async () => {
+    const d = deps({ decideCampaign: campaignDecider({ "901": "BLOCKED", "903": "BLOCKED" }) });
+    let v = await goals.runGoal(A, "tottenham", d);
+    v = await goals.checkGoalRights(at(v), d);
+    v = await goals.findAlternatives(at(v), d);
+    const key = v.alternatives!.candidates[0].key;
+    v = await goals.selectMoment(at(v), v.recommendations.find((r) => r.candidate.scoreplayAssetId === "903")!.key, d);
+    v = await goals.checkGoalRights(at(v), d);
+    expect(v.alternatives).toBeUndefined();
+    await expect(goals.useAlternative(at(v), key, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("a CAMPAIGN-scoped blocker offers no clips, is never searched again, and its remedy restricts the uses in a new version", async () => {
     const d = deps({
       decideCampaign: campaignDecider({ "904": "BLOCKED" }),
-      resolve: vi.fn(async (input) => ({ query: "q", blocker: CAMPAIGN, candidates: [candidate("907", 0, 7, "BLOCKED", input.edit)] })),
+      resolve: vi.fn(async (input) => ({
+        query: "q",
+        blocker: CAMPAIGN,
+        candidates: [candidate("907", 0, 7, "BLOCKED", input.edit)],
+        remedy: { territories: ["GB", "US"] },
+      })),
     });
-    const v = await goals.runGoal(B, "tottenham", d);
-    await goals.checkGoalRights(v.run.id, d);
-    const first = await goals.findAlternatives(v.run.id, d);
-    const again = await goals.findAlternatives(v.run.id, d);
+    let v = await goals.runGoal(B, "tottenham", d);
+    v = await goals.checkGoalRights(at(v), d);
+    const first = await goals.findAlternatives(at(v), d);
+    const again = await goals.findAlternatives(at(first), d);
     expect(d.resolve).toHaveBeenCalledTimes(1);
     expect(first.blocker).toMatchObject({ scope: "CAMPAIGN", suggestion: CAMPAIGN.suggestion });
     expect(first.alternatives!.candidates).toEqual([]);
     expect(again.alternatives!.id).toBe(first.alternatives!.id);
-    await expect(goals.useAlternative(v.run.id, "907@0-7", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(first.remedy).toMatchObject({ label: "Limit to licensed territories: GB, US", territories: ["GB", "US"] });
+    await expect(goals.useAlternative(at(again), "907@0-7", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const remedied = await goals.applyRemedy(at(again), d);
+    expect(remedied.campaign).toMatchObject({ version: 2, origin: "REMEDY", plan: { territories: ["GB", "US"] } });
+    expect(remedied.campaign!.intents).toHaveLength(6);
+    expect(remedied).toMatchObject({ rights: { current: false }, remedy: undefined, canSubmit: false });
+    const rechecked = await goals.checkGoalRights(at(remedied), d);
+    expect(vi.mocked(d.decideCampaign).mock.calls[1][0].intents.map((i) => i.territory).sort()).toEqual(["GB", "GB", "GB", "US", "US", "US"]);
+    expect(rechecked.rights.campaignVersion).toBe(2);
   });
 
-  it("demo clearance can be reviewed but is never publishable; NEEDS_REVIEW can be submitted", async () => {
+  it("demo clearance can be reviewed but is never publishable; the receipt covers every use; NEEDS_REVIEW can be submitted", async () => {
     const d = deps({ decideCampaign: campaignDecider({ "904": "ALLOWED" }) });
     const v = await goals.runGoal(B, "tottenham", d);
-    const checked = await goals.checkGoalRights(v.run.id, d);
+    const checked = await goals.checkGoalRights(at(v), d);
     expect(checked).toMatchObject({ canSubmit: true, publishable: false, rights: { clearance: "DEMO", clearanceLabel: DEMO_CLEARANCE_LABEL } });
-    const submitted = await goals.submitForReview(v.run.id, d);
+    const submitted = await goals.submitForReview(at(checked), d);
     expect(submitted).toMatchObject({ reviewStatus: "PENDING", canSubmit: false, publishable: false, writeback: { status: "NOT_STARTED" } });
-    expect(submitted.receiptId).toBeTruthy();
     expect((await repos.campaigns.get(v.campaign!.campaignId)).receiptId).toBe(submitted.receiptId);
+    const receipt = await getReceipt(submitted.receiptId!);
+    expect(receipt.intents).toHaveLength(21);
+    expect(receipt.media).toEqual([decidedRef("904")]);
 
     await recordReview(submitted.receiptId!, { status: "APPROVED", reviewer: "Ana" }, () => {});
-    const approved = (await goals.getGoal(v.run.id))!;
+    const approved = (await goals.getGoal(v.run.id, d))!;
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(approved))).success).toBe(true);
     expect(approved).toMatchObject({ reviewStatus: "APPROVED", publishable: false });
     expect(approved.publishNote).toContain(DEMO_CLEARANCE_LABEL);
 
     const review = deps({ decideCampaign: campaignDecider({ "901": "NEEDS_REVIEW" }) });
     const nr = await goals.runGoal(A, "tottenham", review);
-    await goals.checkGoalRights(nr.run.id, review);
-    expect((await goals.submitForReview(nr.run.id, review)).reviewStatus).toBe("PENDING");
+    const nrChecked = await goals.checkGoalRights(at(nr), review);
+    expect((await goals.submitForReview(at(nrChecked), review)).reviewStatus).toBe("PENDING");
   });
 
   it("verified clearance + human approval is the only publishable state", async () => {
     const d = deps({ decideCampaign: campaignDecider({ "901": "ALLOWED" }, { fictional: false }) });
     const v = await goals.runGoal(A, "tottenham", d);
-    await goals.checkGoalRights(v.run.id, d);
-    const submitted = await goals.submitForReview(v.run.id, d);
+    const checked = await goals.checkGoalRights(at(v), d);
+    const submitted = await goals.submitForReview(at(checked), d);
     expect(submitted.publishable).toBe(false);
     await recordReview(submitted.receiptId!, { status: "APPROVED", reviewer: "Ana" }, () => {});
-    expect((await goals.getGoal(v.run.id))!.publishable).toBe(true);
+    expect((await goals.getGoal(v.run.id, d))!.publishable).toBe(true);
+  });
+
+  it("a re-check after submission supersedes the submission: no approval or publishability carries over", async () => {
+    const verdicts: Record<string, Verdict> = { "901": "ALLOWED" };
+    const d = deps({ decideCampaign: campaignDecider(verdicts, { fictional: false }) });
+    const v = await goals.runGoal(A, "tottenham", d);
+    const checked = await goals.checkGoalRights(at(v), d);
+    const submitted = await goals.submitForReview(at(checked), d);
+    await recordReview(submitted.receiptId!, { status: "APPROVED", reviewer: "Ana" }, () => {});
+    const approved = (await goals.getGoal(v.run.id, d))!;
+    expect(approved.publishable).toBe(true);
+
+    verdicts["901"] = "BLOCKED";
+    const rechecked = await goals.checkGoalRights(at(approved), d);
+    expect(rechecked).toMatchObject({ rights: { state: "BLOCKED" }, reviewStatus: "NOT_SUBMITTED", receiptId: undefined, publishable: false, canSubmit: false });
+
+    verdicts["901"] = "ALLOWED";
+    const again = await goals.checkGoalRights(at(rechecked), d);
+    expect(again).toMatchObject({ reviewStatus: "NOT_SUBMITTED", canSubmit: true, publishable: false });
   });
 
   it("a new version after submission needs a new check and submission", async () => {
     const d = deps({ decideCampaign: campaignDecider({ "901": "ALLOWED", "902": "ALLOWED" }) });
     const v = await goals.runGoal(A, "tottenham", d);
-    await goals.checkGoalRights(v.run.id, d);
-    await goals.submitForReview(v.run.id, d);
-    const other = v.recommendations[1].key;
-    const switched = await goals.selectMoment(v.run.id, other, d);
+    const checked = await goals.checkGoalRights(at(v), d);
+    const submitted = await goals.submitForReview(at(checked), d);
+    const switched = await goals.selectMoment(at(submitted), v.recommendations[1].key, d);
     expect(switched).toMatchObject({ reviewStatus: "NOT_SUBMITTED", canSubmit: false, rights: { state: "NOT_CHECKED" }, campaign: { version: 2, origin: "SELECTED" } });
-    await expect(goals.submitForReview(v.run.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(goals.submitForReview(at(switched), d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

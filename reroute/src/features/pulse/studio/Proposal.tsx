@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { clock } from "../moment-ranking";
 import type { GoalView } from "../types";
 import { displayTitle } from "./MomentCard";
-import { MomentPreview } from "./MomentPreview";
+import { MomentPreview, recommendationSource } from "./MomentPreview";
 import { CHANNEL_LABEL, Field, duration } from "./parts";
 
 type Campaign = NonNullable<GoalView["campaign"]>;
@@ -18,13 +18,23 @@ type Campaign = NonNullable<GoalView["campaign"]>;
 /** Step 4: the campaign proposal for the selected moment. Nothing here publishes or buys anything. */
 export function Proposal({ goal, campaign: c, busy, onSetDestination }: { goal: GoalView; campaign: Campaign; busy: boolean; onSetDestination: (url: string) => void }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <div className="space-y-4">
-        {goal.selected ? (
-          <MomentPreview key={goal.selected.key} rec={goal.selected} />
-        ) : (
-          <p className="rounded-lg border border-white/10 bg-zinc-900 p-4 text-xs text-zinc-400">This version uses a replacement moment found by “Find another way”.</p>
-        )}
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="min-w-0 space-y-4">
+        <MomentPreview
+          key={c.key}
+          source={
+            goal.selected
+              ? recommendationSource(goal.selected)
+              : {
+                  title: c.media.title,
+                  scoreplayAssetId: c.media.scoreplayAssetId,
+                  thumbnailUrl: c.media.thumbnailUrl,
+                  start: c.media.startSeconds,
+                  end: c.media.endSeconds,
+                  note: "No playable stream is available for this moment.",
+                }
+          }
+        />
         <div className="rounded-xl border border-white/10 bg-zinc-950/60 p-4 text-xs">
           <h3 className="text-sm font-semibold text-zinc-50">{displayTitle(c.media.title)}</h3>
           <p className="font-mono text-[11px] text-zinc-500">
@@ -40,8 +50,8 @@ export function Proposal({ goal, campaign: c, busy, onSetDestination }: { goal: 
         <Metrics goal={goal} />
       </div>
 
-      <div className="space-y-4">
-        <div className="grid gap-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4 text-xs sm:grid-cols-2">
+      <div className="min-w-0 space-y-4">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4 text-xs sm:grid-cols-2">
           <Field label="Creative angle">{c.creative.angle}</Field>
           <Field label={`Hook · ${c.creative.hookLanguage.toUpperCase()}`}>“{c.creative.hook}”</Field>
           <Field label="Audience">

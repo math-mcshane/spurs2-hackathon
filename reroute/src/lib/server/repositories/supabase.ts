@@ -23,22 +23,30 @@ import type {
   WritebackAttempt,
 } from "./types";
 
+import type { ReceiptRow } from "./types";
 /**
  * Supabase adapter (schema: supabase/migrations/*). Uses the privileged server client; every table is
  * RLS-protected with no anon/authenticated grants, so nothing here is reachable from the browser.
  */
 
+/** Postgres codes meaning "the caller sent something the schema refuses" (unique, FK, check, bad uuid). */
+const REJECTED: Record<string, string> = {
+  "23505": "already exists",
+  "23503": "refers to a record that does not exist",
+  "23514": "violates a data rule",
+  "22P02": "has a malformed id",
+};
+
+/** Raw Supabase/Postgres text stays in the server log; clients get the operation, a code and a generic reason. */
 function fail(op: string, error: PostgrestError): never {
+  console.error(`[reroute] Supabase ${op} failed`, { code: error.code, message: error.message, details: error.details, hint: error.hint });
   // 42P01 / PGRST205 / PGRST202: table or function missing → migrations not applied.
-  const missing = error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST202";
-  if (missing) {
+  if (error.code === "42P01" || error.code === "PGRST205" || error.code === "PGRST202") {
     throw new AppError("NOT_CONFIGURED", `Supabase schema missing (${op}): apply supabase/migrations (supabase db push / db reset)`);
   }
-  // 23505 unique / 23503 foreign key / 23514 check / 22P02 bad uuid: the caller sent something invalid.
-  if (error.code === "23505" || error.code === "23503" || error.code === "23514" || error.code === "22P02") {
-    throw new AppError("BAD_REQUEST", `Supabase ${op} rejected: ${error.message}`);
-  }
-  throw new AppError("UPSTREAM", `Supabase ${op} failed: ${error.message}`);
+  const rejected = REJECTED[error.code];
+  if (rejected) throw new AppError("BAD_REQUEST", `Supabase ${op} rejected: request ${rejected} (${error.code})`);
+  throw new AppError("UPSTREAM", `Supabase ${op} failed (${error.code || "no code"})`);
 }
 
 const iso = (v: string) => new Date(v).toISOString();
@@ -164,6 +172,11 @@ function receiptRow(receipt: RightsReceipt) {
     campaign_id: receipt.campaignId ?? null,
     media: receipt.media,
   };
+}
+
+function toReceiptRow(row: { receipt: unknown; campaign_version: unknown }): ReceiptRow {
+  const campaignVersion = z.number().int().nullable().parse(row.campaign_version);
+  return { receipt: RightsReceiptSchema.parse(row.receipt), campaignVersion: opt(campaignVersion) };
 }
 
 /** `db` is resolved per call so a missing env surfaces as NOT_CONFIGURED on use, not at import. */
@@ -446,15 +459,21 @@ export function supabaseRepositories(db: () => SupabaseClient): Repositories {
     },
 
     receipts: {
-      async insert(receipt) {
-        const { error } = await db().from("reroute_receipts").insert({ id: receipt.id, ...receiptRow(receipt) });
+      async insert(receipt, campaignVersion) {
+        const { error } = await db()
+          .from("reroute_receipts")
+          .insert({ id: receipt.id, ...receiptRow(receipt), campaign_version: campaignVersion ?? null });
         if (error) fail("create receipt", error);
       },
       async load(id) {
-        const { data, error } = await db().from("reroute_receipts").select("receipt, version").eq("id", id).maybeSingle();
+        const { data, error } = await db()
+          .from("reroute_receipts")
+          .select("receipt, version, campaign_version")
+          .eq("id", id)
+          .maybeSingle();
         if (error) fail("read receipt", error);
         if (!data) throw new AppError("NOT_FOUND", `Receipt ${id} not found`);
-        return { receipt: RightsReceiptSchema.parse(data.receipt), version: data.version as number };
+        return { ...toReceiptRow(data), version: data.version as number };
       },
       async compareAndSet(id, version, next) {
         const { data, error } = await db()
@@ -470,24 +489,24 @@ export function supabaseRepositories(db: () => SupabaseClient): Repositories {
         assertUuid(campaignId, "campaignId");
         const { data, error } = await db()
           .from("reroute_receipts")
-          .select("receipt")
+          .select("receipt, campaign_version")
           .eq("campaign_id", campaignId)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
         if (error) fail("read campaign receipt", error);
-        return data ? RightsReceiptSchema.parse(data.receipt) : null;
+        return data ? toReceiptRow(data) : null;
       },
       async findForEdit(editId, policyVersion) {
         const { data, error } = await db()
           .from("reroute_receipts")
-          .select("receipt")
+          .select("receipt, campaign_version")
           .eq("receipt->edit->>id", editId)
           .eq("receipt->decision->>policyVersion", policyVersion)
           .order("created_at", { ascending: false })
           .limit(50);
         if (error) fail("find receipts for edit", error);
-        return data.map((r) => RightsReceiptSchema.parse(r.receipt));
+        return data.map(toReceiptRow);
       },
       async addReview(receiptId, review: ReviewRecord) {
         const { error } = await db()

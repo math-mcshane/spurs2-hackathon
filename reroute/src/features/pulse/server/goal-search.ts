@@ -1,22 +1,20 @@
 import { CLUBS } from "../clubs";
-import { isVideoPreviewEnabled } from "../flags";
 import { goalIntents } from "../goal-intents";
-import { latestSeason, rankMoments, withPreview, type LinkedVideo } from "../moment-ranking";
-import type { Club, GoalRun, MatchFilter, ParsedObjective, Preview } from "../types";
+import { latestSeason, rankMoments, type LinkedVideo } from "../moment-ranking";
+import type { Club, GoalRun, MatchFilter, ParsedObjective } from "../types";
 import { candidateMapping, defaultMediaDeps, linkDiscovered, mappingAttempt, openIndex, stageIssue, type MediaDeps } from "./media-lookup";
 import { ScorePlayDiscoveryError, discoverVideos, type DiscoveredVideo, type Discovery } from "./scoreplay-discovery";
-import { classifyTwelveLabsError, searchMoments, videoStream } from "./twelvelabs-moments";
+import { classifyTwelveLabsError, searchMoments } from "./twelvelabs-moments";
 
 /** Moments per question: one page; enough for agreement between questions to show. */
 const MOMENTS_PER_INTENT = 12;
-/** Distinct videos whose stream is looked up (top recommendations + alternatives). */
-const PREVIEW_VIDEOS = 15;
 
-export type GoalSearchDeps = MediaDeps & { previews: boolean };
+/** Preview stream URLs are not part of a goal search (they are resolved at view time via `previewFor` in lib/media). */
+export type GoalSearchDeps = MediaDeps;
 
 /** The club's index: `PULSE_TWELVELABS_INDEX_ID_<CLUB>` when configured, else the shared `TWELVELABS_INDEX_ID`. */
 export function defaultGoalDeps(club: Club): GoalSearchDeps {
-  return { ...defaultMediaDeps(club), previews: isVideoPreviewEnabled() };
+  return defaultMediaDeps(club);
 }
 
 export type GoalSearch = Pick<GoalRun, "intents" | "library" | "search" | "attempts" | "pool" | "matchFilter">;
@@ -142,29 +140,7 @@ export async function searchGoal(
       return { intents, library: indexed, attempts, pool: [], matchFilter, search: { status: "UNAVAILABLE", code, message: "Video intelligence is unavailable right now, so no moment can be proposed." } };
     }
 
-    const ranked = rankMoments(results, byVideo, { objective: input.objective, match: input.match, latestSeason: library.latestSeason });
-    const previews = new Map<string, Preview>();
-    if (deps.previews) {
-      const wanted = [...new Set(ranked.flatMap((r) => r.candidate.twelveLabsVideoId ?? []))].slice(0, PREVIEW_VIDEOS);
-      await Promise.all(
-        wanted.map(async (videoId) => {
-          const proxy = byVideo.get(videoId)?.asset.previewUrl;
-          if (proxy?.startsWith("https://")) {
-            previews.set(videoId, { source: "SCOREPLAY_PROXY", url: proxy, hls: /\.m3u8(\?|$)/.test(proxy) });
-            return;
-          }
-          const hls = await videoStream(sdk, indexId, videoId);
-          if (hls) previews.set(videoId, { source: "TWELVELABS_STREAM", url: hls, hls: true });
-        }),
-      );
-    }
-    const unavailable = deps.previews
-      ? "Neither ScorePlay nor TwelveLabs returned a browser-playable stream for this video."
-      : "In-app video preview is switched off (PULSE_VIDEO_PREVIEW=off).";
-    const pool = ranked.map((r) => {
-      const videoId = r.candidate.twelveLabsVideoId;
-      return withPreview(r, videoId ? previews.get(videoId) : undefined, unavailable);
-    });
+    const pool = rankMoments(results, byVideo, { objective: input.objective, match: input.match, latestSeason: library.latestSeason });
     const moments = results.reduce((n, r) => n + r.moments.length, 0);
     return {
       intents,

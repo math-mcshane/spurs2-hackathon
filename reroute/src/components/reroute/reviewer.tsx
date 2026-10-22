@@ -5,6 +5,7 @@ import { Loader2Icon, LogInIcon, LogOutIcon, UserCheckIcon } from "lucide-react"
 import { z } from "zod";
 import { ApiErrorSchema, WritebackResponseSchema } from "@/lib/contracts";
 import { ApiClientError, ReceiptViewSchema } from "@/lib/api-client";
+import { WritebackPreviewSchema } from "@/lib/scoreplay/writeback";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,8 @@ export const reviewApi = {
   receipt: (id: string) => call(AuditedReceiptSchema, receiptPath(id)),
   review: (id: string, status: "APPROVED" | "REJECTED") => call(ReceiptViewSchema, `${receiptPath(id)}/review`, "POST", { status }),
   writeback: (receiptId: string) => call(WritebackViewSchema, "/api/writeback", "POST", { receiptId }),
+  /** What POST would do right now (mode, planned calls, target media) — no side effects. */
+  writebackPreview: (receiptId: string) => call(WritebackPreviewSchema, `/api/writeback?${new URLSearchParams({ receiptId })}`),
 };
 
 /** Current reviewer session; `refresh` after sign-in/out. `null` while loading. */

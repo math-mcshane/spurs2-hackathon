@@ -43,9 +43,12 @@ export async function casUpdate<T>(
     const next = mutate(draft) ?? draft;
     if (await write(next, current.version)) return { value: next, version: current.version + 1 };
   }
-  throw expectedVersion === undefined
-    ? new AppError("UPSTREAM", `${label} is being modified concurrently; retry`)
-    : new AppError("BAD_REQUEST", `${label} changed since version ${expectedVersion}; reload and try again`);
+  throw new AppError(
+    "CONFLICT",
+    expectedVersion === undefined
+      ? `${label} is being modified concurrently; retry`
+      : `${label} changed since version ${expectedVersion}; reload and try again`,
+  );
 }
 
 export type ParsedEvaluation = {

@@ -12,6 +12,8 @@ import { AppError } from "@/lib/errors";
 export const SESSION_COOKIE = "reroute_reviewer";
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
 const MIN_SECRET_LENGTH = 32;
+/** A shared passcode is the only factor, so production refuses short ones (dev/test may use anything). */
+const MIN_PRODUCTION_PASSCODE_LENGTH = 12;
 /** Tolerated clock skew for `iat` between instances. */
 const CLOCK_SKEW_SECONDS = 60;
 
@@ -27,11 +29,12 @@ export type ReviewerSession = z.infer<typeof SessionSchema>;
 
 type AuthConfig = { passcode: string; secret: string };
 
-/** null = reviewer sign-in disabled (env missing or secret too short). */
+/** null = reviewer sign-in disabled (env missing, secret too short, or a short passcode in production). */
 export function authConfig(): AuthConfig | null {
   const passcode = process.env.REROUTE_REVIEWER_PASSCODE ?? "";
   const secret = process.env.REROUTE_SESSION_SECRET ?? "";
   if (!passcode || secret.length < MIN_SECRET_LENGTH) return null;
+  if (process.env.NODE_ENV === "production" && passcode.length < MIN_PRODUCTION_PASSCODE_LENGTH) return null;
   return { passcode, secret };
 }
 
@@ -40,7 +43,7 @@ function requireConfig(): AuthConfig {
   if (!config) {
     throw new AppError(
       "NOT_CONFIGURED",
-      `Reviewer sign-in is disabled: set REROUTE_REVIEWER_PASSCODE and REROUTE_SESSION_SECRET (≥ ${MIN_SECRET_LENGTH} chars)`,
+      `Reviewer sign-in is disabled: set REROUTE_REVIEWER_PASSCODE (≥ ${MIN_PRODUCTION_PASSCODE_LENGTH} chars in production) and REROUTE_SESSION_SECRET (≥ ${MIN_SECRET_LENGTH} chars)`,
     );
   }
   return config;
@@ -131,6 +134,75 @@ export function signIn(passcode: string, name: string, now: Date = new Date()): 
   const iat = Math.floor(now.getTime() / 1000);
   const session: ReviewerSession = { reviewer: reviewer.data, iat, exp: iat + SESSION_TTL_SECONDS };
   return { session, cookie: cookie(signSession(session, config.secret), SESSION_TTL_SECONDS) };
+}
+
+// ---------- Sign-in throttling ----------
+//
+// Defence in depth only: this limiter is per server instance and in memory, so on Vercel (many instances,
+// cold starts) the real control is a Vercel Firewall rate-limit rule on POST /api/auth/session.
+
+export const SIGN_IN_FAILURE_DELAY_MS = 750;
+export const SIGN_IN_MAX_FAILURES = 10;
+export const SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
+/** Bound on tracked client addresses, so a spray of addresses cannot grow memory without limit. */
+const SIGN_IN_MAX_TRACKED = 10_000;
+
+/** Failure timestamps per client address within the current window. */
+const signInFailures = new Map<string, number[]>();
+
+/** Client address as set by the platform proxy (Vercel sets both headers); local requests share "unknown". */
+export function clientAddress(req: Request): string {
+  return req.headers.get("x-real-ip")?.trim() || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+}
+
+function recentFailures(address: string, now: number): number[] {
+  const recent = (signInFailures.get(address) ?? []).filter((t) => now - t < SIGN_IN_WINDOW_MS);
+  if (recent.length) signInFailures.set(address, recent);
+  else signInFailures.delete(address);
+  return recent;
+}
+
+function recordSignInFailure(address: string, now: number): void {
+  if (!signInFailures.has(address) && signInFailures.size >= SIGN_IN_MAX_TRACKED) {
+    for (const key of signInFailures.keys()) recentFailures(key, now);
+    // Still full: forget the oldest-tracked address (Map iterates in insertion order).
+    if (signInFailures.size >= SIGN_IN_MAX_TRACKED) signInFailures.delete(signInFailures.keys().next().value!);
+  }
+  signInFailures.set(address, [...recentFailures(address, now), now]);
+}
+
+export function resetSignInThrottleForTests(): void {
+  signInFailures.clear();
+}
+
+/**
+ * `signIn` behind the throttle: while an address has SIGN_IN_MAX_FAILURES failures in the window every
+ * attempt (even a correct passcode) gets RATE_LIMITED; each wrong passcode is answered after a fixed delay.
+ */
+export async function attemptSignIn(
+  req: Request,
+  passcode: string,
+  name: string,
+): Promise<{ session: ReviewerSession; cookie: SessionCookie }> {
+  const address = clientAddress(req);
+  const recent = recentFailures(address, Date.now());
+  if (recent.length >= SIGN_IN_MAX_FAILURES) {
+    const retryAfter = Math.max(1, Math.ceil((recent[0] + SIGN_IN_WINDOW_MS - Date.now()) / 1000));
+    throw new AppError("RATE_LIMITED", "Too many failed sign-in attempts; try again later", {
+      headers: { "Retry-After": String(retryAfter) },
+    });
+  }
+  try {
+    return signIn(passcode, name);
+  } catch (err) {
+    if (err instanceof AppError && err.code === "FORBIDDEN") {
+      recordSignInFailure(address, Date.now());
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, SIGN_IN_FAILURE_DELAY_MS);
+      await promise;
+    }
+    throw err;
+  }
 }
 
 export function signOutCookie(): SessionCookie {

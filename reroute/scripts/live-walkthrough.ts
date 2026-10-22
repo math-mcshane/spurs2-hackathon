@@ -65,35 +65,41 @@ async function scenario(s: (typeof SCENARIOS)[number]) {
   out(`proposal: campaign ${v.campaign.campaignId} v${v.campaign.version} · ${v.campaign.intents.length} uses · CTA ${v.campaign.cta.status} · time to proposal ${v.timing.toProposalSec}s (results ${v.timing.toRecommendationsSec}s)`);
   out(`  hook: ${v.campaign.creative.hook} · KPI: ${v.kpi.label} (value ${v.kpi.value})`);
 
-  v = await goals.checkGoalRights(v.run.id);
+  const at = (g: GoalView) => ({ id: g.run.id, expectedVersion: g.version });
+  v = await goals.checkGoalRights(at(v));
   out(`rights: ${rights(v)}`);
   for (const i of topIssues(v)) out(`  - ${i}`);
 
   // Walk the other recommendations until REROUTE identifies a restriction (or none does).
   for (const rec of v.recommendations.slice(1)) {
     if (v.rights.state !== "ALLOWED") break;
-    v = await goals.selectMoment(v.run.id, rec.key);
-    v = await goals.checkGoalRights(v.run.id);
+    v = await goals.selectMoment(at(v), rec.key);
+    v = await goals.checkGoalRights(at(v));
     out(`select ${rec.key} → v${v.campaign!.version}: ${rights(v)}`);
     for (const i of topIssues(v)) out(`  - ${i}`);
   }
 
   if (v.rights.state !== "ALLOWED") {
-    v = await goals.findAlternatives(v.run.id);
+    v = await goals.findAlternatives(at(v));
     const b = v.blocker;
     out(`blocker: ${b ? `${b.scope} [${b.dimensions.join(",")}] ${b.explanation}${b.suggestion ? ` → ${b.suggestion}` : ""}` : "-"}`);
     const alts = v.alternatives?.candidates ?? [];
     out(`alternatives (query “${v.alternatives?.query ?? "-"}”): ${alts.length}`);
-    for (const a of alts) out(`  ${a.key} · ${a.verdict} · clearance ${a.clearance}${a.eligible ? " · eligible" : ""}`);
+    for (const a of alts) out(`  ${a.key} · “${a.title}” · ${a.verdict} · clearance ${a.clearance}${a.eligible ? " · eligible" : ""}`);
     const pick = alts.find((a) => a.eligible) ?? alts.find((a) => a.verdict !== "BLOCKED");
-    if (pick && b?.scope !== "CAMPAIGN") {
-      v = await goals.useAlternative(v.run.id, pick.key);
+    if (pick) {
+      v = await goals.useAlternative(at(v), pick.key);
       out(`alternative ${pick.key} → new version v${v.campaign!.version}, independent re-check: ${rights(v)}`);
+    } else if (v.remedy) {
+      out(`remedy: ${v.remedy.label}`);
+      v = await goals.applyRemedy(at(v));
+      v = await goals.checkGoalRights(at(v));
+      out(`remedy applied → v${v.campaign!.version} (${v.campaign!.intents.length} uses), re-check: ${rights(v)}`);
     }
   }
 
   if (v.canSubmit) {
-    v = await goals.submitForReview(v.run.id);
+    v = await goals.submitForReview(at(v));
     out(`review: receipt ${v.receiptId} · ${v.reviewStatus} · publishable ${v.publishable} · ${v.publishNote}`);
     const receipt = await getReceipt(v.receiptId!);
     const mode = writebackMode(receipt);

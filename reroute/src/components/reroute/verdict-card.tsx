@@ -6,7 +6,7 @@ import type { AccessResponseSchema } from "@/lib/contracts";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ErrorState, FictionalTag, OriginBadge, VERDICT_STYLE, evidenceOrigin, tcRange } from "./shared";
+import { ErrorState, FictionalTag, OriginBadge, VERDICT_STYLE, evidenceOrigin, tcRange, utc } from "./shared";
 
 export type AccessResult = z.infer<typeof AccessResponseSchema>;
 export type AccessState =
@@ -120,7 +120,7 @@ export function VerdictCard({
           policy <span className="text-zinc-200">{d.policyId}</span> · v{d.policyVersion} · clearance {d.clearance}
         </span>
         {d.policyFictional && <FictionalTag />}
-        <span className="text-zinc-500">evaluated {new Date(d.evaluatedAt).toLocaleTimeString()}</span>
+        <span className="text-zinc-500">evaluated {utc(d.evaluatedAt)}</span>
       </div>
       {d.policySelection && (
         <details className="text-[10px] text-zinc-500">

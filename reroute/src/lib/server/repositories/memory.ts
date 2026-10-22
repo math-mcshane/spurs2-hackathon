@@ -33,7 +33,7 @@ export function memoryRepositories(): Repositories {
   const events: AuditEvent[] = [];
   const writebacks: WritebackAttempt[] = [];
   const observationCache = new Map<string, unknown>();
-  const receipts = new Map<string, { receipt: RightsReceipt; version: number; createdAt: number }>();
+  const receipts = new Map<string, { receipt: RightsReceipt; campaignVersion?: number; version: number; createdAt: number }>();
   let receiptSeq = 0;
   const reviews: (ReviewRecord & { receiptId: string })[] = [];
   const observations: Evidence[] = [];
@@ -117,6 +117,10 @@ export function memoryRepositories(): Repositories {
         }
         c.currentVersion += 1;
         c.updatedAt = at;
+        // A new version is unreviewed: status, review and receipt never carry over (same as the SQL function).
+        c.status = "DRAFT";
+        c.reviewStatus = undefined;
+        c.receiptId = undefined;
         c.versions.push({ version: c.currentVersion, draft: clone(draft), actor, createdAt: at });
         return c.currentVersion;
       },
@@ -230,15 +234,22 @@ export function memoryRepositories(): Repositories {
     },
 
     receipts: {
-      async insert(receipt) {
+      async insert(receipt, campaignVersion) {
         if (receipts.has(receipt.id)) throw new AppError("BAD_REQUEST", `Receipt ${receipt.id} already exists`);
-        if (receipt.campaignId !== undefined) campaignOf(receipt.campaignId);
-        receipts.set(receipt.id, { receipt: RightsReceiptSchema.parse(clone(receipt)), version: 1, createdAt: receiptSeq++ });
+        if (receipt.campaignId !== undefined) {
+          if (campaignVersion === undefined) throw new AppError("BAD_REQUEST", "A campaign receipt needs its campaign version");
+          if (!campaignOf(receipt.campaignId).versions.some((v) => v.version === campaignVersion)) {
+            throw new AppError("BAD_REQUEST", `Campaign ${receipt.campaignId} has no version ${campaignVersion}`);
+          }
+        } else if (campaignVersion !== undefined) {
+          throw new AppError("BAD_REQUEST", "campaignVersion without campaignId");
+        }
+        receipts.set(receipt.id, { receipt: RightsReceiptSchema.parse(clone(receipt)), campaignVersion, version: 1, createdAt: receiptSeq++ });
       },
       async load(id) {
         const stored = receipts.get(id);
         if (!stored) throw new AppError("NOT_FOUND", `Receipt ${id} not found`);
-        return { receipt: clone(stored.receipt), version: stored.version };
+        return { receipt: clone(stored.receipt), campaignVersion: stored.campaignVersion, version: stored.version };
       },
       async compareAndSet(id, version, next) {
         const stored = receipts.get(id);
@@ -250,13 +261,13 @@ export function memoryRepositories(): Repositories {
         const newest = [...receipts.values()]
           .filter((r) => r.receipt.campaignId === campaignId)
           .sort((a, b) => b.createdAt - a.createdAt)[0];
-        return newest ? clone(newest.receipt) : null;
+        return newest ? { receipt: clone(newest.receipt), campaignVersion: newest.campaignVersion } : null;
       },
       async findForEdit(editId, policyVersion) {
         return [...receipts.values()]
           .filter((r) => r.receipt.edit.id === editId && r.receipt.decision.policyVersion === policyVersion)
           .sort((a, b) => b.createdAt - a.createdAt)
-          .map((r) => clone(r.receipt));
+          .map((r) => ({ receipt: clone(r.receipt), campaignVersion: r.campaignVersion }));
       },
       async addReview(receiptId, review) {
         receiptExists(receiptId);

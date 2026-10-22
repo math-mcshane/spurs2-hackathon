@@ -1,24 +1,40 @@
 import type { z } from "zod";
-import type { Asset, Candidate, EditPlan, PublishIntent, ResolveResponseSchema, SearchHit, Segment } from "@/lib/contracts";
+import type { Asset, Candidate, EditDecision, EditPlan, PublishIntent, ResolveResponseSchema, SearchHit, Segment } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
-import { classifyBlocker } from "@/lib/rights";
-import { loadDecisionContext } from "./context";
-import { evaluateEditInContext, type DecideOptions } from "./decide";
+import { classifyBlocker, type Remedy } from "@/lib/rights";
+import { loadDecisionContext, type DecisionContext } from "./context";
+import { combineDecisions, evaluateEditInContext, type DecideOptions } from "./decide";
 
 export interface ResolveInput {
   edit: EditPlan;
   intent: PublishIntent;
+  /** Every use of the campaign (default `[intent]`): the blocker aggregates them and candidates must pass all. */
+  intents?: PublishIntent[];
   segmentIndex: number;
   query?: string;
   limit: number;
 }
 
-export type ResolveResult = z.infer<typeof ResolveResponseSchema>;
+/** Contract response + `remedy`: the licensed subset of the requested uses (CAMPAIGN blockers only). */
+export type ResolveResult = z.infer<typeof ResolveResponseSchema> & { remedy?: Remedy };
 
 /** Marengo hits fetched per requested candidate: headroom for hits dropped by exclusion/duplicates/fit. */
 const OVERFETCH = 4;
+/** Each hit may trigger a ScorePlay load + video analysis: hard cap per resolve. */
+const MAX_HITS = 12;
 /** Renditions of the same clip differ by a few frames at most. */
 const DUPLICATE_DURATION_SEC = 0.5;
+
+/** One edit under every intent, combined segment by segment (worst verdict, weakest clearance). */
+function evaluateForIntents(ctx: DecisionContext, edit: EditPlan, intents: readonly PublishIntent[], opts: Pick<DecideOptions, "policies"> & { now: Date }): EditDecision {
+  const results = intents.map((intent) => evaluateEditInContext(ctx, edit, intent, opts));
+  if (results.length === 1) return results[0];
+  return {
+    edit,
+    decision: combineDecisions(results.map((r) => r.decision), opts.now),
+    segments: edit.segments.map((segment, i) => ({ segment, decision: combineDecisions(results.map((r) => r.segments[i].decision), opts.now) })),
+  };
+}
 
 /**
  * Fit a hit to `duration` seconds around its midpoint (minimal change to the matched moment),
@@ -61,25 +77,27 @@ function probableDuplicate(a: Asset, b: Asset): boolean {
  * Works for BLOCKED and NEEDS_REVIEW segments. The original asset and its probable duplicates are excluded.
  */
 export async function resolve(input: ResolveInput, opts: DecideOptions = {}): Promise<ResolveResult> {
-  const { edit, intent, segmentIndex, limit } = input;
+  const { edit, segmentIndex, limit } = input;
+  const intents = input.intents?.length ? input.intents : [input.intent];
   const target = edit.segments[segmentIndex];
   if (!target) {
     throw new AppError("BAD_REQUEST", `segmentIndex ${segmentIndex} out of range (edit has ${edit.segments.length})`);
   }
   const now = opts.now ?? new Date();
-  const ctx = await loadDecisionContext(edit, { deps: opts.deps, club: intent.club });
+  const evalOpts = { now, policies: opts.policies };
+  const ctx = await loadDecisionContext(edit, { deps: opts.deps, club: intents.find((i) => i.club)?.club });
   const original = ctx.assets[target.scoreplayMediaId];
   const query = input.query?.trim() || target.label?.trim() || original.title.trim();
 
-  const current = evaluateEditInContext(ctx, edit, intent, { now, policies: opts.policies });
-  const blocker = classifyBlocker(current.segments[segmentIndex].decision, intent, opts.policies);
-  if (blocker.scope !== "CLIP") return { query, blocker, candidates: [] };
+  const current = intents.map((intent) => ({ intent, decision: evaluateEditInContext(ctx, edit, intent, evalOpts).segments[segmentIndex].decision }));
+  const { blocker, remedy } = classifyBlocker(current, opts.policies);
+  if (blocker.scope !== "CLIP") return { query, blocker, candidates: [], ...(remedy ? { remedy } : {}) };
 
   const video = ctx.video();
   if ("status" in video) throw new AppError("NOT_CONFIGURED", `Marengo search unavailable: ${video.detail}`);
 
   const duration = target.end - target.start;
-  const hits = await video.search(query, { limit: Math.min(limit * OVERFETCH, 50), excludeMediaIds: [original.id] });
+  const hits = await video.search(query, { limit: Math.min(limit * OVERFETCH, MAX_HITS), excludeMediaIds: [original.id] });
 
   // Hits whose ScorePlay asset no longer exists can't be checked → dropped.
   const gone = new Set<string>();
@@ -112,8 +130,8 @@ export async function resolve(input: ResolveInput, opts: DecideOptions = {}): Pr
       derivedFrom: edit.id,
     };
     const alone: EditPlan = { id: `${proposedEdit.id}~alone`, title: asset.title, segments: [segment], derived: true, derivedFrom: edit.id };
-    const segmentDecision = evaluateEditInContext(ctx, alone, intent, { now, policies: opts.policies }).segments[0].decision;
-    const editDecision = evaluateEditInContext(ctx, proposedEdit, intent, { now, policies: opts.policies });
+    const segmentDecision = evaluateForIntents(ctx, alone, intents, evalOpts).segments[0].decision;
+    const editDecision = evaluateForIntents(ctx, proposedEdit, intents, evalOpts);
     candidates.push({ hit, proposedEdit, segmentDecision, editDecision, eligible: editDecision.decision.verdict === "ALLOWED" });
   }
 

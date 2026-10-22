@@ -53,7 +53,7 @@ const SQUAD = { "Dominic Solanke-Mitchell": ["Tottenham Hotspur FC"], "Micky van
 const playerClip = thfc("goal", { people: ["Dominic Solanke-Mitchell", "Micky van de Ven"], peopleTeams: SQUAD });
 const highlights = thfc("hl", { people: ["Dominic Solanke-Mitchell"], peopleTeams: SQUAD }, ["Highlights"]);
 const fullMatch = thfc("full", {}, ["Full Match"]);
-const crowd = thfc("crowd");
+const crowd = thfc("crowd", { people: [] }); // ScorePlay positively lists no player
 
 const ev = (id: string, label: string, extra: Partial<Evidence> = {}): Evidence => ({
   scoreplayMediaId: id,
@@ -98,6 +98,8 @@ function decide(asset: Asset, intent: PublishIntent, opts: { observations?: Evid
   for (const r of result.decision.reasons) expect(r.basis, `${r.ruleId} has a basis`).toBeDefined();
   return DecisionSchema.parse(result.segments[0].decision);
 }
+
+const blockerOf = (d: Decision, intent: PublishIntent) => classifyBlocker([{ intent, decision: d }]).blocker;
 
 const open = (d: Decision) => d.reasons.filter((r) => r.outcome !== "PERMIT");
 
@@ -145,7 +147,7 @@ describe("policy selection", () => {
     const d = decide(playerClip, { ...base, club: undefined });
     expect(d.verdict).toBe("NEEDS_REVIEW");
     expect(d.reasons[0]).toMatchObject({ basis: "POLICY_SELECTION", dimension: "policy" });
-    expect(classifyBlocker(d, { ...base, club: undefined }).scope).toBe("CAMPAIGN");
+    expect(blockerOf(d, { ...base, club: undefined }).scope).toBe("CAMPAIGN");
   });
 
   it("footage without the required provenance tag is not covered (CLIP blocker)", () => {
@@ -153,7 +155,7 @@ describe("policy selection", () => {
     const d = decide(foreign, base);
     expect(d.verdict).toBe("NEEDS_REVIEW");
     expect(d.reasons[0]).toMatchObject({ basis: "POLICY_SELECTION", dimension: "provenance" });
-    expect(classifyBlocker(d, base).scope).toBe("CLIP");
+    expect(blockerOf(d, base).scope).toBe("CLIP");
   });
 });
 
@@ -172,7 +174,7 @@ describe("Tottenham demo policy", () => {
     const deny = d.reasons.find((r) => r.outcome === "DENY")!;
     expect(deny).toMatchObject({ ruleId: "THFC-6-no-broadcast-footage-in-ads", dimension: "usage", basis: "LEGAL_ENTITLEMENT" });
     expect(deny.explanation).toMatch(/may not be used to sell merchandise/);
-    expect(classifyBlocker(d, commercial).scope).toBe("CLIP");
+    expect(blockerOf(d, commercial).scope).toBe("CLIP");
   });
 
   it("missing analysis is a TECHNICAL gap, not a missing licence", () => {
@@ -232,21 +234,57 @@ describe("Tottenham demo policy", () => {
     expect(decide(crowd, commercial, { observations: [rubric("crowd", "group")] }).verdict).toBe("NEEDS_REVIEW");
   });
 
+  it("an UNKNOWN ScorePlay people list is never 'no players', even when analysis finds none (CLIP)", () => {
+    const unknownPeople = thfc("unknown-people");
+    const d = decide(unknownPeople, commercial, { observations: [rubric("unknown-people", "no_players")] });
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(open(d)).toEqual([expect.objectContaining({ dimension: "people", basis: "LEGAL_ENTITLEMENT", ruleId: "fact:people" })]);
+    expect(blockerOf(d, commercial).scope).toBe("CLIP");
+  });
+
   it("unlicensed territory ⇒ NEEDS_REVIEW and a CAMPAIGN blocker with the licensed territories", () => {
     const intent = { ...base, territory: "IN" };
     const d = decide(playerClip, intent);
     expect(d.verdict).toBe("NEEDS_REVIEW");
     expect(open(d)).toEqual([expect.objectContaining({ dimension: "territory", basis: "LEGAL_ENTITLEMENT" })]);
-    const blocker = classifyBlocker(d, intent);
+    const blocker = blockerOf(d, intent);
     expect(blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
     expect(blocker.suggestion).toMatch(/GB, IE, US, CA, AU, NZ/);
+  });
+
+  it("CAMPAIGN blocker aggregates every unlicensed territory across the campaign's uses, with a remedy", () => {
+    const uses = ["GB", "FR", "ES", "US", "IN"].map((territory) => ({ ...base, territory }));
+    const { blocker, remedy } = classifyBlocker(uses.map((intent) => ({ intent, decision: decide(playerClip, intent) })));
+    expect(blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"], ruleIds: ["THFC-3-licensed-territories"] });
+    expect(blocker.explanation).toMatch(/Not licensed in FR, ES, IN\./);
+    expect(blocker.suggestion).toMatch(/Drop FR, ES, IN; licensed territories: GB, IE, US, CA, AU, NZ/);
+    expect(remedy).toEqual({ territories: ["GB", "US"] });
+  });
+
+  it("a near-miss caused by a missing ASSET fact is CLIP-scope, not CAMPAIGN", () => {
+    const spursIntent: PublishIntent = { territory: "FR", platform: "instagram", usage: "ORGANIC", competition: "NBA", club: "spurs", publishAt: base.publishAt };
+    const d = decide({ ...nba("nocomp", { competition: undefined }), tags: ["NBA"] }, spursIntent);
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(open(d).some((r) => r.dimension === "territory" && r.ruleId.startsWith("fact:competition:"))).toBe(true);
+    expect(blockerOf(d, spursIntent).scope).toBe("CLIP");
+  });
+
+  it("a publish date in the past ⇒ NEEDS_REVIEW (not BLOCKED), CAMPAIGN scope, asks for a current date", () => {
+    const stale = { ...base, publishAt: "2026-10-01T10:00:00Z" }; // now = 2026-10-22
+    const d = decide(playerClip, stale);
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(open(d)).toEqual([expect.objectContaining({ ruleId: "intent:publish-date-past", dimension: "expiry" })]);
+    expect(blockerOf(d, stale)).toMatchObject({ scope: "CAMPAIGN" });
+    expect(blockerOf(d, stale).suggestion).toMatch(/future/);
+    // Within the grace window it is still "now".
+    expect(decide(playerClip, { ...base, publishAt: "2026-10-22T11:58:00Z" }).verdict).toBe("ALLOWED");
   });
 
   it("full-match recordings are geo-restricted to the home market (CLIP blocker)", () => {
     const intent = { ...base, territory: "US" };
     const d = decide(fullMatch, intent);
     expect(d.verdict).toBe("BLOCKED");
-    expect(classifyBlocker(d, intent).scope).toBe("CLIP");
+    expect(blockerOf(d, intent).scope).toBe("CLIP");
     expect(decide(fullMatch, base).verdict).toBe("ALLOWED");
   });
 
@@ -255,8 +293,8 @@ describe("Tottenham demo policy", () => {
     const d = decide(playerClip, late);
     expect(d.verdict).toBe("BLOCKED");
     expect(d.reasons.find((r) => r.outcome === "DENY")).toMatchObject({ ruleId: "policy-term", dimension: "expiry" });
-    expect(classifyBlocker(d, late)).toMatchObject({ scope: "CAMPAIGN" });
-    expect(classifyBlocker(d, late).suggestion).toMatch(/2026-07-01 and 2027-06-30/);
+    expect(blockerOf(d, late)).toMatchObject({ scope: "CAMPAIGN" });
+    expect(blockerOf(d, late).suggestion).toMatch(/2026-07-01 and 2027-06-30/);
   });
 
   it("unknown is never ALLOWED: competition not recorded ⇒ NEEDS_REVIEW", () => {
@@ -293,6 +331,6 @@ describe("San Antonio Spurs demo policy", () => {
     const gb = { ...organic, territory: "GB" };
     const d = decide(nba("g"), gb);
     expect(d.verdict).toBe("BLOCKED");
-    expect(classifyBlocker(d, gb).scope).toBe("CAMPAIGN");
+    expect(blockerOf(d, gb).scope).toBe("CAMPAIGN");
   });
 });

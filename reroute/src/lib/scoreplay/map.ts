@@ -83,7 +83,12 @@ export function mapMediaToAsset(
     competition: competitions.length === 1 ? competitions[0] : undefined,
     team: teams.length === 1 ? teams[0] : undefined,
     teams: teams.length ? teams : undefined,
-    people: completeList(players, media.player_ids),
+    // [] = ScorePlay positively lists no player: the full tag list was loaded (GET /media/{id}; search returns
+    // `tags: []`), it holds no player tag — not even a hidden one — and no player id is listed. Else unknown/complete list.
+    people:
+      (media.tags?.length ?? 0) > 0 && !(media.tags ?? []).some((t) => positive(t.player_id)) && !media.player_ids?.length
+        ? []
+        : completeList(players, media.player_ids),
     peopleTeams: Object.keys(peopleTeams).length ? peopleTeams : undefined,
     sponsors: completeList(sponsors, media.sponsor_ids),
     recordedAt: unixToIso(media.date),

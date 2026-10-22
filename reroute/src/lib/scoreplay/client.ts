@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { z } from "zod";
-import { DEMO_CLEARANCE_LABEL, type Asset, type RightsReceipt, type ScorePlayClient } from "@/lib/contracts";
+import { DEMO_CLEARANCE_LABEL, canPublish, type Asset, type RightsReceipt, type ScorePlayClient } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { mapMediaToAsset, toSquad, type ScorePlaySquad } from "./map";
 import {
@@ -84,8 +84,14 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     return mapMediaToAsset(media, filters, squads);
   }
 
-  /** Uploads a rendered derivative as its OWN media (multipart, documented 3-step flow). */
+  /**
+   * Uploads a rendered derivative as its OWN media (multipart, documented 3-step flow).
+   * Requires `canPublish(receipt)` (verified clearance + human approval) AND SCOREPLAY_UPLOAD_APPROVED=true.
+   */
   async uploadDerivative(file: { path: string; title: string }, receipt: RightsReceipt): Promise<{ id: string }> {
+    if (!canPublish(receipt)) {
+      throw new AppError("FORBIDDEN", "Derivative upload requires verified clearance and human approval (canPublish)");
+    }
     if (process.env.SCOREPLAY_UPLOAD_APPROVED !== "true") {
       throw new AppError("NOT_CONFIGURED", "Derivative upload disabled: set SCOREPLAY_UPLOAD_APPROVED=true only after ScorePlay staff confirm permission");
     }

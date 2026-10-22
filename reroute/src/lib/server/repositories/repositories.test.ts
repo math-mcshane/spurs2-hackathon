@@ -88,7 +88,7 @@ function contract(name: string, make: () => Repositories, restart: () => Reposit
       expect(await repos.goalRuns.getVersioned(run.id)).toMatchObject({ version: 2, run: { selectedKey: "101@3-9" } });
 
       // A stale client (expected v1) must not overwrite v2.
-      await expect(repos.goalRuns.update(run.id, (r) => void (r.selectedKey = "stale"), 1)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      await expect(repos.goalRuns.update(run.id, (r) => void (r.selectedKey = "stale"), 1)).rejects.toMatchObject({ code: "CONFLICT" });
       expect((await restart().goalRuns.get(run.id)).selectedKey).toBe("101@3-9");
       await expect(repos.goalRuns.update(run.id, (r) => void (r.selectedKey = "202@0-4"), 2)).resolves.toMatchObject({ selectedKey: "202@0-4" });
 
@@ -150,12 +150,33 @@ function contract(name: string, make: () => Repositories, restart: () => Reposit
       expect(await repos.campaigns.findByOpportunity(opportunityId)).toMatchObject({ id, draft: { n: 1 } });
     });
 
+    it("campaigns: a new version clears status, review and receipt; receipts pin their campaign version", async () => {
+      const repos = make();
+      const campaignId = randomUUID();
+      await repos.campaigns.saveVersion(campaignId, { hook: "v1" }, "pulse");
+      // A campaign receipt must name the campaign version it covers, and that version must exist.
+      await expect(repos.receipts.insert(receipt({ campaignId }))).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      await expect(repos.receipts.insert(receipt({ campaignId }), 7)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      const r = receipt({ campaignId, intents: [intent, { ...intent, platform: "tiktok" }] });
+      await repos.receipts.insert(r, 1);
+      await repos.campaigns.setState(campaignId, { receiptId: r.id, reviewStatus: "APPROVED", status: "APPROVED" });
+
+      expect(await repos.campaigns.saveVersion(campaignId, { hook: "v2" }, "ed")).toBe(2);
+      const after = restart();
+      const record = await after.campaigns.get(campaignId);
+      expect(record).toMatchObject({ currentVersion: 2, status: "DRAFT" });
+      expect(record.reviewStatus).toBeUndefined();
+      expect(record.receiptId).toBeUndefined();
+      const row = await after.receipts.load(r.id);
+      expect(row).toMatchObject({ campaignVersion: 1, receipt: { intents: [{ platform: "instagram" }, { platform: "tiktok" }] } });
+    });
+
     it("receipts link to campaigns; evaluations, alternatives, writeback attempts record the trail", async () => {
       const repos = make();
       const campaignId = randomUUID();
       await repos.campaigns.saveVersion(campaignId, { hook: "v1" }, "pulse");
       const r = receipt({ campaignId });
-      await repos.receipts.insert(r);
+      await repos.receipts.insert(r, 1);
       await repos.campaigns.setState(campaignId, { receiptId: r.id, reviewStatus: "PENDING", status: "SUBMITTED" });
 
       const original = await repos.evaluations.record({
@@ -185,8 +206,11 @@ function contract(name: string, make: () => Repositories, restart: () => Reposit
 
       const after = restart();
       expect(await after.campaigns.get(campaignId)).toMatchObject({ receiptId: r.id, reviewStatus: "PENDING", status: "SUBMITTED" });
-      expect(await after.receipts.latestForCampaign(campaignId)).toMatchObject({ id: r.id, campaignId, media: [{ scoreplayMediaId: "101" }] });
-      expect((await after.receipts.findForEdit(r.edit.id, "demo-1")).map((x) => x.id)).toEqual([r.id]);
+      expect(await after.receipts.latestForCampaign(campaignId)).toMatchObject({
+        campaignVersion: 1,
+        receipt: { id: r.id, campaignId, media: [{ scoreplayMediaId: "101" }] },
+      });
+      expect((await after.receipts.findForEdit(r.edit.id, "demo-1")).map((x) => x.receipt.id)).toEqual([r.id]);
       expect(await after.receipts.findForEdit(r.edit.id, "other-version")).toEqual([]);
       expect((await after.evaluations.listForCampaign(campaignId)).map((e) => e.kind)).toEqual(["ORIGINAL", "ALTERNATIVE"]);
       expect(await after.alternatives.listForEvaluation(original.id)).toEqual([alt]);

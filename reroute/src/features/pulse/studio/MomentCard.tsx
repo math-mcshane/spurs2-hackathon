@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { clock } from "../moment-ranking";
 import type { RecommendationView } from "../types";
-import { MomentPreview } from "./MomentPreview";
+import { MomentPreview, recommendationSource } from "./MomentPreview";
 import { RightsPill } from "./parts";
 
 /** Filename without extension, separators as spaces: what a social manager recognizes. */
@@ -38,7 +38,7 @@ export function MomentCard({
         selected ? "border-sky-400/70 ring-1 ring-sky-400/40" : "border-white/10 hover:border-white/20",
       )}
     >
-      <MomentPreview key={rec.key} rec={rec} className="rounded-none border-0 border-b border-white/10" />
+      <MomentPreview key={rec.key} source={recommendationSource(rec)} className="rounded-none border-0 border-b border-white/10" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

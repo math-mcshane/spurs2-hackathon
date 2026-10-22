@@ -13,6 +13,7 @@ export { DURATION_TOLERANCE_SEC, linkCatalogs, normalizeFilename } from "./link"
 export type { LinkedCatalogs, ScorePlayCatalogEntry, TwelveLabsCatalogEntry } from "./link";
 export { CATALOG_TTL_MS, CatalogMediaResolver } from "./resolver";
 export type { CatalogSource, MediaCatalog } from "./resolver";
+export { PREVIEW_TTL_MS, previewFor, type PreviewDeps } from "./preview";
 
 if (typeof window !== "undefined") throw new Error("lib/media is server-only");
 

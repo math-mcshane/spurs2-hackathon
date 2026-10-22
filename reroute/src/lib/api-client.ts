@@ -154,6 +154,8 @@ export function describeError(err: unknown): { title: string; detail: string; co
       BAD_REQUEST: "Invalid request",
       NOT_FOUND: "Not found",
       UPSTREAM: "Upstream service error",
+      CONFLICT: "Changed elsewhere",
+      RATE_LIMITED: "Too many requests",
       INTERNAL: "Server error",
       NETWORK: "Network error",
       BAD_RESPONSE: "Unexpected response",

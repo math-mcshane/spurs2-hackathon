@@ -62,6 +62,11 @@ describe("TwelveLabsVideoIntelligence.search", () => {
       { twelvelabsVideoId: "tl-foreign", method: "UNMAPPED" },
     ]);
   });
+
+  it("rejects queries over 500 characters before calling TwelveLabs", async () => {
+    await expect(client().search("x".repeat(501))).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(sdk.searchCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe("TwelveLabsVideoIntelligence.observations", () => {
@@ -71,6 +76,22 @@ describe("TwelveLabsVideoIntelligence.observations", () => {
     }
     expect(sdk.videoRetrieve).not.toHaveBeenCalled();
     expect(sdk.analyze).not.toHaveBeenCalled();
+  });
+
+  it("shares one in-flight analysis per video and replays a failure without re-paying or leaking the body", async () => {
+    sdk.videoRetrieve.mockResolvedValue({ id: "tl-1", assetId: "asset-1" });
+    const analysis = Promise.withResolvers<never>();
+    sdk.analyze.mockReturnValue(analysis.promise);
+    const release = () => analysis.reject(Object.assign(new Error("quota exceeded for key tlk_secret"), { statusCode: 429 }));
+    const c = client();
+    const r = ref("130851417", "tl-1", "FILENAME_DURATION");
+    const both = Promise.allSettled([c.observations(r), c.observations(r)]);
+    await vi.waitFor(() => expect(sdk.analyze).toHaveBeenCalledTimes(1));
+    release();
+    const results = await both;
+    expect(results.map((s) => s.status)).toEqual(["rejected", "rejected"]);
+    await expect(c.observations(r)).rejects.toMatchObject({ code: "UPSTREAM", message: "TwelveLabs Pegasus analyze failed (HTTP 429)" });
+    expect(sdk.analyze).toHaveBeenCalledTimes(1);
   });
 
   it("analyzes ref.twelvelabsVideoId directly and serves the stored result afterwards", async () => {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FilmIcon, GitBranchIcon, Loader2Icon, TriangleAlertIcon } from "lucide-react";
+import { FilmIcon, GitBranchIcon, Loader2Icon, LogInIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   PublishIntentSchema,
   UsageSchema,
@@ -390,6 +391,19 @@ export function RerouteApp() {
                     }}
                     onTimeUpdate={(e) => setPlayhead({ mediaId: playerAsset.id, t: e.currentTarget.currentTime })}
                   />
+                ) : playerAsset && !session?.reviewer ? (
+                  <>
+                    {playerAsset.thumbnailUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element -- remote ScorePlay thumbnail
+                      <img src={playerAsset.thumbnailUrl} alt="" className="absolute inset-0 size-full object-contain opacity-30" />
+                    )}
+                    <div className="relative flex flex-col items-center gap-2 px-4 text-center text-xs text-zinc-300">
+                      <span>Video previews are available to signed-in reviewers only.</span>
+                      <Button size="sm" variant="outline" disabled={session?.enabled === false} onClick={() => setSignInOpen(true)}>
+                        <LogInIcon /> {session?.enabled === false ? "Reviewer sign-in not configured" : "Sign in as reviewer to preview"}
+                      </Button>
+                    </div>
+                  </>
                 ) : playerAsset?.thumbnailUrl ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element -- remote ScorePlay thumbnail */}
@@ -543,7 +557,15 @@ export function RerouteApp() {
         Decisions come from verified rules and metadata only — logo detection, similarity or absence of a deny rule is never permission.
         In-app access gating does not change ScorePlay ACLs.
       </footer>
-      <ReviewerSignInDialog open={signInOpen} onOpenChange={setSignInOpen} onSignedIn={setSession} />
+      <ReviewerSignInDialog
+        open={signInOpen}
+        onOpenChange={setSignInOpen}
+        onSignedIn={(s) => {
+          setSession(s);
+          // Preview URLs are only returned to reviewers: re-read the asset on screen.
+          if (playerId) void loadDetail(playerId);
+        }}
+      />
     </div>
   );
 }

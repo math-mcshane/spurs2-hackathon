@@ -69,8 +69,8 @@ export function ReviewStage({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <div className="space-y-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4 text-sm">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
+      <div className="min-w-0 space-y-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold text-zinc-50">Human review</h3>
           <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", status.cls)}>{status.label}</span>

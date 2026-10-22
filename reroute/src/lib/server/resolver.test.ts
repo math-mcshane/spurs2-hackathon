@@ -32,8 +32,8 @@ const squad = { people: ["Dominic Solanke-Mitchell"], peopleTeams: { "Dominic So
 const assets: Record<string, Asset> = {
   goal: thfc("goal", "Goal Man United 9x16 (A) v1.mp4", 30, squad),
   goalDup: thfc("goalDup", "Goal Man United 4x5 (A) v2.mp4", 30.2, squad), // rendition of the original
-  fans: thfc("fans", "Slide 6 - Away End Singing Pre-KO.mov", 10),
-  boards: thfc("boards", "Slide 17 - Stadium GV.mov", 7.5),
+  fans: thfc("fans", "Slide 6 - Away End Singing Pre-KO.mov", 10, { people: [] }),
+  boards: thfc("boards", "Slide 17 - Stadium GV.mov", 7.5, { people: [] }),
   nba: {
     id: "nba",
     title: "Vic dunk.mp4",
@@ -75,10 +75,11 @@ const hit = (scoreplayMediaId: string, start: number, end: number, rank: number)
   mapping: "FILENAME_DURATION",
 });
 
-function deps(opts: { hits?: SearchHit[]; queries?: string[]; refs?: Record<string, MediaRef>; human?: () => Promise<Evidence[]> } = {}): ContextDeps {
+function deps(opts: { hits?: SearchHit[]; queries?: string[]; limits?: number[]; refs?: Record<string, MediaRef>; human?: () => Promise<Evidence[]> } = {}): ContextDeps {
   const video: VideoIntelligence = {
-    async search(query) {
+    async search(query, searchOpts) {
       opts.queries?.push(query);
+      opts.limits?.push(searchOpts?.limit ?? -1);
       return opts.hits ?? [];
     },
     async observations(r) {
@@ -100,7 +101,9 @@ describe("resolve", () => {
   it("CLIP blocker: re-checks every candidate alone and in the full edit, excludes the original and its renditions", async () => {
     const queries: string[] = [];
     const hits = [hit("goal", 12, 18, 1), hit("goalDup", 0, 5, 2), hit("boards", 0, 5, 3), hit("fans", 2, 6, 4), hit("nba", 0, 4, 5)];
-    const result = await resolve({ edit, intent: commercial, segmentIndex: 0, limit: 5 }, { deps: deps({ hits, queries }), now });
+    const limits: number[] = [];
+    const result = await resolve({ edit, intent: commercial, segmentIndex: 0, limit: 5 }, { deps: deps({ hits, queries, limits }), now });
+    expect(limits).toEqual([12]); // hits analysed per resolve are capped
 
     expect(queries).toEqual(["celebrating fans"]); // query = segment label
     expect(result.blocker).toMatchObject({ scope: "CLIP", dimensions: ["sponsor"] });
@@ -127,6 +130,17 @@ describe("resolve", () => {
     expect(result.candidates).toEqual([]);
     expect(result.blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
     expect(result.blocker.suggestion).toMatch(/GB, IE, US, CA, AU, NZ/);
+  });
+
+  it("CAMPAIGN blocker over every use: lists all unlicensed territories and returns the licensed subset as remedy", async () => {
+    const editorial = { ...commercial, usage: "EDITORIAL" as const };
+    const intents = ["GB", "FR", "ES", "DE", "IN", "US"].map((territory) => ({ ...editorial, territory }));
+    const result = await resolve({ edit, intent: intents[0], intents, segmentIndex: 0, limit: 3 }, { deps: deps(), now });
+    expect(result.blocker.scope).toBe("CAMPAIGN");
+    expect(result.blocker.explanation).toMatch(/Not licensed in FR, ES, DE, IN\./);
+    expect(result.blocker.suggestion).toMatch(/Drop FR, ES, DE, IN/);
+    expect(result.remedy).toEqual({ territories: ["GB", "US"] });
+    expect(result.candidates).toEqual([]);
   });
 
   it("works for NEEDS_REVIEW segments (ambiguous media identity ⇒ MEDIA_IDENTITY, CLIP)", async () => {

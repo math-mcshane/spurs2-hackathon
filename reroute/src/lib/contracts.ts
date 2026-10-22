@@ -201,7 +201,7 @@ export type Segment = z.infer<typeof SegmentSchema>;
 export const EditPlanSchema = z.object({
   id: z.string(),
   title: z.string(),
-  segments: z.array(SegmentSchema).min(1),
+  segments: z.array(SegmentSchema).min(1).max(20),
   /** True when REROUTE produced this plan (derivative ⇒ distinct asset needing its own decision). */
   derived: z.boolean(),
   derivedFrom: z.string().optional(),
@@ -260,7 +260,10 @@ export const RightsReceiptSchema = z.object({
   campaignId: z.string().optional(),
   sourceAssetIds: z.array(z.string()),
   derivativeAssetId: z.string().optional(),
+  /** The use the decision is keyed on (worst use for campaigns). */
   intent: PublishIntentSchema,
+  /** Every use (channel × territory) covered by `decision` — a campaign receipt approves all of them. */
+  intents: z.array(PublishIntentSchema).optional(),
   decision: DecisionSchema,
   edit: EditPlanSchema,
   /** MediaRefs used for evidence at decision time (audit of which video the evidence came from). */
@@ -307,7 +310,7 @@ export const ResolveRequestSchema = z.object({
   intent: PublishIntentSchema,
   segmentIndex: z.number().int().nonnegative(),
   /** Natural-language description of the shot to find (defaults to segment label/observations). */
-  query: z.string().optional(),
+  query: z.string().max(500).optional(),
   limit: z.number().int().min(1).max(10).default(3),
 });
 
@@ -386,7 +389,7 @@ export const ReviewRequestSchema = z.object({ status: z.enum(["APPROVED", "REJEC
 /** Uniform error body for every route. */
 export const ApiErrorSchema = z.object({
   error: z.string(),
-  code: z.enum(["BAD_REQUEST", "NOT_CONFIGURED", "UPSTREAM", "FORBIDDEN", "NOT_FOUND", "INTERNAL"]),
+  code: z.enum(["BAD_REQUEST", "NOT_CONFIGURED", "UPSTREAM", "FORBIDDEN", "NOT_FOUND", "CONFLICT", "RATE_LIMITED", "INTERNAL"]),
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 

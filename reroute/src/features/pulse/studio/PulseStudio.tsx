@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/reroute/shared";
+import { describeError } from "@/lib/api-client";
 import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
@@ -17,7 +18,7 @@ import { MomentCard } from "./MomentCard";
 import { Proposal } from "./Proposal";
 import { ReceiptView } from "./Receipt";
 import { ReviewStage } from "./Review";
-import { AnotherWay, VerdictPanel } from "./Verdict";
+import { AnotherWay, VerdictPanel, type VerdictBusy } from "./Verdict";
 import { STEPS, StepHeading, Stepper, type StepKey, type StepState } from "./parts";
 
 /** The two hackathon scenarios, one click each. */
@@ -26,7 +27,13 @@ const EXAMPLES: Record<Club, string[]> = {
   spurs: ["Sell Spurs jerseys in Mexico using the best moments from the Kings game"],
 };
 
-type Busy = null | "load" | "run" | "draft" | "rights" | "alternatives" | "submit" | `select:${string}` | `alt:${string}`;
+type Busy = null | "load" | "run" | "draft" | "rights" | "alternatives" | "remedy" | "submit" | `select:${string}` | `alt:${string}`;
+
+/** Optimistic-concurrency rejection: the run changed elsewhere (another tab/reviewer). Retrying would fail again. */
+function isConflict(error: unknown): boolean {
+  const d = describeError(error);
+  return d.code === "CONFLICT" || (d.code === "BAD_REQUEST" && d.detail.startsWith("This goal was updated elsewhere"));
+}
 
 /** Section each action's result belongs to: brought into view once it has rendered. */
 const SECTION_AFTER: Record<GoalAction["action"], StepKey> = {
@@ -36,6 +43,7 @@ const SECTION_AFTER: Record<GoalAction["action"], StepKey> = {
   checkRights: "rights",
   findAlternatives: "rights",
   useAlternative: "rights",
+  applyRemedy: "rights",
   submitForReview: "review",
 };
 
@@ -63,6 +71,7 @@ export function PulseStudio() {
   const [busy, setBusy] = useState<Busy>(null);
   const [failure, setFailure] = useState<{ error: unknown; retry: () => void } | null>(null);
   const [missingRun, setMissingRun] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
   const [text, setText] = useState("");
   const [club, setClub] = useState<Club>("tottenham");
   const [signInOpen, setSignInOpen] = useState(false);
@@ -116,6 +125,10 @@ export function PulseStudio() {
       if (runIdFromUrl() !== g.run.id) window.history.pushState(null, "", `/?${new URLSearchParams({ run: g.run.id })}`);
       done?.(g);
     } catch (error) {
+      if (isConflict(error)) {
+        setConflict(true);
+        return;
+      }
       setFailure({ error, retry: () => void act(body, kind, done) });
       // A refused action may still have recorded something (e.g. a fresh verdict): show the server's state.
       if (goal && body.action !== "run") await pulseApi.goal(goal.run.id).then((g) => g && setGoal(g), () => undefined);
@@ -130,12 +143,15 @@ export function PulseStudio() {
     setGoal(null);
     setFailure(null);
     setMissingRun(null);
+    setConflict(false);
     setText("");
     window.history.pushState(null, "", "/");
     document.getElementById("goal-text")?.focus();
   }
 
   const id = goal?.run.id;
+  /** Run version the user is looking at; every action on the run sends it back (stale → CONFLICT). */
+  const v = goal?.version ?? 0;
   const at = currentStep(goal);
   const states = Object.fromEntries(STEPS.map((s, i) => [s.key, (i < at ? "done" : i === at ? "current" : "todo") as StepState])) as Record<StepKey, StepState>;
   const locked = busy !== null;
@@ -169,7 +185,22 @@ export function PulseStudio() {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-6">
+      <main className="mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col gap-10 px-4 py-6">
+        {conflict && id && (
+          <div role="alert" className="flex flex-col gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 p-4 text-sm text-sky-100 sm:flex-row sm:items-center sm:justify-between">
+            <span>This campaign was updated elsewhere (another tab or reviewer). Reload to see the latest version before continuing.</span>
+            <Button
+              size="sm"
+              disabled={locked}
+              onClick={() => {
+                setConflict(false);
+                void load(id);
+              }}
+            >
+              <RefreshCwIcon /> Reload
+            </Button>
+          </div>
+        )}
         {failure && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
             <ErrorState error={failure.error} className="flex-1" />
@@ -263,9 +294,12 @@ export function PulseStudio() {
           </p>
         )}
         {missingRun && (
-          <p role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
-            Goal run <span className="font-mono">{missingRun}</span> was not found. Start a new goal above.
-          </p>
+          <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+            <span>This campaign wasn&apos;t found. It may have been created on another server or removed.</span>
+            <Button size="sm" variant="outline" onClick={startOver}>
+              <PlusIcon /> New goal
+            </Button>
+          </div>
         )}
         {busy === "run" && <MomentSkeletons />}
 
@@ -297,7 +331,7 @@ export function PulseStudio() {
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
                 {goal.recommendations.map((rec, i) => (
                   <MomentCard
                     key={rec.key}
@@ -306,7 +340,7 @@ export function PulseStudio() {
                     selected={goal.campaign?.key === rec.key}
                     busy={locked}
                     loading={busy === `select:${rec.key}`}
-                    onChoose={() => id && void act({ action: "select", id, key: rec.key }, `select:${rec.key}`, () => toast.success("Proposal rebuilt for this moment"))}
+                    onChoose={() => id && void act({ action: "select", id, expectedVersion: v, key: rec.key }, `select:${rec.key}`, () => toast.success("Proposal rebuilt for this moment"))}
                   />
                 ))}
               </div>
@@ -324,7 +358,12 @@ export function PulseStudio() {
               title="Campaign proposal"
               sub={`Draft v${goal.campaign.version} for “${goal.campaign.objective.summary}” — nothing is published and no ads are bought.`}
             />
-            <Proposal goal={goal} campaign={goal.campaign} busy={locked} onSetDestination={(url) => void act({ action: "draft", id, commerceUrl: url }, "draft", () => toast.success("Destination link added — new version"))} />
+            <Proposal
+              goal={goal}
+              campaign={goal.campaign}
+              busy={locked}
+              onSetDestination={(url) => void act({ action: "draft", id, expectedVersion: v, commerceUrl: url }, "draft", () => toast.success("Destination link added — new version"))}
+            />
           </section>
         )}
 
@@ -336,14 +375,17 @@ export function PulseStudio() {
               rights={goal.rights}
               busy={busy === "rights" || busy === "alternatives" ? busy : null}
               disabled={locked}
-              onCheck={() => void act({ action: "checkRights", id }, "rights")}
-              onFindAnotherWay={() => void act({ action: "findAlternatives", id }, "alternatives")}
+              onCheck={() => void act({ action: "checkRights", id, expectedVersion: v }, "rights")}
+              onFindAnotherWay={() => void act({ action: "findAlternatives", id, expectedVersion: v }, "alternatives")}
             />
             <AnotherWay
               goal={goal}
-              busy={busy?.startsWith("alt:") ? (busy as `alt:${string}`) : null}
+              busy={busy === "remedy" || busy?.startsWith("alt:") ? (busy as VerdictBusy) : null}
               disabled={locked}
-              onUse={(key) => void act({ action: "useAlternative", id, key }, `alt:${key}`, () => toast.success("Alternative adopted — same goal, re-checked"))}
+              onUse={(key) => void act({ action: "useAlternative", id, expectedVersion: v, key }, `alt:${key}`, () => toast.success("Alternative adopted — same goal, re-checked"))}
+              onApplyRemedy={() =>
+                void act({ action: "applyRemedy", id, expectedVersion: v }, "remedy", () => toast.info("Campaign limited to its licensed uses — check rights again"))
+              }
             />
           </section>
         )}
@@ -359,7 +401,7 @@ export function PulseStudio() {
               onRetrySession={refreshSession}
               submitting={busy === "submit"}
               disabled={locked}
-              onSubmit={() => void act({ action: "submitForReview", id }, "submit", () => toast.success("Submitted — audit receipt created"))}
+              onSubmit={() => void act({ action: "submitForReview", id, expectedVersion: v }, "submit", () => toast.success("Submitted — audit receipt created"))}
               onSignIn={() => setSignInOpen(true)}
               onReviewed={refresh}
             />
@@ -428,7 +470,7 @@ function Understood({ goal }: { goal: GoalView }) {
 
 function MomentSkeletons() {
   return (
-    <div className="grid gap-4 md:grid-cols-3" aria-hidden>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3" aria-hidden>
       {[0, 1, 2].map((i) => (
         <div key={i} className="space-y-3 rounded-xl border border-white/10 bg-zinc-950/70 p-4">
           <Skeleton className="aspect-video w-full" />

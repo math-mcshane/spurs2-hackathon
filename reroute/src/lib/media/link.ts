@@ -53,41 +53,20 @@ const spCandidate = (s: ScorePlayCatalogEntry) => ({ scoreplayMediaId: s.scorepl
 const tlCandidate = (t: TwelveLabsCatalogEntry) => ({ twelvelabsVideoId: t.twelvelabsVideoId, filename: t.filename, durationSec: t.durationSec });
 
 /**
- * Link two catalogs:
- *  1. AUTHORITATIVE_ID — a TwelveLabs `claimedScoreplayId` that exists in THIS ScorePlay catalog, with the same
- *     normalized filename, claimed by exactly one TwelveLabs video;
- *  2. FILENAME_DURATION — normalized filename equality + |Δduration| ≤ 0.5 s, unique in BOTH directions;
- *  3. otherwise AMBIGUOUS (with `candidates`) or UNMAPPED. Nothing is guessed.
+ * Link two catalogs. A pair links only when normalized filename + |Δduration| ≤ 0.5 s match uniquely in BOTH
+ * directions. Such a pair is AUTHORITATIVE_ID when the TwelveLabs `claimedScoreplayId` names that same
+ * ScorePlay asset (claim corroborated), else FILENAME_DURATION. A claim never creates or redirects a link.
+ * Everything else is AMBIGUOUS (with `candidates`) or UNMAPPED. Nothing is guessed.
  */
 export function linkCatalogs(
-  scoreplay: readonly ScorePlayCatalogEntry[],
-  twelvelabs: readonly TwelveLabsCatalogEntry[],
+  sps: readonly ScorePlayCatalogEntry[],
+  tls: readonly TwelveLabsCatalogEntry[],
   opts: { indexId?: string; now?: Date } = {},
 ): LinkedCatalogs {
   const checkedAt = (opts.now ?? new Date()).toISOString();
   const base = { twelvelabsIndexId: opts.indexId, checkedAt };
   const out: LinkedCatalogs = { refs: [], ambiguous: [], unmapped: [] };
-  const linkedSp = new Set<string>();
   const linkedTl = new Set<string>();
-  const spById = new Map(scoreplay.map((s) => [s.scoreplayMediaId, s]));
-
-  // 1. Authoritative ids, verified against this workspace.
-  const claims = new Map<string, TwelveLabsCatalogEntry[]>();
-  for (const t of twelvelabs) {
-    if (t.claimedScoreplayId && spById.has(t.claimedScoreplayId)) claims.set(t.claimedScoreplayId, [...(claims.get(t.claimedScoreplayId) ?? []), t]);
-  }
-  for (const [spId, tls] of claims) {
-    const sp = spById.get(spId)!;
-    const t = tls[0];
-    if (tls.length !== 1 || key(sp.filename) === undefined || key(sp.filename) !== key(t.filename)) continue;
-    linkedSp.add(spId);
-    linkedTl.add(t.twelvelabsVideoId);
-    out.refs.push({ ...base, scoreplayMediaId: spId, twelvelabsVideoId: t.twelvelabsVideoId, method: "AUTHORITATIVE_ID", match: match(sp, t), candidates: [] });
-  }
-
-  // 2. Filename + duration among the rest, unique both ways.
-  const sps = scoreplay.filter((s) => !linkedSp.has(s.scoreplayMediaId));
-  const tls = twelvelabs.filter((t) => !linkedTl.has(t.twelvelabsVideoId));
   const tlFor = new Map(sps.map((s) => [s.scoreplayMediaId, tls.filter((t) => sameFile(s, t))]));
   const spFor = new Map(tls.map((t) => [t.twelvelabsVideoId, sps.filter((s) => sameFile(s, t))]));
 
@@ -99,8 +78,10 @@ export function linkCatalogs(
     }
     const rivals = spFor.get(cands[0].twelvelabsVideoId)!;
     if (cands.length === 1 && rivals.length === 1) {
-      linkedTl.add(cands[0].twelvelabsVideoId);
-      out.refs.push({ ...base, scoreplayMediaId: s.scoreplayMediaId, twelvelabsVideoId: cands[0].twelvelabsVideoId, method: "FILENAME_DURATION", match: match(s, cands[0]), candidates: [] });
+      const t = cands[0];
+      linkedTl.add(t.twelvelabsVideoId);
+      const method = t.claimedScoreplayId === s.scoreplayMediaId ? "AUTHORITATIVE_ID" : "FILENAME_DURATION";
+      out.refs.push({ ...base, scoreplayMediaId: s.scoreplayMediaId, twelvelabsVideoId: t.twelvelabsVideoId, method, match: match(s, t), candidates: [] });
       continue;
     }
     const otherSps = [...new Set(cands.flatMap((t) => spFor.get(t.twelvelabsVideoId)!))].filter((o) => o !== s);

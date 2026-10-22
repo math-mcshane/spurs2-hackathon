@@ -1,7 +1,20 @@
 import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type PublishIntent, type Reason, type RightsReceipt } from "@/lib/contracts";
+import { withPreview } from "./moment-ranking";
 import { MARKETS, PRODUCTS } from "./objective-parser";
 import { MarketCodeSchema } from "./types";
-import type { ChannelRights, GoalEvaluation, GoalRun, GoalView, Recommendation, RecommendationView, ReviewStatus, RightsIssue, RightsView } from "./types";
+import type {
+  ChannelRights,
+  GoalAlternatives,
+  GoalEvaluation,
+  GoalRun,
+  GoalView,
+  Preview,
+  Recommendation,
+  RecommendationView,
+  ReviewStatus,
+  RightsIssue,
+  RightsView,
+} from "./types";
 
 /**
  * Presentation of a goal run. Rights wording is a plain-English rendering of REROUTE's recorded
@@ -121,15 +134,29 @@ export function presentRights(run: GoalRun): RightsView {
   };
 }
 
-function recommendationView(run: GoalRun, rec: Recommendation): RecommendationView {
+function recommendationView(run: GoalRun, rec: Recommendation, previews: ReadonlyMap<string, Preview>): RecommendationView {
   const e = run.evaluations.findLast((x) => x.key === rec.key);
-  return { ...rec, rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" } };
+  const shown = withPreview(rec, previews.get(rec.key), PREVIEW_UNAVAILABLE);
+  return { ...shown, rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" } };
 }
+
+const PREVIEW_UNAVAILABLE = "No browser-playable stream is available for this video (or previews are switched off).";
 
 /** The review receipt for the current campaign version, if one was submitted. */
 type Receipt = Pick<RightsReceipt, "id" | "decision" | "humanReviewStatus" | "writeback">;
 
-function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSubmit: boolean, publishable: boolean): string {
+/** Plain-English label for a REROUTE remedy (the licensed subset of the campaign's uses). */
+export function remedyLabel(remedy: NonNullable<GoalAlternatives["remedy"]>): string {
+  return [
+    remedy.territories?.length && `Limit to licensed territories: ${remedy.territories.join(", ")}`,
+    remedy.platforms?.length && `Limit to licensed channels: ${remedy.platforms.join(", ")}`,
+    remedy.usage && `Switch the use to ${remedy.usage.toLowerCase()}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSubmit: boolean, publishable: boolean, remedy: boolean): string {
   if (!run.campaign) return run.pool.length ? "Pick one of the three moments to build its campaign." : "No usable moment was found — refine the goal or index more footage.";
   if (run.campaign.cta.status === "NOT_CONFIGURED" && review === "NOT_SUBMITTED" && rights.state === "NOT_CHECKED")
     return "Check rights with REROUTE. The store link is not configured — add an https link on the club's domain (optional before review).";
@@ -140,6 +167,7 @@ function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSub
       : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Run the ScorePlay writeback (dry-run) to record the decision.`;
   if (review === "REJECTED") return "The reviewer rejected this version. Find another way or change the proposal, then submit again.";
   if (review === "PENDING") return "Waiting for a reviewer to approve or reject the receipt.";
+  if (remedy) return "The restriction is tied to where or how the campaign runs, not to the clip: apply REROUTE's remedy, then check rights again.";
   if (rights.state === "BLOCKED") return "Restricted. Find another way: REROUTE searches comparable footage and re-checks it independently.";
   if (canSubmit)
     return rights.state === "NEEDS_REVIEW"
@@ -148,20 +176,35 @@ function nextStep(run: GoalRun, rights: RightsView, review: ReviewStatus, canSub
   return "Check rights again.";
 }
 
-export function buildGoalView(run: GoalRun, receipt?: Receipt | null): GoalView {
+export function buildGoalView(
+  run: GoalRun,
+  opts: { version: number; receipt?: Receipt | null; previews?: ReadonlyMap<string, Preview> },
+): GoalView {
   const { pool, adopted, campaign: draft } = run;
+  const previews = opts.previews ?? new Map<string, Preview>();
   const rights = presentRights(run);
   const latest = latestEvaluation(run);
   const all = [...pool, ...adopted];
   const selectedRec = draft ? all.find((r) => r.key === draft.key) : undefined;
 
-  // A submission only counts for the version that was submitted.
-  const submitted = run.review && draft && run.review.campaignVersion === draft.version ? run.review : undefined;
-  const liveReceipt = submitted && receipt?.id === submitted.receiptId ? receipt : undefined;
+  // A submission only counts while it is for the latest evaluation: any re-check supersedes it.
+  const submitted = run.review && latest && run.review.evaluationId === latest.id && rights.current ? run.review : undefined;
+  const liveReceipt = submitted && opts.receipt?.id === submitted.receiptId ? opts.receipt : undefined;
   const reviewStatus: ReviewStatus = submitted ? (liveReceipt?.humanReviewStatus ?? "PENDING") : "NOT_SUBMITTED";
   const canSubmit = !!latest && rights.current && latest.overall.verdict !== "BLOCKED" && !submitted;
   const publishable = !!liveReceipt && canPublish(liveReceipt);
   const lastWrite = liveReceipt?.writeback.at(-1);
+
+  // "Find another way" results are bound to the evaluation that produced them.
+  const found = latest && rights.current ? run.alternatives.findLast((a) => a.forEvaluationId === latest.id && a.forKey === latest.key) : undefined;
+  const alternatives = found && {
+    ...found,
+    candidates: found.candidates.map((c) => ({ ...c, preview: previews.get(c.key) })),
+  };
+  const remedy =
+    found?.blocker.scope === "CAMPAIGN" && found.remedy && remedyLabel(found.remedy)
+      ? { label: remedyLabel(found.remedy), description: found.blocker.suggestion ?? found.blocker.explanation, ...found.remedy }
+      : undefined;
 
   const commerce = run.objective.product && PRODUCTS[run.objective.product.key].commerce;
   const notLocalized = draft?.evidenceLabels.find((l) => l.startsWith("Copy not localized"));
@@ -190,9 +233,10 @@ export function buildGoalView(run: GoalRun, receipt?: Receipt | null): GoalView 
     ],
   };
 
-  const lastAlternatives = run.alternatives.at(-1);
+  const view = (r: Recommendation) => recommendationView(run, r, previews);
   const seconds = (to: string) => Math.round((Date.parse(to) - Date.parse(run.submittedAt)) / 100) / 10;
   return {
+    version: opts.version,
     run: {
       id: run.id,
       club: run.club,
@@ -208,12 +252,13 @@ export function buildGoalView(run: GoalRun, receipt?: Receipt | null): GoalView 
       attempts: run.attempts,
       selectedKey: run.selectedKey,
     },
-    recommendations: pool.slice(0, 3).map((r) => recommendationView(run, r)),
-    selected: selectedRec && recommendationView(run, selectedRec),
+    recommendations: pool.slice(0, 3).map(view),
+    selected: selectedRec && view(selectedRec),
     campaign,
     rights,
-    blocker: lastAlternatives && latest && lastAlternatives.forEvaluationId === latest.id ? lastAlternatives.blocker : undefined,
-    alternatives: lastAlternatives,
+    blocker: found?.blocker,
+    alternatives,
+    remedy,
     evaluations: run.evaluations.map((e) => ({
       id: e.id,
       kind: e.kind,
@@ -233,7 +278,7 @@ export function buildGoalView(run: GoalRun, receipt?: Receipt | null): GoalView 
       : rights.clearanceLabel
         ? `${rights.clearanceLabel} — never publishable, even after approval.`
         : "Publishable only with a verified REROUTE clearance AND human approval.",
-    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable),
+    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable, !!remedy),
     kpi: {
       label: run.objective.kpi,
       value: null,

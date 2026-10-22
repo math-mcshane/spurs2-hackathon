@@ -1,7 +1,15 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Decision, EditPlan, PublishIntent } from "@/lib/contracts";
-import { SESSION_COOKIE, signIn } from "@/lib/server/auth";
+import { toErrorResponse } from "@/lib/errors";
+import {
+  SESSION_COOKIE,
+  SIGN_IN_FAILURE_DELAY_MS,
+  SIGN_IN_MAX_FAILURES,
+  SIGN_IN_WINDOW_MS,
+  resetSignInThrottleForTests,
+  signIn,
+} from "@/lib/server/auth";
 import { resetRepositoriesForTests, useMemoryRepositoriesForTests } from "@/lib/server/repositories/testing";
 import type { Repositories } from "@/lib/server/repositories/types";
 import { createReceipt } from "@/lib/server/store";
@@ -51,6 +59,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   resetRepositoriesForTests();
+  vi.useRealTimers();
+  resetSignInThrottleForTests();
 });
 
 describe("proxy", () => {
@@ -117,6 +127,25 @@ describe("POST /api/receipts/[id]/review", () => {
     expect(res.status).toBe(403);
     expect(await repos.receipts.listReviews(receipt.id)).toEqual([]);
   });
+
+  it("reviews are final: a second review is a CONFLICT (409)", async () => {
+    const receipt = await createReceipt({ edit, intent, decision: decision("NEEDS_REVIEW") });
+    const review = (status: string, name: string) =>
+      postReview(request(`/api/receipts/${receipt.id}/review`, { body: { status }, cookie: reviewerCookie(name) }), ctx(receipt.id));
+    expect((await review("REJECTED", "Jo")).status).toBe(200);
+    const again = await review("APPROVED", "Ed");
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ code: "CONFLICT" });
+    expect((await repos.receipts.listReviews(receipt.id)).map((r) => r.reviewer)).toEqual(["Jo"]);
+  });
+});
+
+describe("error bodies", () => {
+  it("never echo unexpected error text to the client", async () => {
+    const res = toErrorResponse(new Error("connect ECONNREFUSED 10.0.0.5:5432 password=hunter2"));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Internal error", code: "INTERNAL" });
+  });
 });
 
 describe("POST /api/observations", () => {
@@ -132,8 +161,55 @@ describe("POST /api/observations", () => {
 });
 
 describe("/api/auth/session", () => {
+  /** Wrong passcodes are answered after a fixed delay; fake timers skip it deterministically. */
+  async function wrongAttempt(ip = "203.0.113.7"): Promise<Response> {
+    const req = request("/api/auth/session", { body: { passcode: "guess", name: "Ed" } });
+    req.headers.set("x-real-ip", ip);
+    const pending = signInRoute(req);
+    await vi.advanceTimersByTimeAsync(SIGN_IN_FAILURE_DELAY_MS);
+    return pending;
+  }
+
+  it("answers a wrong passcode only after the fixed delay", async () => {
+    vi.useFakeTimers();
+    let settled = false;
+    const pending = signInRoute(request("/api/auth/session", { body: { passcode: "guess", name: "Ed" } })).then((r) => {
+      settled = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(SIGN_IN_FAILURE_DELAY_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await pending).status).toBe(403);
+  });
+
+  it("rate-limits an address after repeated failures (429 + Retry-After), even for the right passcode", async () => {
+    vi.useFakeTimers();
+    for (let i = 0; i < SIGN_IN_MAX_FAILURES; i++) expect((await wrongAttempt()).status).toBe(403);
+    const limited = await wrongAttempt();
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toMatchObject({ code: "RATE_LIMITED" });
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+
+    const right = request("/api/auth/session", { body: { passcode: "spurs-demo-review", name: "Ed" } });
+    right.headers.set("x-real-ip", "203.0.113.7");
+    expect((await signInRoute(right)).status).toBe(429);
+    // Another address is unaffected; the window expires.
+    expect((await wrongAttempt("198.51.100.1")).status).toBe(403);
+    vi.advanceTimersByTime(SIGN_IN_WINDOW_MS);
+    expect((await wrongAttempt()).status).toBe(403);
+  });
+
+  it("is disabled in production with a short passcode", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("REROUTE_REVIEWER_PASSCODE", "short-pass");
+    const res = await signInRoute(request("/api/auth/session", { body: { passcode: "short-pass", name: "Ed" } }));
+    expect(res.status).toBe(503);
+  });
+
   it("signs in with the passcode (HttpOnly cookie) and refuses a wrong one", async () => {
-    const wrong = await signInRoute(request("/api/auth/session", { body: { passcode: "guess", name: "Ed" } }));
+    vi.useFakeTimers();
+    const wrong = await wrongAttempt();
     expect(wrong.status).toBe(403);
     expect(wrong.headers.get("set-cookie")).toBeNull();
 

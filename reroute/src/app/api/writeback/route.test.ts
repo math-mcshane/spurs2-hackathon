@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_CLEARANCE_LABEL, WritebackResponseSchema, type RightsReceipt } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import type * as WritebackModule from "@/lib/scoreplay/writeback";
-import { POST } from "./route";
+import { WritebackPreviewSchema } from "@/lib/scoreplay/writeback";
+import { GET, POST } from "./route";
 
 const NOW = "2026-10-22T20:00:00.000Z";
 
@@ -125,5 +126,41 @@ describe("POST /api/writeback", () => {
     const body = WritebackResponseSchema.parse(await (await call()).json());
     expect(body.receipt.writeback[0]).toMatchObject({ status: "FAILED", detail: "key lacks can_do_media_edit" });
     expect(h.record).toHaveBeenCalledWith(expect.objectContaining({ mode: "LIVE", status: "FAILED" }));
+  });
+});
+
+describe("GET /api/writeback (preview)", () => {
+  const preview = (query = "?receiptId=rcpt-1") => GET(new Request(`http://localhost/api/writeback${query}`));
+
+  it("requires a reviewer session", async () => {
+    h.requireReviewer.mockRejectedValue(new AppError("FORBIDDEN", "Reviewer session required"));
+    expect((await preview()).status).toBe(403);
+    expect(h.getReceipt).not.toHaveBeenCalled();
+  });
+
+  it("reports LIVE for a writable receipt without writing or recording anything", async () => {
+    vi.stubEnv("SCOREPLAY_WRITEBACK_MODE", "live");
+    load(receipt());
+    const res = await preview();
+    expect(res.status).toBe(200);
+    const body = WritebackPreviewSchema.parse(await res.json());
+    expect(body).toMatchObject({ mode: "LIVE", targets: ["101"] });
+    expect(body.refusedReason).toBeUndefined();
+    expect(body.planned.length).toBeGreaterThan(0);
+    expect(h.applyWriteback).not.toHaveBeenCalled();
+    expect(h.record).not.toHaveBeenCalled();
+    expect(h.updateReceipt).not.toHaveBeenCalled();
+  });
+
+  it("reports DRY_RUN + refusedReason for a demo receipt", async () => {
+    vi.stubEnv("SCOREPLAY_WRITEBACK_MODE", "live");
+    load(receipt({ fictional: true }));
+    const body = WritebackPreviewSchema.parse(await (await preview()).json());
+    expect(body.mode).toBe("DRY_RUN");
+    expect(body.refusedReason).toContain(DEMO_CLEARANCE_LABEL);
+  });
+
+  it("400 without receiptId", async () => {
+    expect((await preview("")).status).toBe(400);
   });
 });

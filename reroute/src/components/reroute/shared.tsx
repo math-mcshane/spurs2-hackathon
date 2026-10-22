@@ -19,6 +19,11 @@ export function tcRange(start?: number, end?: number): string {
   return `${tc(start)}–${tc(end)}`;
 }
 
+/** ISO timestamp → "22 Oct 2026, 21:04 UTC" (one format for every time shown in the app). */
+export function utc(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC";
+}
+
 export const VERDICT_STYLE: Record<Verdict, { label: string; text: string; bg: string; border: string; fill: string }> = {
   ALLOWED: {
     label: "ALLOWED",

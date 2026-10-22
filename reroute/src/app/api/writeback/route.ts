@@ -8,14 +8,37 @@ import {
   writebackMode,
   writebackTargets,
   type MediaReadBack,
+  type WritebackPreview,
 } from "@/lib/scoreplay";
 import { requireReviewer } from "@/lib/server/auth";
-import { parseBody, route } from "@/lib/server/http";
+import { parseBody, parseInput, route } from "@/lib/server/http";
 import { writebackAttempts } from "@/lib/server/repositories";
 import { getReceipt, updateReceipt } from "@/lib/server/store";
 
 type Entry = RightsReceipt["writeback"][number];
 const SEVERITY: Record<Entry["status"], number> = { VERIFIED: 0, DRY_RUN: 0, REFUSED: 0, WRITTEN: 1, FAILED: 2 };
+
+/** Loads the receipt and computes the plan + mode exactly as POST would. Reads Supabase only. */
+async function prepare(receiptId: string) {
+  const stored = await getReceipt(receiptId);
+  const receipt = RightsReceiptSchema.parse(stored);
+  const lastReview = stored.reviews.at(-1);
+  const plan = planWriteback(receipt, { reviewer: lastReview?.reviewer, reviewedAt: lastReview?.at });
+  return { receipt, plan, planned: toScorePlayActions(plan), decided: writebackMode(receipt), targets: writebackTargets(receipt) };
+}
+
+/** GET /api/writeback?receiptId= — reviewer only; what POST would do right now. No ScorePlay call, nothing recorded. */
+export const GET = route(async (req: Request) => {
+  await requireReviewer(req);
+  const { receiptId } = parseInput(WritebackRequestSchema, { receiptId: new URL(req.url).searchParams.get("receiptId") ?? undefined });
+  const { planned, decided, targets } = await prepare(receiptId);
+  return Response.json({
+    mode: decided.mode,
+    planned,
+    ...(decided.mode === "DRY_RUN" && decided.refusedReason ? { refusedReason: decided.refusedReason } : {}),
+    targets,
+  } satisfies WritebackPreview);
+});
 
 /**
  * POST /api/writeback {receiptId} — reviewer only. Always plans the documented ScorePlay mutations.
@@ -26,13 +49,7 @@ const SEVERITY: Record<Entry["status"], number> = { VERIFIED: 0, DRY_RUN: 0, REF
 export const POST = route(async (req: Request) => {
   const { reviewer: actor } = await requireReviewer(req);
   const { receiptId } = await parseBody(req, WritebackRequestSchema);
-  const stored = await getReceipt(receiptId);
-  const receipt = RightsReceiptSchema.parse(stored);
-  const lastReview = stored.reviews.at(-1);
-  const plan = planWriteback(receipt, { reviewer: lastReview?.reviewer, reviewedAt: lastReview?.at });
-  const planned = toScorePlayActions(plan);
-  const decided = writebackMode(receipt);
-  const targets = writebackTargets(receipt);
+  const { receipt, plan, planned, decided, targets } = await prepare(receiptId);
 
   let entries: Entry[];
   let readBack: Record<string, MediaReadBack> | undefined;

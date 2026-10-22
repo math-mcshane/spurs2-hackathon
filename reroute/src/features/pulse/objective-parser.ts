@@ -159,9 +159,10 @@ export function parseObjective(raw: string, now: Date = new Date()): ParsedObjec
   const market = firstMatch(text, MARKETS);
   const product = firstMatch(text, PRODUCTS);
   const deadline = parseDeadline(text, now);
+  // Bare "Spurs" is ambiguous (Tottenham's nickname and San Antonio's name): only explicit names count.
   const club: Club | undefined = /\b(tottenham|thfc|hotspur)\b/.test(text)
     ? "tottenham"
-    : /\b(san antonio|spurs)\b/.test(text)
+    : /\bsan antonio\b/.test(text)
       ? "spurs"
       : undefined;
 

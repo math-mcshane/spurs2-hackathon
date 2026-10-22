@@ -114,6 +114,26 @@ describe("planWriteback (pure)", () => {
     r.sourceAssetIds = ["tl-abc"];
     expect(() => planWriteback(r)).toThrow(/Invalid ScorePlay media id/);
   });
+
+  it("REJECTED never gets a verdict tag (review:rejected + logs only); PENDING plans no tags", () => {
+    const rejected = planWriteback(receipt({ review: "REJECTED" }), REVIEW);
+    const json = JSON.stringify(toScorePlayActions(rejected));
+    for (const tag of Object.values(T.verifiedVerdictTags)) expect(json).not.toContain(`"name":"${tag}"`);
+    const tagOps = rejected.flatMap((a) => (a.op.kind === "ADD_MEDIA_TAGS" ? [a.op.tagNames] : []));
+    expect(tagOps).toEqual([["reroute:review:rejected"], ["reroute:review:rejected"]]);
+    expect(rejected.filter((a) => a.op.kind === "ADD_VIDEO_LOGS")).toHaveLength(2);
+
+    const pending = planWriteback(receipt({ review: "PENDING" }), {});
+    expect(pending.map((a) => a.op.kind)).toEqual(["ADD_VIDEO_LOGS", "REMOVE_SUPERSEDED_LOGS", "ADD_VIDEO_LOGS", "REMOVE_SUPERSEDED_LOGS"]);
+  });
+
+  it("lists every campaign intent in the log comment", () => {
+    const r = receipt();
+    r.intents = [r.intent, { ...r.intent, platform: "tiktok", territory: "FR" }];
+    const op = planWriteback(r, REVIEW).find((a) => a.op.kind === "ADD_VIDEO_LOGS")!.op;
+    if (op.kind !== "ADD_VIDEO_LOGS") throw new Error("unreachable");
+    expect(op.logs[0].comment).toContain(`intents=instagram/GB/SPONSORED/Premier League@${NOW}, tiktok/FR/SPONSORED/Premier League@${NOW}`);
+  });
 });
 
 describe("writebackMode", () => {
@@ -136,7 +156,7 @@ describe("writebackMode", () => {
 
 type Call = { method: string; path: string; body?: unknown };
 
-function mockScorePlay() {
+function mockScorePlay(opts: { types?: Record<string, string>; companyless?: string[] } = {}) {
   const calls: Call[] = [];
   const tags = new Map<string, Set<number>>([["101", new Set([77])], ["202", new Set()]]); // 77 = stale verified:blocked
   const options = new Map<string, number>([["reroute:verified:blocked", 77]]);
@@ -173,8 +193,8 @@ function mockScorePlay() {
         const n = names();
         return json({
           ID: Number(media[1]),
-          company_id: 42,
-          type: "video",
+          company_id: opts.companyless?.includes(media[1]) ? null : 42,
+          type: opts.types?.[media[1]] ?? "video",
           tags: [...tags.get(media[1])!].map((id) => ({ tag_option_id: id, tag_option: { ID: id, name: n.get(id) } })),
         });
       }
@@ -221,13 +241,15 @@ describe("applyWriteback (LIVE, mocked HTTP)", () => {
 
     expect(sp.calls.map((c) => `${c.method} ${c.path}`)).toEqual([
       "GET /whoami",
+      // preflight: every target is a video with company_id before any write
+      "GET /media/101",
+      "GET /media/202",
       "GET /tag/options",
       "POST /tag/options", // reroute:verified:allowed
       "GET /tag/options",
       "POST /tag/options", // reroute:review:approved
       "GET /tag/options", // reroute:verified:blocked exists
       // media 101
-      "GET /media/101",
       "GET /media/101/logs",
       "POST /media/101/tags",
       "POST /video/logs",
@@ -238,7 +260,6 @@ describe("applyWriteback (LIVE, mocked HTTP)", () => {
       "GET /media/101",
       "GET /media/101/logs",
       // media 202
-      "GET /media/202",
       "GET /media/202/logs",
       "POST /media/202/tags",
       "POST /video/logs",
@@ -259,7 +280,7 @@ describe("applyWriteback (LIVE, mocked HTTP)", () => {
     expect(sp.logs.get("101")!.map((l) => l.id)).not.toContain(1);
   });
 
-  it("does not delete anything when the add cannot be verified", async () => {
+  it("removes superseded tags behind tag verification only; keeps old logs when new logs are not visible", async () => {
     const sp = mockScorePlay();
     const real = globalThis.fetch;
     // Simulate ScorePlay accepting POST /video/logs without persisting it.
@@ -270,7 +291,33 @@ describe("applyWriteback (LIVE, mocked HTTP)", () => {
     const out = await applyWriteback(r, planWriteback(r, REVIEW), new ScorePlayHttpClient());
     expect(out["101"].status).toBe("WRITTEN");
     expect(out["101"].detail).toMatch(/not visible on re-read/);
-    expect(sp.calls.some((c) => c.method === "DELETE")).toBe(false);
+    // Tags verified → the stale verified:blocked is gone (never both verdicts on one media).
+    expect(sp.calls.find((c) => c.method === "DELETE" && c.path === "/media/101/tags")!.body).toEqual({ tag_option_ids: [77] });
+    expect(out["101"].tags).toEqual(expect.arrayContaining(["reroute:verified:allowed"]));
+    expect(out["101"].tags).not.toContain("reroute:verified:blocked");
+    // Logs not verified → the earlier log is kept.
+    expect(sp.calls.some((c) => c.method === "DELETE" && c.path.endsWith("/logs"))).toBe(false);
+    expect(sp.logs.get("101")!.map((l) => l.id)).toContain(1);
+  });
+
+  it.each([
+    ["a non-video target", { types: { "202": "photo" } }, /not a video/],
+    ["a target without company_id", { companyless: ["202"] }, /no company_id/],
+  ])("writes nothing when %s fails preflight", async (_label, opts, message) => {
+    const sp = mockScorePlay(opts);
+    const r = receipt();
+    await expect(applyWriteback(r, planWriteback(r, REVIEW), new ScorePlayHttpClient())).rejects.toThrow(message);
+    expect(sp.calls.every((c) => c.method === "GET")).toBe(true);
+  });
+
+  it("REJECTED review writes review:rejected + logs, never a verdict tag", async () => {
+    const sp = mockScorePlay();
+    const r = receipt({ review: "REJECTED" });
+    const out = await applyWriteback(r, planWriteback(r, REVIEW), new ScorePlayHttpClient());
+    const created = sp.calls.filter((c) => c.method === "POST" && c.path === "/tag/options").map((c) => c.body);
+    expect(created).toEqual([expect.objectContaining({ name: "reroute:review:rejected" })]);
+    expect(out["101"]).toMatchObject({ status: "VERIFIED", tags: ["reroute:review:rejected"] });
+    expect(out["202"].tags).toEqual(["reroute:review:rejected"]);
   });
 
   it("refuses demo and unreviewed receipts before any HTTP call", async () => {

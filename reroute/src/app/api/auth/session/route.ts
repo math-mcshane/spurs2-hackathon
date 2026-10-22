@@ -1,6 +1,6 @@
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
-import { authConfig, getSession, signIn, signOutCookie, type ReviewerSession } from "@/lib/server/auth";
+import { attemptSignIn, authConfig, getSession, signOutCookie, type ReviewerSession } from "@/lib/server/auth";
 import { parseBody, route } from "@/lib/server/http";
 
 const SignInSchema = z.object({ passcode: z.string().min(1).max(200), name: z.string() });
@@ -18,10 +18,13 @@ export const GET = route(async (req: Request) => {
   return Response.json(body(await getSession(req)));
 });
 
-/** POST /api/auth/session { passcode, name } → signed HttpOnly reviewer cookie (8 h). Wrong passcode → FORBIDDEN. */
+/**
+ * POST /api/auth/session { passcode, name } → signed HttpOnly reviewer cookie (8 h). Wrong passcode → FORBIDDEN
+ * after a fixed delay; repeated failures from one address → RATE_LIMITED (429, Retry-After).
+ */
 export const POST = route(async (req: Request) => {
   const { passcode, name } = await parseBody(req, SignInSchema);
-  const { session, cookie } = signIn(passcode, name);
+  const { session, cookie } = await attemptSignIn(req, passcode, name);
   const res = NextResponse.json(body(session));
   res.cookies.set(cookie.name, cookie.value, cookie.options);
   return res;

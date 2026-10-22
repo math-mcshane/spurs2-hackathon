@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FlaskConicalIcon, ScanSearchIcon, SearchXIcon, TriangleAlertIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { utc } from "@/components/reroute/shared";
 import { cn } from "@/lib/utils";
 import type { CommercialState, MediaCandidate, MediaLookup, OpportunityView, RightsState, ScoreBreakdown, SnapshotMeta, SourceMode } from "./types";
 import { WEIGHTS } from "./detect-opportunities";
@@ -124,8 +125,9 @@ export const DELIVERABLE_LABEL: Record<OpportunityView["deliverableState"], stri
   FULFILLED: "FULFILLED — published with evidence",
 };
 
+/** Board timestamps use the app-wide UTC format. */
 export function when(iso: string): string {
-  return new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC";
+  return utc(iso);
 }
 
 export function minutes(m: number | undefined): string {

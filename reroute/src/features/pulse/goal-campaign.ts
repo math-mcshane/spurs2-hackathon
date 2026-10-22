@@ -56,14 +56,16 @@ export function buildGoalCampaign(input: {
   campaignId: string;
   version: number;
   origin: GoalCampaign["origin"];
+  /** The uses this version targets: the run's plan, or a REROUTE-remedied subset of it. */
+  plan: GoalPlan;
   destination?: CommerceDestination;
   now: Date;
   previous?: GoalCampaign;
 }): GoalCampaign {
-  const { run, rec, now, previous } = input;
+  const { run, rec, now, previous, plan } = input;
   const edit = editFor(run.id, rec);
-  // The publication slot is fixed at the first proposal so every version is checked for the same date.
-  const intents = intentsFor(run.plan, rec, previous?.intents[0]?.publishAt ?? proposedPublishAt(now));
+  // Every version proposes a fresh slot (never a stale date from an earlier version); checks refresh it again.
+  const intents = intentsFor(plan, rec, proposedPublishAt(now));
   const primary = rec.matches[0];
   const seconds = Math.round((rec.candidate.endSeconds ?? 0) - (rec.candidate.startSeconds ?? 0));
   const draft = composeCampaign({
@@ -75,7 +77,7 @@ export function buildGoalCampaign(input: {
     reroute: { edit, intent: intents[0] },
     hooks: HOOKS[primary.intent] ?? {},
     fallbackHook: rec.headline,
-    angle: `${rec.headline}: the ${seconds}-second moment at ${clock(rec.candidate.startSeconds ?? 0)} in “${rec.candidate.title}”, as a vertical social cut for ${run.plan.channels.length} channels.`,
+    angle: `${rec.headline}: the ${seconds}-second moment at ${clock(rec.candidate.startSeconds ?? 0)} in “${rec.candidate.title}”, as a vertical social cut for ${plan.channels.length} channels.`,
     cohort: audienceOf(run),
     rationale: [rec.why.opportunity, rec.why.media],
     evidenceLabels: ["Ranking: objective × live TwelveLabs evidence — no fan-signal or market data used"],
@@ -83,5 +85,5 @@ export function buildGoalCampaign(input: {
     now,
     previous,
   });
-  return { ...draft, campaignId: input.campaignId, version: input.version, key: rec.key, mediaRef: rec.media, plan: run.plan, intents, origin: input.origin };
+  return { ...draft, campaignId: input.campaignId, version: input.version, key: rec.key, mediaRef: rec.media, plan, intents, origin: input.origin };
 }

@@ -1,7 +1,9 @@
-export { classifyBlocker, reasonScope } from "./blocker";
+export { classifyBlocker, reasonScope, type IntentDecision, type Remedy } from "./blocker";
 export { KNOWN_CLUB_NAMES, clubKey, sameClub } from "./club";
 export {
   MIN_DENY_CONFIDENCE,
+  PAST_PUBLISH_GRACE_MS,
+  PAST_PUBLISH_RULE_ID,
   buildDecision,
   clearanceOf,
   evaluateEdit,

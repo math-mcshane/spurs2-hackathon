@@ -142,16 +142,20 @@ export interface ObservationCacheRepository {
 
 export type ReviewRecord = { status: "APPROVED" | "REJECTED"; reviewer: string; at: string };
 
+/** A stored receipt plus the campaign version it covers (a column, not part of the frozen receipt contract). */
+export type ReceiptRow = { receipt: RightsReceipt; campaignVersion?: number };
+
 /** Storage primitives behind `lib/server/store.ts` (which owns the receipt workflow rules). */
 export interface ReceiptRepository {
-  insert(receipt: RightsReceipt): Promise<void>;
+  /** `campaignVersion` is required when `receipt.campaignId` is set. */
+  insert(receipt: RightsReceipt, campaignVersion?: number): Promise<void>;
   /** Throws NOT_FOUND. */
-  load(id: string): Promise<{ receipt: RightsReceipt; version: number }>;
+  load(id: string): Promise<ReceiptRow & { version: number }>;
   /** Writes `next` only if the stored version is still `version`; false when someone else won. */
   compareAndSet(id: string, version: number, next: RightsReceipt): Promise<boolean>;
-  latestForCampaign(campaignId: string): Promise<RightsReceipt | null>;
+  latestForCampaign(campaignId: string): Promise<ReceiptRow | null>;
   /** Receipts for one edit id evaluated under `policyVersion`, newest first. */
-  findForEdit(editId: string, policyVersion: string): Promise<RightsReceipt[]>;
+  findForEdit(editId: string, policyVersion: string): Promise<ReceiptRow[]>;
   addReview(receiptId: string, review: ReviewRecord): Promise<void>;
   /** Oldest first. */
   listReviews(receiptId: string): Promise<ReviewRecord[]>;

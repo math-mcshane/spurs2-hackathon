@@ -41,6 +41,22 @@ DATABRICKS_HOST=https://adb-….azuredatabricks.net
 DATABRICKS_TOKEN=dapi…
 ```
 
+### Secret scope `spurs2-hackathon`
+
+Policy-engine secrets live in Databricks scope **`spurs2-hackathon`** (workspace users: READ).  
+Re-upload from `andres/.env` (never commit that file):
+
+```powershell
+cd andres/databricks
+powershell -ExecutionPolicy Bypass -File scripts/upload-hackathon-secrets.ps1
+```
+
+Keys: `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `SCOREPLAY_API_KEY`, `TWELVELABS_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `APP_URL`, `SCOREPLAY_WEBHOOK_SECRET`.
+
+```python
+dbutils.secrets.get(scope="spurs2-hackathon", key="SCOREPLAY_API_KEY")
+```
+
 CLI expects `DATABRICKS_HOST` + `DATABRICKS_TOKEN` (or a working `databricks auth login` profile).  
 `databricks.yml` uses `profile: DEFAULT` — switch to `rob-andres` if that’s your active profile.
 

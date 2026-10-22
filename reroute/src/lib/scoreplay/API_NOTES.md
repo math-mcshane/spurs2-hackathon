@@ -63,6 +63,22 @@ Documented but deliberately **not** used:
 - **Idempotency keys / atomic replace:** none on any media write (`VideoLog.external_id` is the event/match matcher, not a log id). Hence add-then-verify-then-delete.
 - **`PUT /media/{id}/details`:** documented but not used (overwrites producer `description`, can change ACLs).
 
+## Webhooks (Connect → REROUTE)
+
+ScorePlay names events **`media.create`** and **`media.update`** (not `media.created`). Documented pairing: on `media.create`, call `GET /media/{id}` for full media (see OpenAPI note on `getUserPublic`).
+
+| Event | REROUTE route (production) |
+|---|---|
+| `media.create` | `POST https://spurs2-hackathon.vercel.app/api/webhooks/scoreplay/media-create` |
+| `media.update` | `POST https://spurs2-hackathon.vercel.app/api/webhooks/scoreplay/media-update` |
+
+- **Auth:** when `SCOREPLAY_WEBHOOK_SECRET` is set, require `Authorization: Bearer …`, HTTP Basic (password = secret), or `X-ScorePlay-Webhook-Secret`. When unset, the route accepts (logs a warning) for bootstrap.
+- **Body:** loose JSON; we extract `media_id` / `media.ID` / `data.*` and store the raw payload in `.data/webhooks.json` (append-only, capped). Duplicates keyed by `event_id` or body hash return `200` with `duplicate: true`.
+- **Supabase:** when `SUPABASE_URL` + `SUPABASE_SECRET_KEY` are set, upsert `scoreplay_webhook_events` (every event) and `scoreplay_inbound_media` (one row per `media_id` — browse all inbound files). Schema: `supabase/migrations/20261022210000_scoreplay_webhook_events.sql`. Apply with `pnpm db:migrate` (needs `SUPABASE_DB_PASSWORD` for DDL).
+- **Enrich:** if `SCOREPLAY_API_KEY` is set and a media id is present, we call `getAsset` after ack storage; failures are reported in the JSON response but do **not** fail the webhook.
+- **List:** `GET /api/webhooks/scoreplay/inbound` reads `scoreplay_inbound_media`.
+- **Vercel:** Deployment Protection blocks anonymous POSTs — exclude these paths or use the protection-bypass query param on the URL configured in ScorePlay.
+
 ## Open questions for ScorePlay staff
 
 1. **Taxonomy sign-off:** are the tag names in `taxonomy.ts` OK? Are colons in tag option names allowed? Should they use a specific `type`, or live in a "REROUTE" tag filter group? A newer verified receipt for another intent supersedes the media's verdict tag (logs keep each receipt's intent) — acceptable?

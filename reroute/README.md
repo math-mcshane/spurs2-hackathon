@@ -118,8 +118,10 @@ Migrations in `supabase/migrations/` (apply in filename order): `…190000_rerou
 observations), `…200000_reroute_workflow` (goal runs, campaigns + versions, evaluations, alternatives, append-only
 hash-chained events, writeback attempts, observation cache), `…210000_reroute_campaign_receipt_version`,
 `20261023000000_reroute_policy_packages` (uploaded rule packages + per-club workspace default; without it uploads and
-the workspace default answer `NOT_CONFIGURED`, presets still work). No new environment variables.
-All tables are `reroute_*`, RLS on, no `anon`/`authenticated` grants; access is server-only with the secret key.
+the workspace default answer `NOT_CONFIGURED`, presets still work), plus CDM / webhook tables
+(`…210000_scoreplay_webhook_events`, `…220000_twelvelabs_evidence`, `…230000_partners_eligible_media`,
+`…240000_media_passports`, `…250000_cdm_studio_ops`). Apply with `pnpm db:migrate` when using the remote project.
+All app tables are RLS on, no `anon`/`authenticated` grants; access is server-only with the secret key.
 Only ids, timestamps, decisions and evidence text are stored — never media or preview URLs.
 
 ## Deploy (Vercel)
@@ -128,13 +130,27 @@ Only ids, timestamps, decisions and evidence text are stored — never media or 
   **never commit `.env*`** files.
 - Keep `SCOREPLAY_WRITEBACK_MODE=dry-run`, `MEDIA_PROCESSING_APPROVED=false`, `SCOREPLAY_UPLOAD_APPROVED=false`,
   `PULSE_BOARD_ENABLED=false`, `MEDIA_PREVIEW_ENABLED` unset/false until playback rights are confirmed.
+- Also set `SCOREPLAY_WEBHOOK_SECRET`, `DATABRICKS_HOST` / `DATABRICKS_TOKEN` / `DATABRICKS_COMPLIANCE_JOB_ID`
+  (optional `DATABRICKS_WAREHOUSE_ID`) for inbound media → policy pipeline.
 - Reviewers: `pnpm exec tsx scripts/reviewer-credentials.ts <id>="<Display Name>" …` prints `REROUTE_REVIEWERS`
   (scrypt hashes only) and writes the personal passcodes to the gitignored `reroute/.reviewers.local.txt` (mode 600)
   for out-of-band handover. Plus a ≥ 32-char `REROUTE_SESSION_SECRET`. Never put passcodes in env files or docs.
 - Per-IP API rate limits (`src/lib/server/rate-limit.ts`) are in memory per instance — best-effort on serverless.
   Recommended: Vercel Deployment Protection and a Firewall rate-limit rule on `/api/*`.
+  **ScorePlay webhooks:** exclude `/api/webhooks/scoreplay/*` from protection, or append
+  `?x-vercel-protection-bypass=<VERCEL_AUTOMATION_BYPASS_SECRET>` to the webhook URLs in ScorePlay.
 - Demo replay reads the committed `demo-cache/` (set `DEMO_REPLAY=true` for a network-independent demo); FFmpeg
   render is unavailable on Vercel.
+
+### ScorePlay webhook URLs (production)
+
+| ScorePlay event | Endpoint |
+|---|---|
+| `media.create` | `https://spurs2-hackathon.vercel.app/api/webhooks/scoreplay/media-create` |
+| `media.update` | `https://spurs2-hackathon.vercel.app/api/webhooks/scoreplay/media-update` |
+
+Auth: Bearer / Basic / custom header with `SCOREPLAY_WEBHOOK_SECRET`. Browse inbound:
+`GET /api/webhooks/scoreplay/inbound` or Supabase `scoreplay_inbound_media`.
 
 ## Invariants
 

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>REROUTE — Unified CDM Workbook</title>
+  <style>
+    :root {
+      --bg: #0b0e12;
+      --panel: #141a22;
+      --panel2: #1c2430;
+      --line: #2a3544;
+      --text: #e7eef7;
+      --muted: #8b98a8;
+      --gold: #c4a35a;
+      --gold-bg: rgba(196, 163, 90, 0.12);
+      --ok: #3d9a6a;
+      --warn: #c4923a;
+      --bad: #c45a5a;
+      --sp: #5a9bc4;
+      --tl: #8a7cc4;
+      --mono: "Cascadia Code", "SF Mono", Consolas, monospace;
+      --sans: "Segoe UI", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.5; }
+    .shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+    @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } nav { position: sticky; top: 0; z-index: 5; } }
+    nav { background: var(--panel); border-right: 1px solid var(--line); padding: 20px 14px; }
+    nav .brand { font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+    nav .sub { font-size: 11px; color: var(--muted); margin-bottom: 18px; }
+    nav button {
+      display: block; width: 100%; text-align: left; background: transparent; border: 1px solid transparent;
+      color: var(--muted); padding: 8px 10px; border-radius: 6px; margin-bottom: 4px; cursor: pointer; font-size: 0.85rem;
+    }
+    nav button:hover { background: var(--panel2); color: var(--text); }
+    nav button.active { background: var(--gold-bg); border-color: var(--gold); color: var(--gold); }
+    main { padding: 28px 28px 64px; max-width: 980px; }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 1.1rem; margin: 28px 0 10px; }
+    h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 8px; }
+    .lede { color: var(--muted); max-width: 68ch; margin: 0 0 18px; }
+    .pill { display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-right: 6px; }
+    .pill.on { color: var(--gold); border-color: var(--gold); background: var(--gold-bg); }
+    .callout { background: var(--gold-bg); border: 1px solid var(--gold); border-radius: 8px; padding: 12px 14px; font-size: 0.9rem; margin: 14px 0; }
+    .callout.warn { background: rgba(196,146,58,.12); border-color: var(--warn); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .card .t { font-weight: 650; margin-bottom: 4px; }
+    .card p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+    .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 12px 0; }
+    .flow .n { flex: 1 1 120px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 0.8rem; }
+    .flow .n b { display: block; margin-bottom: 4px; }
+    .flow .a { align-self: center; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    pre { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.45; background: #080b0f; border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; color: #c5d0dc; }
+    .status { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+    .status.ok { background: rgba(61,154,106,.2); color: var(--ok); }
+    .status.warn { background: rgba(196,146,58,.2); color: var(--warn); }
+    .status.bad { background: rgba(196,90,90,.2); color: var(--bad); }
+    .entity-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    @media (max-width: 800px) { .entity-grid { grid-template-columns: 1fr 1fr; } }
+    .ent { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; }
+    .ent:hover, .ent.on { border-color: var(--gold); background: var(--panel2); }
+    .ent .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .ent .n { font-weight: 650; font-size: 0.9rem; }
+    .detail { display: none; margin-top: 12px; }
+    .detail.open { display: block; }
+    .journey { border-left: 2px solid var(--gold); padding-left: 14px; margin: 14px 0; }
+    .journey ol { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 0.88rem; }
+    .journey ol strong { color: var(--text); }
+    .ui-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (max-width: 720px) { .ui-grid { grid-template-columns: 1fr; } }
+    .ui { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .ui .id { font-family: var(--mono); font-size: 11px; color: var(--gold); }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 0.72rem; color: var(--muted); }
+    code { font-family: var(--mono); font-size: 0.85em; color: var(--gold); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav>
+      <div class="brand">REROUTE</div>
+      <div class="sub">Unified workbook · /andres</div>
+      <button type="button" class="active" data-tab="overview">Overview</button>
+      <button type="button" data-tab="cdm">Data model</button>
+      <button type="button" data-tab="journeys">User journeys</button>
+      <button type="button" data-tab="workflows">Workflows</button>
+      <button type="button" data-tab="ui">App UI surfaces</button>
+      <button type="button" data-tab="packs">Stakeholder packs</button>
+      <button type="button" data-tab="demo">Demo scenario</button>
+      <button type="button" data-tab="map">ScorePlay → CDM</button>
+    </nav>
+    <main>
+      <!-- OVERVIEW -->
+      <section class="panel active" id="overview">
+        <span class="pill on">Rights &amp; Compliance</span>
+        <span class="pill">Spurs²</span>
+        <span class="pill">Intent in · Publishable path out</span>
+        <h1>Unified CDM &amp; product workbook</h1>
+        <p class="lede">
+          Single source for entities, journeys, workflows, and UI surfaces.
+          Aligns REROUTE team workflow, CLEAR UGC prototype, TwelveLabs sample
+          prompts, and ScorePlay URL → TwelveLabs ingest.
+        </p>
+        <div class="callout">
+          <strong>Core principle:</strong> AI observes media; verified policy packs
+          determine permissions; humans approve publication. Missing evidence is
+          <span class="status warn">NEEDS_REVIEW</span>, never silent allow.
+        </div>
+        <div class="flow">
+          <div class="n"><b style="color:var(--sp)">ScorePlay</b>Media + URLs</div>
+          <div class="a">→</div>
+          <div class="n"><b style="color:var(--tl)">TwelveLabs</b>Observations</div>
+          <div class="a">→</div>
+          <div class="n"><b>Policy packs</b>League·Team·Player·Territory·Advertiser</div>
+          <div class="a">→</div>
+          <div class="n"><b>Decision</b>ALLOWED / REVIEW / BLOCKED</div>
+          <div class="a">→</div>
+          <div class="n"><b>REROUTE</b>Alt → FFmpeg → Receipt</div>
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <div class="t">Sources reviewed</div>
+            <p>REROUTE_TEAM_WORKFLOW.md · clear/ README + adapters · twelvelabs_sampleprompts · ScorePlay media JSON shape</p>
+          </div>
+          <div class="card">
+            <div class="t">Repo docs</div>
+            <p><code>andres/UNIFIED_DATA_MODEL.md</code> · <code>USER_JOURNEYS.md</code> · <code>WORKFLOWS_AND_UI.md</code> · <code>schemas/unified-cdm.types.ts</code></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CDM -->
+      <section class="panel" id="cdm">
+        <h1>Unified data model</h1>
+        <p class="lede">Click an entity for fields. Types live in <code>schemas/unified-cdm.types.ts</code>.</p>
+        <div class="callout warn">
+          Verdict names: use <code>ALLOWED</code> | <code>NEEDS_REVIEW</code> | <code>BLOCKED</code>.
+          CLEAR’s CLEARED/REVIEW/BLOCKED map at the UI edge only.
+        </div>
+        <div class="entity-grid" id="ents"></div>
+        <div class="detail" id="entDetail"></div>
+        <h2>Composition rule</h2>
+        <pre>final = worst(packDecisions)
+  BLOCKED &gt; NEEDS_REVIEW &gt; ALLOWED
+
+Each Alternative gets its own Decision before substitution.
+Post-FFmpeg Version is fully re-evaluated.</pre>
+      </section>
+
+      <!-- JOURNEYS -->
+      <section class="panel" id="journeys">
+        <h1>Supported user journeys</h1>
+        <p class="lede">Personas and paths the product must support for the hackathon and adjacent CLEAR flow.</p>
+
+        <div class="wrap" style="margin-bottom:16px">
+          <table>
+            <thead><tr><th>Persona</th><th>Goal</th><th>Surfaces</th></tr></thead>
+            <tbody>
+              <tr><td>Media producer</td><td>Ship a compliant cut</td><td>Studio, Dial, Reroute, Receipt</td></tr>
+              <tr><td>Rights ops</td><td>Explain / audit</td><td>Evidence, Review, Receipt</td></tr>
+              <tr><td>Campaign manager</td><td>Set sponsored intent</td><td>Policy Dial</td></tr>
+              <tr><td>Fan creator</td><td>Grant micro-license</td><td>CLEAR Creator flow</td></tr>
+              <tr><td>Approver</td><td>Human gate</td><td>Review queue, writeback</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="journey">
+          <h3>A — P0 demo (SAS sponsored FR IG)</h3>
+          <ol>
+            <li>Open 15s edit (3 segments) from ScorePlay</li>
+            <li>Dial: FR · Instagram · <strong>sponsored</strong> · DEMO campaign</li>
+            <li>Check → <span class="status bad">BLOCKED</span> on 00:04–00:09</li>
+            <li>Evidence → DEMO advertiser rule + TL brand observation</li>
+            <li>Find path → similar dunk → independent rights check</li>
+            <li>REROUTE + FFmpeg → re-check whole edit → <span class="status ok">ALLOWED</span></li>
+            <li>Rights Receipt → optional ScorePlay writeback</li>
+          </ol>
+        </div>
+        <div class="journey">
+          <h3>B — Policy Dial flip</h3>
+          <ol>
+            <li>Same pixels, usage=<strong>organic</strong> → softer / allow</li>
+            <li>Flip to <strong>sponsored</strong> → verdict changes (jury WOW setup)</li>
+          </ol>
+        </div>
+        <div class="journey">
+          <h3>C — Multi-holder (Tottenham / NFL venue)</h3>
+          <ol>
+            <li>NFL marks without entitlement → <span class="status warn">NEEDS_REVIEW</span></li>
+            <li>Search venue-only cleared alternatives · never invent permission</li>
+          </ol>
+        </div>
+        <div class="journey">
+          <h3>D — CLEAR creator → producer library</h3>
+          <ol>
+            <li>Attest ownership · scoped micro-license · consent event</li>
+            <li>Signals (music/minor) → REVIEW/BLOCKED fail-safe</li>
+            <li>CLEARED asset becomes Media + EntitlementFacts for REROUTE</li>
+          </ol>
+        </div>
+        <div class="journey">
+          <h3>E — No compliant path</h3>
+          <ol>
+            <li>Alternatives all fail packs → stay BLOCKED / NEEDS_REVIEW</li>
+            <li>Still emit Receipt documenting the attempt</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- WORKFLOWS -->
+      <section class="panel" id="workflows">
+        <h1>System workflows</h1>
+        <div class="grid2">
+          <div class="card">
+            <div class="t">W1 · Ingest &amp; observe</div>
+            <p>SP search/GET → map CDM → TL <code>method=url</code> → ObservationRun (or cache)</p>
+          </div>
+          <div class="card">
+            <div class="t">W2 · Evaluate</div>
+            <p>Intent + Edit + Observations + Entitlements + Packs → Decision</p>
+          </div>
+          <div class="card">
+            <div class="t">W3 · Reroute</div>
+            <p>Marengo search → Alternatives → filter by W2 → FFmpeg → re-W2</p>
+          </div>
+          <div class="card">
+            <div class="t">W4 · Receipt &amp; writeback</div>
+            <p>RightsReceipt JSON → SP tags if permitted → human approve</p>
+          </div>
+        </div>
+        <h2>W2 evaluate (detail)</h2>
+        <pre>for each Segment:
+  observations = TL facts in [start, end]
+  facts = EntitlementFacts for asset
+  packs = resolve(league, team, player, territory, advertiser, …)
+  packDecisions[] = evaluate(intent, observations, facts, pack)
+segmentVerdict = worst(packDecisions)
+editVerdict = worst(segmentVerdicts)</pre>
+        <h2>Invariants</h2>
+        <div class="wrap">
+          <table>
+            <tbody>
+              <tr><td>Observations ≠ permissions</td><td>TwelveLabs never grants rights</td></tr>
+              <tr><td>Unknown ≠ allow</td><td>Missing entitlement → NEEDS_REVIEW</td></tr>
+              <tr><td>Independent alts</td><td>Each replacement re-runs W2</td></tr>
+              <tr><td>Append-only audit</td><td>Decisions + Receipts not mutated</td></tr>
+              <tr><td>DEMO label</td><td>All packs visibly fictional for judges</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- UI -->
+      <section class="panel" id="ui">
+        <h1>App UI surfaces</h1>
+        <p class="lede">P0 surfaces for REROUTE Studio. CLEAR remains the UGC sibling.</p>
+        <div class="ui-grid" id="uis"></div>
+        <h2>P0 navigation</h2>
+        <pre>Library → Studio
+          ├─ Policy Dial (persistent)
+          ├─ Check rights → Evidence
+          ├─ Find compliant path → Alternatives → Before/After
+          └─ Rights Receipt → Approve / writeback
+Review queue (ops) · CLEAR Creator (optional)</pre>
+        <h2>Action → surface → workflow</h2>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Action</th><th>Surface</th><th>Workflow</th></tr></thead>
+            <tbody>
+              <tr><td>Open edit</td><td>S-STUDIO</td><td>W1</td></tr>
+              <tr><td>Change Dial</td><td>S-DIAL → S-CHECK</td><td>W2</td></tr>
+              <tr><td>Inspect failure</td><td>S-EVID</td><td>—</td></tr>
+              <tr><td>Find path</td><td>S-ALT → S-REROUTE</td><td>W3</td></tr>
+              <tr><td>Save decision</td><td>S-RECEIPT</td><td>W4</td></tr>
+              <tr><td>Creator submit</td><td>S-CREATOR</td><td>W5</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PACKS -->
+      <section class="panel" id="packs">
+        <h1>Stakeholder policy packs</h1>
+        <p class="lede">Each stakeholder brings requirements. Engine intersects packs for the PublishIntent.</p>
+        <div class="wrap">
+          <table>
+            <thead><tr><th>Pack</th><th>Example requirements</th><th>TL / metadata aid</th></tr></thead>
+            <tbody>
+              <tr><td><strong>League</strong></td><td>Broadcast source, clean feed, embargo, competition, clip caps</td><td>RIGHTS-01/02, competition_source</td></tr>
+              <tr><td><strong>Team</strong></td><td>Club channel rules, venue IP, tunnel/BTS, academy minors</td><td>VENUE-02, restricted_zone</td></tr>
+              <tr><td><strong>Player</strong></td><td>NIL / single-player commercial, roster status, personal deal conflict</td><td>PLAYER-02, players_named</td></tr>
+              <tr><td><strong>Territory</strong></td><td>Geo allow/deny, category bans (gambling/alcohol), blackouts</td><td>PublishIntent + MEDIA-04</td></tr>
+              <tr><td><strong>Advertiser</strong></td><td>Campaign exclusivity, organic vs sponsored, competitor adjacency</td><td>sponsors_seen, archival_sponsored</td></tr>
+              <tr><td><strong>Platform</strong></td><td>IG/TikTok/YouTube/CTV scopes, paid social</td><td>PublishIntent</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h2>Demo seed rules (fiction)</h2>
+        <pre>ADV-DEMO-01  advertiser  BLOCK     competing brand in sponsored FR IG window
+TERR-FR-01   territory   RESTRICT  sponsored social FR only with campaign pack
+LEA-FEED-01  league      BLOCK     dirty scorebug for paid social
+PLY-CTA-01   player      REVIEW    single-player + shop CTA without player pack
+TEAM-TUN-01  team        BLOCK     tunnel/locker on public IG
+3P-NFL-01    league      REVIEW    NFL marks without entitlement on file</pre>
+      </section>
+
+      <!-- DEMO -->
+      <section class="panel" id="demo">
+        <h1>Concrete demo objects</h1>
+        <p class="lede">San Antonio Spurs · 15s sponsored Instagram · France · fictional campaign policy.</p>
+        <div class="grid2">
+          <div>
+            <h3>Edit segments</h3>
+            <pre>00:00–00:04  entrance      ALLOWED
+00:04–00:09  dunk+brand    BLOCKED (ADV-DEMO-01)
+00:09–00:15  celebration   ALLOWED</pre>
+          </div>
+          <div>
+            <h3>PublishIntent</h3>
+            <pre>{
+  "territory": "FR",
+  "platform": "instagram",
+  "usage": "sponsored",
+  "competition": "NBA",
+  "publishAt": "2026-10-24",
+  "campaignId": "demo-partner-fr"
+}</pre>
+          </div>
+        </div>
+        <h2>RightsReceipt (shape)</h2>
+        <pre>{
+  "verdict": "ALLOWED",
+  "intent": { "...PublishIntent" },
+  "policyVersions": ["advertiser.demo-partner-fr@1", "territory.fr@1", "league.nba.demo@1"],
+  "replacements": [{
+    "segmentId": "seg-2",
+    "fromAssetId": "sp-orig",
+    "toAssetId": "sp-alt-dunk",
+    "startSeconds": 4,
+    "endSeconds": 9
+  }],
+  "demoDisclosure": "DEMO POLICY — NOT AN ACTUAL TEAM OR LEAGUE AGREEMENT",
+  "writebackStatus": "pending"
+}</pre>
+      </section>
+
+      <!-- MAP -->
+      <section class="panel" id="map">
+        <h1>ScorePlay payload → CDM</h1>
+        <p class="lede">From authenticated media GET/search. URLs go straight to TwelveLabs.</p>
+        <div class="wrap" style="padding: 4px 14px">
+          <table>
+            <thead><tr><th>ScorePlay</th><th>CDM</th></tr></thead>
+            <tbody>
+              <tr><td><code>ID</code></td><td><code>Asset.scoreplayMediaId</code></td></tr>
+              <tr><td><code>type</code></td><td><code>Asset.mediaType</code></td></tr>
+              <tr><td><code>company_id</code></td><td><code>Org.scoreplayCompanyId</code></td></tr>
+              <tr><td><code>event</code></td><td><code>EventRef</code> + Collection</td></tr>
+              <tr><td><code>tags / tag_option_ids</code></td><td><code>AssetTag[]</code></td></tr>
+              <tr><td><code>files[].url</code> / <code>original_url</code></td><td><code>Rendition</code> + <code>tlSourceUrl</code></td></tr>
+              <tr><td><code>usage</code>, accessibility windows</td><td><code>EntitlementFact</code> when authoritative</td></tr>
+              <tr><td>Collection→Media→Version→File</td><td><code>SportsMediaLocator</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout" style="margin-top:14px">
+          Ingest path: set <code>tlSourceUrl</code> from photographer/compressed/original →
+          TwelveLabs <code>assets.create(method=url)</code>. No download relay on happy path.
+        </div>
+      </section>
+
+      <footer>
+        /andres workbook · replaces docs/cdm-rights-compliance-preview.html ·
+        DEMO policies only · not legal advice · Spurs² Oct 2026
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const entities = [
+      { k: 'media', n: 'Asset', d: `id, scoreplayMediaId, mediaType
+orgId, event, tags[]
+renditions[]
+tlSourceUrl          // SP URL → TL
+tlAssetId, tlStatus
+locator: Collection→Media→Version→File` },
+      { k: 'media', n: 'Edit / Version', d: `id, title, rootAssetId
+versionId, parentVersionId?
+segments[]
+durationSeconds` },
+      { k: 'media', n: 'Segment', d: `id, editId
+startSeconds, endSeconds
+sourceAssetId
+observationIds[]` },
+      { k: 'intent', n: 'PublishIntent', d: `territory, platform
+usage: organic|sponsored|paid
+competition, publishAt
+advertiserId?, campaignId?` },
+      { k: 'obs', n: 'ObservationRun', d: `provider: twelvelabs
+modelAnalyze / modelSearch
+sourceUrl, indexId
+cached, createdAt` },
+      { k: 'obs', n: 'Observation', d: `questionId, section
+value, start/end
+citation, confidence
+// RIGHTS/MEDIA/PLAYER/VENUE ids` },
+      { k: 'policy', n: 'PolicyPack', d: `kind: league|team|player|
+  territory|advertiser|platform
+version, demo: true
+rules[]` },
+      { k: 'policy', n: 'EntitlementFact', d: `subjectKind, claimType
+claimValue, validUntil
+source: scoreplay|demo_seed|
+  clear_license|manual` },
+      { k: 'decision', n: 'Decision', d: `verdict
+packDecisions[]
+segmentVerdicts[]
+policyVersions[]
+evaluatedAt` },
+      { k: 'decision', n: 'Alternative', d: `forSegmentId
+candidateAssetId
+start/end, similarityScore
+decision (independent)` },
+      { k: 'decision', n: 'RightsReceipt', d: `intent, verdict
+policyVersions
+replacements[]
+demoDisclosure
+writebackStatus` },
+      { k: 'ugc', n: 'CLEAR bridge', d: `Creator, MicroLicense
+ConsentEvent
+→ EntitlementFacts
+→ Asset ready for REROUTE` },
+    ];
+
+    const uis = [
+      ['S-LIB', 'Library', 'Search edits/assets by event & status'],
+      ['S-STUDIO', 'Studio', 'Player + segmented timeline'],
+      ['S-DIAL', 'Policy Dial', 'Territory · platform · usage · competition · date'],
+      ['S-CHECK', 'Check result', 'Verdict + pack breakdown'],
+      ['S-EVID', 'Evidence drawer', 'Timecode, rule, TL citation, DEMO label'],
+      ['S-ALT', 'Alternatives', 'Candidate cards with per-item rights'],
+      ['S-REROUTE', 'Before / after', 'Dual player + FFmpeg output version'],
+      ['S-RECEIPT', 'Rights Receipt', 'Downloadable audit JSON + writeback'],
+      ['S-REVIEW', 'Review queue', 'NEEDS_REVIEW / override (ops)'],
+      ['S-CREATOR', 'CLEAR Creator', 'UGC attest + micro-license'],
+    ];
+
+    const ents = document.getElementById('ents');
+    const detail = document.getElementById('entDetail');
+    entities.forEach((e) => {
+      const el = document.createElement('div');
+      el.className = 'ent';
+      el.innerHTML = `<div class="k">${e.k}</div><div class="n">${e.n}</div>`;
+      el.onclick = () => {
+        document.querySelectorAll('.ent').forEach((x) => x.classList.remove('on'));
+        el.classList.add('on');
+        detail.className = 'detail open';
+        detail.innerHTML = `<h3>${e.n}</h3><pre>${e.d}</pre>`;
+      };
+      ents.appendChild(el);
+    });
+
+    const uisEl = document.getElementById('uis');
+    uis.forEach(([id, name, desc]) => {
+      const el = document.createElement('div');
+      el.className = 'ui';
+      el.innerHTML = `<div class="id">${id}</div><div class="t" style="font-weight:650;margin:4px 0">${name}</div><p class="muted" style="margin:0">${desc}</p>`;
+      uisEl.appendChild(el);
+    });
+
+    document.querySelectorAll('nav button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('nav button').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+        window.scrollTo(0, 0);
+      });
+    });
+  </script>
+</body>
+</html>

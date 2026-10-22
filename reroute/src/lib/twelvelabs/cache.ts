@@ -8,8 +8,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { DataOrigin } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
+import { STATE_ROOT } from "@/lib/state-dir";
 
-const CACHE_DIR = path.join(process.cwd(), ".cache", "twelvelabs");
+const CACHE_DIR = path.join(STATE_ROOT, ".cache", "twelvelabs");
 
 export function cacheKey(parts: unknown): string {
   return createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32);

@@ -12,6 +12,7 @@ import {
   type RightsReceipt,
 } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
+import { STATE_ROOT } from "@/lib/state-dir";
 import { z } from "zod";
 
 /**
@@ -36,7 +37,7 @@ type StoreData = z.infer<typeof StoreDataSchema>;
 /** Receipt as returned by the API: the contract shape plus the review audit trail. */
 export type StoredReceipt = RightsReceipt & { reviews: ReviewRecord[] };
 
-const DATA_DIR = path.join(process.cwd(), ".data");
+const DATA_DIR = path.join(STATE_ROOT, ".data");
 const STORE_FILE = path.join(DATA_DIR, "store.json");
 
 let queue: Promise<unknown> = Promise.resolve();

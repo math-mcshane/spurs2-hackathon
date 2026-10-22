@@ -3,8 +3,9 @@ import { mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import type { Asset, Segment } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
+import { STATE_ROOT } from "@/lib/state-dir";
 
-export const RENDERS_DIR = path.join(process.cwd(), ".renders");
+export const RENDERS_DIR = path.join(STATE_ROOT, ".renders");
 
 /** Spec §9: off-platform media processing only after organizers approve it. */
 export function mediaProcessingApproved(): boolean {

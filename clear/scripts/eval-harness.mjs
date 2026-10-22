@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { evaluateRights } from '../lib/compliance.ts';
 import { evaluateRulePack } from '../lib/rule-pack.ts';
+import { validateAgreement } from '../lib/agreement.ts';
 
 const base = {
   consentAccepted: true,
@@ -57,3 +58,31 @@ for (const [name, override, expected] of packCases) {
   console.log(`✓ ${name} → ${actual}`);
 }
 console.log(`\n${cases.length + packCases.length}/${cases.length + packCases.length} total safety evaluations passed.`);
+
+const agreementBase = {
+  templateId: 'clear-ugc-brand-1.0',
+  assetId: 'CL-1048',
+  campaign: 'Game Night Fan Moment',
+  partner: 'Demo Brand Partner',
+  platforms: ['Instagram', 'TikTok'],
+  territory: 'United States',
+  durationDays: 90,
+  paidUse: false,
+  assetVerdict: 'CLEARED',
+  creatorLicenseActive: true,
+};
+const agreementCases = [
+  ['approved agreement variables are ready', {}, 'READY'],
+  ['unapproved template blocks', { templateId: 'ai-freeform' }, 'BLOCKED'],
+  ['blocked asset blocks agreement', { assetVerdict: 'BLOCKED' }, 'BLOCKED'],
+  ['out-of-pack platform blocks', { platforms: ['Streaming TV'] }, 'BLOCKED'],
+  ['excessive duration blocks', { durationDays: 365 }, 'BLOCKED'],
+  ['paid use requires addendum review', { paidUse: true }, 'REVIEW'],
+];
+
+for (const [name, override, expected] of agreementCases) {
+  const actual = validateAgreement({ ...agreementBase, ...override }).status;
+  assert.equal(actual, expected, `${name}: expected ${expected}, got ${actual}`);
+  console.log(`✓ ${name} → ${actual}`);
+}
+console.log(`\n${cases.length + packCases.length + agreementCases.length}/${cases.length + packCases.length + agreementCases.length} total safety evaluations passed.`);

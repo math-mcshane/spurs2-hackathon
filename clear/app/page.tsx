@@ -13,6 +13,9 @@ import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import GavelRoundedIcon from '@mui/icons-material/GavelRounded';
+import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
+import LockRoundedIcon from '@mui/icons-material/LockRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 
 const spursTheme = createTheme({
   palette: { mode: 'dark', background: { default: '#050505', paper: '#111214' }, primary: { main: '#c4ced4', contrastText: '#050505' }, secondary: { main: '#00a9ce' }, success: { main: '#38c79a' }, warning: { main: '#ffb81c' }, error: { main: '#f05a7e' } },
@@ -22,7 +25,7 @@ const spursTheme = createTheme({
 });
 
 type Status = 'CLEARED' | 'REVIEW' | 'BLOCKED';
-type View = 'library' | 'review' | 'submit' | 'detail' | 'evaluations' | 'integrations';
+type View = 'library' | 'review' | 'agreements' | 'submit' | 'detail' | 'evaluations' | 'integrations';
 type Asset = { id:string; title:string; creator:string; name:string; email:string; status:Status; scope:string; platforms:string[]; territory:string; duration:string; paid:boolean; modification:boolean; expiry:string; reason:string[]; signals:string[]; audit:string; consent:string; submitted:string; color:string };
 
 const seedAssets: Asset[] = [
@@ -49,6 +52,7 @@ export default function Home(){
       <nav aria-label="Primary">
         <button className={`nav-item ${view==='library'||view==='detail'?'active':''}`} onClick={()=>setView('library')}><DashboardRoundedIcon/><span>Library</span></button>
         <button className={`nav-item ${view==='review'?'active':''}`} onClick={()=>setView('review')}><FactCheckRoundedIcon/><span>Rights review</span> <b>2</b></button>
+        <button className={`nav-item ${view==='agreements'?'active':''}`} onClick={()=>setView('agreements')}><DescriptionRoundedIcon/><span>Agreements</span></button>
         <button className={`nav-item ${view==='submit'?'active':''}`} onClick={()=>setView('submit')}><AddCircleRoundedIcon/><span>Creator flow</span> <b>Live</b></button>
         <button className={`nav-item ${view==='evaluations'?'active':''}`} onClick={()=>setView('evaluations')}><VerifiedRoundedIcon/><span>Evaluations</span></button>
         <button className={`nav-item ${view==='integrations'?'active':''}`} onClick={()=>setView('integrations')}><HubRoundedIcon/><span>Integrations</span></button>
@@ -57,6 +61,7 @@ export default function Home(){
     <section className="workspace"><Header onLogo={()=>setView('library')} onSubmit={()=>setView('submit')}/>
       {view==='library'&&<Library assets={filtered} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} open={open} submit={()=>setView('submit')}/>} 
       {view==='review'&&<RightsReview/>}
+      {view==='agreements'&&<AgreementBuilder/>}
       {view==='detail'&&<Detail asset={selected} back={()=>setView('library')}/>} 
       {view==='submit'&&<Submission done={(asset)=>{setSelected(asset);setView('detail')}}/>}
       {view==='evaluations'&&<Evaluations/>}
@@ -99,6 +104,60 @@ return <div className="creator-bg"><div className="phone-flow"><div className="c
 {step===3&&<div className="form-stage"><h1>Choose what you approve.</h1><p>You stay in control. These are the uses the club is requesting.</p><fieldset><legend>Platforms</legend><div className="chips">{['Instagram','TikTok','X','YouTube'].map(p=><button type="button" key={p} className={platforms.includes(p)?'chip selected':'chip'} onClick={()=>toggle(p)}>{platforms.includes(p)?'✓ ':''}{p}</button>)}</div></fieldset><label>Territory<select value={territory} onChange={e=>setTerritory(e.target.value)}><option>Worldwide</option><option>United States</option></select></label><label>Duration<select value={duration} onChange={e=>setDuration(e.target.value)}><option>12 months</option><option>6 months</option><option>30 days</option></select></label><div className="toggle-row"><span><b>Paid advertising</b><small>Allow use in promoted posts or ads</small></span><button className={paid?'toggle on':'toggle'} onClick={()=>setPaid(!paid)}><i/></button></div><div className="toggle-row"><span><b>Editing & modification</b><small>Allow cropping, captions, and edits</small></span><button className={modify?'toggle on':'toggle'} onClick={()=>setModify(!modify)}><i/></button></div><button className="primary full" disabled={!platforms.length} onClick={next}>Review my license →</button></div>}
 {step===4&&<div className="form-stage"><h1>Your permission, in plain English.</h1><p>You&apos;re granting a limited license—not giving up ownership.</p><div className="license-card"><span className="micro">UGC MICRO-LICENSE · VERSION 1.0</span><h3>You keep ownership.</h3><p>You give the San Antonio Spurs permission to use this clip on <b>{platforms.join(', ')}</b>, for <b>{duration.toLowerCase()}</b>, in <b>{territory}</b>.</p><dl><dt>Organic social</dt><dd>Included</dd><dt>Paid advertising</dt><dd>{paid?'Included':'Not included'}</dd><dt>Editing</dt><dd>{modify?'Captions, crops & edits allowed':'Not allowed'}</dd></dl><p className="legal">You confirm you created this content and can grant these rights. You can contact the club about this license. Separate third-party rights may still require review.</p></div><label className="check"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/><span><b>I have read and accept this license.</b><small>My acceptance, timestamp, and license version will be recorded.</small></span></label><button className="primary full" disabled={!accepted} onClick={finish}>Accept & submit clip ✓</button><p className="tiny center">Creates a tamper-evident demo consent event</p></div>}
 <button className="producer-return plain" onClick={()=>location.reload()}>← Producer workspace</button></div></div>}
+
+const lockedClauses = [
+  ['01','Rights ownership & authority','Creator warrants they control the submitted asset and may grant the defined rights.','CLUB + LEAGUE'],
+  ['02','Limited license grant','The grant is non-exclusive, purpose-limited, non-transferable except to approved production vendors.','CLUB COUNSEL'],
+  ['03','League and competition restrictions','Use remains subject to applicable league, competition, player, venue, and broadcast rules.','LEAGUE PACK'],
+  ['04','Brand conflict protection','No asset may imply an endorsement or appear beside an excluded or conflicting category.','PARTNER RULES'],
+  ['05','Player and group licensing','Commercial player use must satisfy the active league and club player-rights policy.','LEAGUE PACK'],
+  ['06','Third-party material','Music, broadcast footage, trademarks, and other embedded rights require separate clearance.','RIGHTS OPS'],
+  ['07','Revocation, expiry & takedown','Publication stops when the license expires, is revoked, or a rights conflict is confirmed.','CLUB COUNSEL'],
+  ['08','Evidence and audit trail','The accepted text, version, signer, timestamp, scope, and hash are retained with the asset.','CLEAR SYSTEM'],
+];
+
+function AgreementBuilder(){
+  const [partner,setPartner]=useState('Demo Brand Partner');
+  const [campaign,setCampaign]=useState('Game Night Fan Moment');
+  const [platform,setPlatform]=useState('Instagram + TikTok');
+  const [territory,setTerritory]=useState('United States');
+  const [duration,setDuration]=useState('90 days');
+  const [asset,setAsset]=useState('CL-1048 · Courtside celebration');
+  const [generated,setGenerated]=useState(false);
+  const [notice,setNotice]=useState('');
+  const generate=()=>{setGenerated(true);setNotice('Agreement draft created from approved clause pack');window.setTimeout(()=>setNotice(''),2800)};
+  return <div className="content agreement-workspace">
+    <div className="eyebrow">CONTROLLED AGREEMENT GENERATOR / COUNSEL-GOVERNED</div>
+    <div className="title-row agreement-title"><div><h1>Move fast without rewriting the rules.</h1><p>At least 80% of every agreement is locked to approved club, league, and brand guardrails. Producers configure only the deal facts.</p></div><div className="lock-score"><span><LockRoundedIcon/> LOCKED</span><b>80%</b><small>8 of 10 sections</small></div></div>
+    <section className="agreement-flow" aria-label="Agreement generation workflow">{[['01','Choose rule packs'],['02','Set safe variables'],['03','Validate conflicts'],['04','Generate + approve']].map(([n,label],i)=><div className={i<3?'done':''} key={n}><small>{n}</small><b>{label}</b><i>{i<3?'✓':'→'}</i></div>)}</section>
+    <section className="agreement-layout">
+      <aside className="agreement-config"><div className="section-heading"><div><b><TuneRoundedIcon/> Agreement setup</b><span>Only approved variables are editable</span></div></div>
+        <label>Agreement type<select><option>UGC brand usage license</option><option disabled>Player commercial addendum · approval needed</option><option disabled>Broadcast reuse license · approval needed</option></select></label>
+        <label>Club rule pack<select><option>San Antonio · UGC demo v1.0</option></select></label>
+        <label>League rule pack<select><option>NBA media rights · draft v1.0.0</option></select></label>
+        <label>Brand partner<input value={partner} onChange={e=>setPartner(e.target.value)}/></label>
+        <label>Campaign<input value={campaign} onChange={e=>setCampaign(e.target.value)}/></label>
+        <label>Approved asset<select value={asset} onChange={e=>setAsset(e.target.value)}><option>CL-1048 · Courtside celebration</option><option>CL-1052 · Arena crowd reaction</option></select></label>
+        <label>Platforms<select value={platform} onChange={e=>setPlatform(e.target.value)}><option>Instagram + TikTok</option><option>Instagram only</option><option>X + YouTube</option></select></label>
+        <label>Territory<select value={territory} onChange={e=>setTerritory(e.target.value)}><option>United States</option><option>North America</option><option>Worldwide</option></select></label>
+        <label>Duration<select value={duration} onChange={e=>setDuration(e.target.value)}><option>30 days</option><option>90 days</option><option>6 months</option></select></label>
+        <div className="blocked-option"><LockRoundedIcon/><span><b>Paid media is locked off</b><small>This template requires a separately approved paid-media addendum.</small></span></div>
+      </aside>
+      <div className="clause-stack"><div className="section-heading"><div><b>Agreement composition</b><span>Policy sources stay attached to every clause</span></div><small>PACK · CLEAR-UGC-1.0</small></div>
+        {lockedClauses.map(([n,title,copy,source])=><article className="locked-clause" key={n}><span>{n}</span><div><b>{title}</b><p>{copy}</p><small>{source}</small></div><LockRoundedIcon/></article>)}
+        <article className="variable-clause"><span>09</span><div><b>Approved campaign and asset</b><p><mark>{campaign || 'Untitled campaign'}</mark> may use <mark>{asset}</mark> for the named partner.</p><small>PRODUCER VARIABLE · VALIDATED</small></div><TuneRoundedIcon/></article>
+        <article className="variable-clause"><span>10</span><div><b>Approved distribution scope</b><p><mark>{platform}</mark> · <mark>{territory}</mark> · <mark>{duration}</mark> · organic use only.</p><small>PRODUCER VARIABLE · POLICY-BOUNDED</small></div><TuneRoundedIcon/></article>
+      </div>
+      <aside className="agreement-ready"><div className="ready-orbit"><span>10/10</span><small>checks pass</small></div><h2>Ready to generate</h2><p>Every variable is inside the intersection of the creator license, club policy, league pack, and partner rules.</p>
+        <ul><li>✓ Asset is CLEARED</li><li>✓ Creator license is active</li><li>✓ Selected platforms are in scope</li><li>✓ No category conflict detected</li><li>✓ Paid use remains excluded</li></ul>
+        <button className="primary full" onClick={generate}>Generate controlled draft</button><button className="secondary full" onClick={()=>setNotice('Counsel approval route opened in demo mode')}>Route to counsel</button><small>Demo workflow · approved legal language required</small>
+      </aside>
+    </section>
+    {generated&&<section className="generated-agreement"><div><span>GENERATED DRAFT · CLEAR-AGR-2026-018</span><h2>UGC Brand Usage License</h2><p>This controlled draft combines approved language from San Antonio club policy, the NBA media-rights rule pack, and the applicable partner guardrails.</p></div><dl><dt>Partner</dt><dd>{partner}</dd><dt>Campaign</dt><dd>{campaign}</dd><dt>Asset</dt><dd>{asset}</dd><dt>Scope</dt><dd>{platform} · {territory} · {duration} · organic only</dd></dl><div className="agreement-actions"><button className="primary" onClick={()=>setNotice('Approval package prepared with clause sources and audit hash')}>Prepare approval package</button><button className="secondary" onClick={()=>setNotice('Version comparison opened in demo mode')}>Compare versions</button></div></section>}
+    {notice&&<div className="action-toast" role="status">✓ {notice}<small>Demo only · no agreement was sent or signed</small></div>}
+    <p className="assumption">LEGAL GUARDRAIL · CLEAR generates only from counsel-approved templates and versioned rule packs. AI may summarize or select approved language; it cannot rewrite locked clauses, expand granted rights, or substitute for legal approval.</p>
+  </div>
+}
 
 const reviewCases = [
   { id:'SP-8421', title:'Tunnel high-five with young fan', status:'REVIEW' as Status, color:'amber', duration:'00:09', context:'Spurs partner post · Instagram · US · Organic', score:64, summary:'A player greets a young fan in the tunnel while commercial music plays.', rules:[

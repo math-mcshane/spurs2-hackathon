@@ -36,7 +36,7 @@ Copy `.env.example` to `.env.local` only when preparing integrations. Mock mode 
 
 ## Supabase database
 
-The production-shaped schema lives in `supabase/migrations/20261022133000_clear_initial_schema.sql`. It models creators, assets, ownership attestations, scoped licenses, append-only consent/audit events, video analysis, timecoded evidence, publication requests, deterministic rights decisions, review tasks, compliant asset matches, and integration events.
+The production-shaped schema lives in `supabase/migrations`. It models creators, assets, ownership attestations, scoped licenses, append-only consent/audit events, video analysis, timecoded evidence, publication requests, deterministic rights decisions, review tasks, compliant asset matches, integration events, versioned agreement templates and clauses, generated drafts, and counsel approvals.
 
 All tables have Row Level Security enabled and no broad client policies by default. Until role-specific policies are approved, write through a trusted server using `SUPABASE_SERVICE_ROLE_KEY`; never expose that key in browser code. The public project URL and anonymous key use `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
@@ -44,6 +44,7 @@ All tables have Row Level Security enabled and no broad client policies by defau
 
 - Responsive producer library with search and status filtering.
 - Agentic Rights Review workspace with request context, a review queue, timecoded AI evidence, rule-by-rule findings, deterministic decisions, reviewer actions, and compliant duplicate suggestions.
+- Controlled agreement generator with an enforced 80% locked-clause floor, versioned club/league/partner rule packs, bounded deal variables, conflict checks, and approval-package workflow.
 - Three demo scenarios: clearable celebration, music/minor review, and expired/restricted block.
 - Asset detail with verdict, reasoning, AI signals, license scope, creator proof, consent ID, expiry, and audit hash.
 - Four-step mobile creator flow: upload placeholder, identity/contact, ownership attestation, granular scope, plain-English micro-license, and acceptance.

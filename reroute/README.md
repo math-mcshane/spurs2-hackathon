@@ -30,9 +30,10 @@ ScorePlay stays the system of record for media: only ScorePlay ids, decisions an
 - Schema: `supabase/migrations/20261022190000_reroute_store.sql`. Run it once in Supabase → SQL Editor (idempotent).
   Until then the store routes answer `503 NOT_CONFIGURED` ("Supabase tables missing").
 - Access is server-only (`src/lib/supabase-admin.ts`, secret key, RLS on, no `anon`/`authenticated` grants).
-- Local dev needs `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in `.env.local` (Supabase → Project Settings → API keys).
-  The Vercel integration stores them as *sensitive* Production/Preview variables, which `vercel env pull` / `vercel env run`
-  cannot read back, so copy them from the Supabase dashboard.
+- Local dev: with access to the Vercel project, `vercel link` (project `spurs2-hackathon`) then
+  `vercel env pull .env.local --environment=preview` fills ScorePlay, TwelveLabs and Supabase keys
+  (the Supabase variables are not on the Development target, hence `--environment=preview`; this overwrites `.env.local`).
+  Without Vercel access, copy `SUPABASE_URL` / `SUPABASE_SECRET_KEY` from Supabase → Project Settings → API keys.
 
 ## Deploy on Vercel
 

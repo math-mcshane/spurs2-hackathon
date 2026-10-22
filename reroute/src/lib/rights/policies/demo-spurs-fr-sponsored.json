@@ -1,0 +1,53 @@
+{
+  "id": "demo-spurs-fr-sponsored",
+  "version": "2026-10-22.1",
+  "source": "REROUTE fictional demo dataset (no club, league or sponsor contract was supplied)",
+  "fictional": true,
+  "disclaimer": "FICTIONAL DEMO POLICY — not an actual team, league or sponsor agreement",
+  "rules": [
+    {
+      "id": "SPURS-1-nba-social-license",
+      "effect": "PERMIT",
+      "dimensions": ["competition", "territory", "platform", "usage", "expiry"],
+      "match": { "competition": ["NBA"] },
+      "intent": { "territories": ["FR", "US"], "platforms": ["instagram", "youtube"], "usage": ["ORGANIC", "SPONSORED"] },
+      "validFrom": "2026-10-01T00:00:00Z",
+      "validUntil": "2026-12-31T23:59:59Z",
+      "explanation": "FICTIONAL: NBA game footage may be published in FR and US on Instagram and YouTube, organic or sponsored, until 31 Dec 2026."
+    },
+    {
+      "id": "SPURS-2-in-game-people-and-signage",
+      "effect": "PERMIT",
+      "dimensions": ["people", "sponsor"],
+      "match": { "competition": ["NBA"] },
+      "covers": ["person:*", "brand:*"],
+      "validFrom": "2026-10-01T00:00:00Z",
+      "validUntil": "2026-12-31T23:59:59Z",
+      "explanation": "FICTIONAL: players, officials and in-arena signage appearing in NBA game footage are cleared for club social use."
+    },
+    {
+      "id": "SPURS-3-rival-sponsor-exclusivity",
+      "effect": "DENY",
+      "dimensions": ["sponsor"],
+      "match": { "evidenceLabels": ["brand:rival-sponsor"] },
+      "intent": { "usage": ["SPONSORED"] },
+      "explanation": "FICTIONAL: sponsored campaign posts must not show a rival sponsor's branding (demo exclusivity clause)."
+    },
+    {
+      "id": "SPURS-4-gb-geo-block",
+      "effect": "DENY",
+      "dimensions": ["territory"],
+      "match": { "competition": ["NBA"] },
+      "intent": { "territories": ["GB"] },
+      "explanation": "FICTIONAL: NBA game footage is geo-blocked in GB (demo exclusive-broadcaster window)."
+    },
+    {
+      "id": "SPURS-5-no-sponsored-tiktok",
+      "effect": "DENY",
+      "dimensions": ["platform"],
+      "match": { "competition": ["NBA"] },
+      "intent": { "platforms": ["tiktok"], "usage": ["SPONSORED"] },
+      "explanation": "FICTIONAL: sponsored NBA footage may not be posted on TikTok."
+    }
+  ]
+}

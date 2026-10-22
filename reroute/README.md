@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# REROUTE — Every clip, cleared
 
-## Getting Started
+Spurs² Hackathon · Rights & Compliance. Spec: `REROUTE_TECHNICAL_SPEC_V1.1.md`.
 
-First, run the development server:
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local   # fill ScorePlay + TwelveLabs keys
 pnpm dev
-# or
-bun dev
+pnpm test && pnpm typecheck && pnpm lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Smoke the integrations once keys are set:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts spurs
+pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts --writeback <assetId>
+pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts "dunk"
+pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts --observe <scoreplayMediaId>
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Without keys every integration route returns `503 NOT_CONFIGURED`; there are no mock adapters.
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+| Path | Role |
+|---|---|
+| `src/lib/contracts.ts` | Shared types, Zod schemas, API request/response contracts |
+| `src/lib/rights/` | Deterministic policy engine + fictional demo policies (`policies/*.json`) |
+| `src/lib/scoreplay/` | ScorePlay client, asset mapping, writeback taxonomy (`API_NOTES.md`) |
+| `src/lib/twelvelabs/` | Marengo search, Pegasus observations, record/replay cache (`API_NOTES.md`) |
+| `src/lib/server/` | Decision context, resolver, JSON store (`.data/`), FFmpeg render |
+| `src/app/api/` | `assets`, `decide`, `resolve`, `access`, `receipts`, `observations`, `writeback`, `render`, `policies` |
+| `src/components/reroute/` | One-screen producer UI |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Invariants
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Explicit DENY → `BLOCKED`; unknown mandatory fact/permission or missing video analysis → `NEEDS_REVIEW`; `ALLOWED` only when all 7 dimensions are affirmatively permitted.
+- An edit is judged across every segment; REROUTE alternatives are derived edits needing their own decision and human review.
+- The access gate is app-level and re-evaluates server-side; it does not change ScorePlay ACLs.
+- `MEDIA_PROCESSING_APPROVED` / `SCOREPLAY_UPLOAD_APPROVED` stay `false` until organizers / ScorePlay staff confirm.
+- Demo policies are fictional and labeled as such in the UI, receipts and ScorePlay tags.

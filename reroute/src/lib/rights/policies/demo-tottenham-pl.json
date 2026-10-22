@@ -1,0 +1,47 @@
+{
+  "id": "demo-tottenham-pl",
+  "version": "2026-10-22.1",
+  "source": "REROUTE fictional demo dataset (no club, league or sponsor contract was supplied)",
+  "fictional": true,
+  "disclaimer": "FICTIONAL DEMO POLICY — not an actual team, league or sponsor agreement",
+  "rules": [
+    {
+      "id": "THFC-1-pl-social-license",
+      "effect": "PERMIT",
+      "dimensions": ["competition", "territory", "platform", "usage", "expiry"],
+      "match": { "competition": ["Premier League"] },
+      "intent": { "territories": ["GB", "FR", "US"], "platforms": ["instagram", "youtube", "x"], "usage": ["ORGANIC"] },
+      "validFrom": "2026-08-01T00:00:00Z",
+      "validUntil": "2027-05-31T23:59:59Z",
+      "explanation": "FICTIONAL: Premier League club media may be published organically in GB, FR and US on Instagram, YouTube and X until 31 May 2027."
+    },
+    {
+      "id": "THFC-2-match-footage-people-and-signage",
+      "effect": "PERMIT",
+      "dimensions": ["people", "sponsor"],
+      "match": { "competition": ["Premier League"], "assetTags": ["match", "highlights"] },
+      "covers": ["person:*", "brand:*"],
+      "validFrom": "2026-08-01T00:00:00Z",
+      "validUntil": "2027-05-31T23:59:59Z",
+      "explanation": "FICTIONAL: everyone and all stadium signage visible in match footage is cleared for organic club use."
+    },
+    {
+      "id": "THFC-3-press-room-clearance",
+      "effect": "PERMIT",
+      "dimensions": ["people", "sponsor"],
+      "match": { "assetTags": ["press-conference", "interview"] },
+      "covers": ["person:club-spokesperson", "brand:*"],
+      "validFrom": "2026-08-01T00:00:00Z",
+      "validUntil": "2027-05-31T23:59:59Z",
+      "explanation": "FICTIONAL: in press conferences and interviews only the club spokesperson and the backdrop branding are cleared; any other person needs individual review."
+    },
+    {
+      "id": "THFC-4-no-sponsored-interviews",
+      "effect": "DENY",
+      "dimensions": ["people"],
+      "match": { "assetTags": ["press-conference", "interview"] },
+      "intent": { "usage": ["SPONSORED"] },
+      "explanation": "FICTIONAL: press conferences and interviews may not be used in sponsored posts (image-rights consent not granted)."
+    }
+  ]
+}

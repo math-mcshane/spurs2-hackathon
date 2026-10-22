@@ -23,6 +23,10 @@ export type PublishIntent = z.infer<typeof PublishIntentSchema>;
 
 export const EvidenceSourceSchema = z.enum(["TWELVELABS", "SCOREPLAY", "HUMAN"]);
 
+/** Provenance of data shown to the user. Never present CACHED or HUMAN data as LIVE. */
+export const DataOriginSchema = z.enum(["LIVE", "CACHED", "HUMAN"]);
+export type DataOrigin = z.infer<typeof DataOriginSchema>;
+
 export const EvidenceSchema = z.object({
   scoreplayMediaId: z.string(),
   start: z.number().nonnegative().optional(), // seconds
@@ -33,6 +37,8 @@ export const EvidenceSchema = z.object({
   label: z.string().optional(),
   /** Confidence in the OBSERVATION (never a legal confidence). 0..1 */
   confidence: z.number().min(0).max(1).optional(),
+  /** LIVE/CACHED for TwelveLabs/ScorePlay results, HUMAN for producer-entered observations. Unset = unknown origin. */
+  origin: DataOriginSchema.optional(),
 });
 export type Evidence = z.infer<typeof EvidenceSchema>;
 
@@ -78,10 +84,6 @@ export const HumanReviewStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"
 export type HumanReviewStatus = z.infer<typeof HumanReviewStatusSchema>;
 
 // ---------- Media model ----------
-
-/** Provenance of data shown to the user. Never present CACHED or HUMAN data as LIVE. */
-export const DataOriginSchema = z.enum(["LIVE", "CACHED", "HUMAN"]);
-export type DataOrigin = z.infer<typeof DataOriginSchema>;
 
 /** Rights facts read from ScorePlay metadata. `undefined` = unknown (→ NEEDS_REVIEW, never ALLOWED). */
 export const RightsFactsSchema = z.object({

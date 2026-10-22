@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { evaluateRights } from '../lib/compliance.ts';
+import { evaluateRulePack } from '../lib/rule-pack.ts';
 
 const base = {
   consentAccepted: true,
@@ -34,3 +35,25 @@ for (const [name, override, expected] of cases) {
   console.log(`✓ ${name} → ${actual}`);
 }
 console.log(`\n${cases.length}/${cases.length} policy evaluations passed.`);
+
+const packBase = {
+  consentComplete: true,
+  licenseActive: true,
+  requestInScope: true,
+  requiredMetadataComplete: true,
+  findings: [{ ruleId: 'MEDIA-01', outcome: 'PASS', citation: { startSeconds: 0, endSeconds: 4 } }],
+};
+const packCases = [
+  ['rule pack baseline clears', {}, 'CLEARED'],
+  ['hard visual conflict blocks', { findings: [{ ruleId: 'RIGHTS-02', outcome: 'CONFLICT', citation: { startSeconds: 4, endSeconds: 9 } }] }, 'BLOCKED'],
+  ['missing request metadata reviews', { requiredMetadataComplete: false }, 'REVIEW'],
+  ['uncited risk cannot clear', { findings: [{ ruleId: 'AUDIO-03', outcome: 'AMBIGUOUS' }] }, 'REVIEW'],
+  ['draft score cannot override expired license', { licenseActive: false, findings: [] }, 'BLOCKED'],
+];
+
+for (const [name, override, expected] of packCases) {
+  const actual = evaluateRulePack({ ...packBase, ...override }).verdict;
+  assert.equal(actual, expected, `${name}: expected ${expected}, got ${actual}`);
+  console.log(`✓ ${name} → ${actual}`);
+}
+console.log(`\n${cases.length + packCases.length}/${cases.length + packCases.length} total safety evaluations passed.`);

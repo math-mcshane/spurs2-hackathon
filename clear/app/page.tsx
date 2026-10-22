@@ -10,6 +10,9 @@ import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import GavelRoundedIcon from '@mui/icons-material/GavelRounded';
 
 const spursTheme = createTheme({
   palette: { mode: 'dark', background: { default: '#050505', paper: '#111214' }, primary: { main: '#c4ced4', contrastText: '#050505' }, secondary: { main: '#00a9ce' }, success: { main: '#38c79a' }, warning: { main: '#ffb81c' }, error: { main: '#f05a7e' } },
@@ -19,7 +22,7 @@ const spursTheme = createTheme({
 });
 
 type Status = 'CLEARED' | 'REVIEW' | 'BLOCKED';
-type View = 'library' | 'submit' | 'detail' | 'evaluations' | 'integrations';
+type View = 'library' | 'review' | 'submit' | 'detail' | 'evaluations' | 'integrations';
 type Asset = { id:string; title:string; creator:string; name:string; email:string; status:Status; scope:string; platforms:string[]; territory:string; duration:string; paid:boolean; modification:boolean; expiry:string; reason:string[]; signals:string[]; audit:string; consent:string; submitted:string; color:string };
 
 const seedAssets: Asset[] = [
@@ -45,6 +48,7 @@ export default function Home(){
     <aside className="sidebar"><button className="brand plain" onClick={()=>setView('library')}><span className="brand-mark">C</span><span className="brand-word">CLEAR</span></button><button className="collapse-nav plain" aria-label={sidebarCollapsed?'Expand navigation':'Collapse navigation'} onClick={()=>setSidebarCollapsed(v=>!v)}><ChevronLeftRoundedIcon/></button>
       <nav aria-label="Primary">
         <button className={`nav-item ${view==='library'||view==='detail'?'active':''}`} onClick={()=>setView('library')}><DashboardRoundedIcon/><span>Library</span></button>
+        <button className={`nav-item ${view==='review'?'active':''}`} onClick={()=>setView('review')}><FactCheckRoundedIcon/><span>Rights review</span> <b>2</b></button>
         <button className={`nav-item ${view==='submit'?'active':''}`} onClick={()=>setView('submit')}><AddCircleRoundedIcon/><span>Creator flow</span> <b>Live</b></button>
         <button className={`nav-item ${view==='evaluations'?'active':''}`} onClick={()=>setView('evaluations')}><VerifiedRoundedIcon/><span>Evaluations</span></button>
         <button className={`nav-item ${view==='integrations'?'active':''}`} onClick={()=>setView('integrations')}><HubRoundedIcon/><span>Integrations</span></button>
@@ -52,6 +56,7 @@ export default function Home(){
     </aside>
     <section className="workspace"><Header onLogo={()=>setView('library')} onSubmit={()=>setView('submit')}/>
       {view==='library'&&<Library assets={filtered} query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} open={open} submit={()=>setView('submit')}/>} 
+      {view==='review'&&<RightsReview/>}
       {view==='detail'&&<Detail asset={selected} back={()=>setView('library')}/>} 
       {view==='submit'&&<Submission done={(asset)=>{setSelected(asset);setView('detail')}}/>}
       {view==='evaluations'&&<Evaluations/>}
@@ -94,6 +99,58 @@ return <div className="creator-bg"><div className="phone-flow"><div className="c
 {step===3&&<div className="form-stage"><h1>Choose what you approve.</h1><p>You stay in control. These are the uses the club is requesting.</p><fieldset><legend>Platforms</legend><div className="chips">{['Instagram','TikTok','X','YouTube'].map(p=><button type="button" key={p} className={platforms.includes(p)?'chip selected':'chip'} onClick={()=>toggle(p)}>{platforms.includes(p)?'✓ ':''}{p}</button>)}</div></fieldset><label>Territory<select value={territory} onChange={e=>setTerritory(e.target.value)}><option>Worldwide</option><option>United States</option></select></label><label>Duration<select value={duration} onChange={e=>setDuration(e.target.value)}><option>12 months</option><option>6 months</option><option>30 days</option></select></label><div className="toggle-row"><span><b>Paid advertising</b><small>Allow use in promoted posts or ads</small></span><button className={paid?'toggle on':'toggle'} onClick={()=>setPaid(!paid)}><i/></button></div><div className="toggle-row"><span><b>Editing & modification</b><small>Allow cropping, captions, and edits</small></span><button className={modify?'toggle on':'toggle'} onClick={()=>setModify(!modify)}><i/></button></div><button className="primary full" disabled={!platforms.length} onClick={next}>Review my license →</button></div>}
 {step===4&&<div className="form-stage"><h1>Your permission, in plain English.</h1><p>You&apos;re granting a limited license—not giving up ownership.</p><div className="license-card"><span className="micro">UGC MICRO-LICENSE · VERSION 1.0</span><h3>You keep ownership.</h3><p>You give the San Antonio Spurs permission to use this clip on <b>{platforms.join(', ')}</b>, for <b>{duration.toLowerCase()}</b>, in <b>{territory}</b>.</p><dl><dt>Organic social</dt><dd>Included</dd><dt>Paid advertising</dt><dd>{paid?'Included':'Not included'}</dd><dt>Editing</dt><dd>{modify?'Captions, crops & edits allowed':'Not allowed'}</dd></dl><p className="legal">You confirm you created this content and can grant these rights. You can contact the club about this license. Separate third-party rights may still require review.</p></div><label className="check"><input type="checkbox" checked={accepted} onChange={e=>setAccepted(e.target.checked)}/><span><b>I have read and accept this license.</b><small>My acceptance, timestamp, and license version will be recorded.</small></span></label><button className="primary full" disabled={!accepted} onClick={finish}>Accept & submit clip ✓</button><p className="tiny center">Creates a tamper-evident demo consent event</p></div>}
 <button className="producer-return plain" onClick={()=>location.reload()}>← Producer workspace</button></div></div>}
+
+const reviewCases = [
+  { id:'SP-8421', title:'Tunnel high-five with young fan', status:'REVIEW' as Status, color:'amber', duration:'00:09', context:'Spurs partner post · Instagram · US · Organic', score:64, summary:'A player greets a young fan in the tunnel while commercial music plays.', rules:[
+    {code:'VENUE-02', label:'Restricted-access area', result:'REVIEW', note:'Tunnel footage begins at 00:02', time:'00:02–00:09'},
+    {code:'PERSON-04', label:'Possible minor', result:'REVIEW', note:'Guardian release not linked', time:'00:04–00:08'},
+    {code:'AUDIO-03', label:'Third-party music', result:'REVIEW', note:'Commercial recording is audible', time:'00:00–00:09'},
+    {code:'CONSENT-01', label:'Creator consent', result:'PASS', note:'UGC license v1.0 accepted', time:'Record'},
+  ], alternatives:[{title:'Courtside crowd reaction',why:'Same game moment · public area · no music',match:'94%',kind:'Same-clock asset'},{title:'Clean high-five edit',why:'Sibling version · audio removed · minor cropped',match:'89%',kind:'Sibling version'}]},
+  { id:'SP-8426', title:'Courtside game-winner celebration', status:'CLEARED' as Status, color:'green', duration:'00:14', context:'Spurs social · TikTok · Worldwide · Organic', score:96, summary:'A creator-owned courtside celebration with no detected restricted rights.', rules:[
+    {code:'CONSENT-01', label:'Creator consent', result:'PASS', note:'UGC license v1.0 accepted', time:'Record'},
+    {code:'RIGHTS-01', label:'Requested scope', result:'PASS', note:'TikTok · worldwide · organic', time:'Record'},
+    {code:'MEDIA-01', label:'Sponsor conflict', result:'PASS', note:'No conflicting overlay detected', time:'00:00–00:14'},
+    {code:'AUDIO-03', label:'Third-party music', result:'PASS', note:'No music detected', time:'00:00–00:14'},
+  ], alternatives:[{title:'Baseline celebration angle',why:'Same moment · wider crop · rights cleared',match:'91%',kind:'Same-clock asset'}]},
+  { id:'SP-8394', title:'Watch party reaction montage', status:'BLOCKED' as Status, color:'rose', duration:'00:22', context:'Partner paid ad · Instagram · US', score:18, summary:'The requested paid use exceeds the expired creator license and includes broadcast footage.', rules:[
+    {code:'TERM-01', label:'License term', result:'BLOCK', note:'License expired Sep 30, 2026', time:'Record'},
+    {code:'SCOPE-02', label:'Paid media rights', result:'BLOCK', note:'Paid advertising not granted', time:'Record'},
+    {code:'RIGHTS-02', label:'Broadcast material', result:'REVIEW', note:'TV screen and scorebug visible', time:'00:06–00:13'},
+    {code:'AUDIO-03', label:'Third-party music', result:'REVIEW', note:'Popular song detected', time:'00:00–00:22'},
+  ], alternatives:[{title:'Licensed arena reaction',why:'Similar energy · organic + paid rights granted',match:'87%',kind:'Semantic match'},{title:'Clean crowd celebration',why:'Same game · no broadcast or music',match:'82%',kind:'Same collection'}]},
+];
+
+function RightsReview(){
+  const [caseId,setCaseId]=useState(reviewCases[0].id);
+  const [notice,setNotice]=useState('');
+  const current=reviewCases.find(item=>item.id===caseId) ?? reviewCases[0];
+  const act=(message:string)=>{setNotice(message);window.setTimeout(()=>setNotice(''),2600)};
+  return <div className="content review-workspace">
+    <div className="eyebrow">AGENTIC RIGHTS WORKSPACE / NBA RULE PACK 1.0.0 DRAFT</div>
+    <div className="title-row review-title"><div><h1>Know what is safe—and why.</h1><p>AI finds the evidence. Approved rules make the decision. People resolve ambiguity.</p></div><span className="draft-pack"><i/> Draft policy · human approval required</span></div>
+    <section className="review-context" aria-label="Publication request">
+      <div><span>REQUEST</span><b>{current.context}</b></div><div><span>RULE PACK</span><b>NBA media rights · v1.0.0</b></div><div><span>ASSET</span><b>{current.id}</b></div><button className="secondary" onClick={()=>act('Request context saved to the audit trail')}>Edit context</button>
+    </section>
+    <section className="review-layout">
+      <aside className="review-queue"><div className="queue-heading"><b>Review queue</b><span>3 assets</span></div>{reviewCases.map(item=><button key={item.id} className={item.id===caseId?'queue-item active':'queue-item'} onClick={()=>{setCaseId(item.id);setNotice('')}}><span className={`queue-thumb ${item.color}`}>▶</span><span><b>{item.title}</b><small>{item.id} · {item.duration}</small></span><StatusPill status={item.status}/></button>)}</aside>
+      <div className="review-main">
+        <div className={`review-video ${current.color}`}><div className="scanline"/><button aria-label="Play demo clip">▶</button><span className="video-id">{current.id} · PROXY PREVIEW</span><div className="timeline"><i/><b style={{left:current.status==='CLEARED'?'68%':'28%'}}/><small>00:00</small><small>{current.duration}</small></div></div>
+        <div className="evidence-summary"><span className="ai-eye">AI</span><div><b>TwelveLabs evidence · mock adapter</b><p>{current.summary}</p></div><small>Model demo-placeholder</small></div>
+        <section className="rule-findings"><div className="section-heading"><div><b>Rule-by-rule evidence</b><span>Every flag is linked to a moment or record</span></div><small>{current.rules.length} checks</small></div>{current.rules.map(rule=><article key={rule.code}><button className="timecode" onClick={()=>act(`Jumped preview to ${rule.time}`)}>{rule.time}</button><div><b>{rule.label}</b><span>{rule.code} · {rule.note}</span></div><em className={`rule-result ${rule.result.toLowerCase()}`}>{rule.result==='PASS'?'✓ PASS':rule.result==='BLOCK'?'× BLOCK':'! REVIEW'}</em></article>)}</section>
+      </div>
+      <aside className="verdict-panel">
+        <div className="verdict-top"><span>DETERMINISTIC DECISION</span><StatusPill status={current.status}/></div><div className={`confidence-ring ${current.status.toLowerCase()}`} style={{'--score':`${current.score*3.6}deg`} as React.CSSProperties}><div><b>{current.score}</b><small>confidence</small></div></div>
+        <h2>{current.status==='CLEARED'?'Safe for this request':current.status==='REVIEW'?'Hold for a person':'Do not publish'}</h2><p>{current.status==='CLEARED'?'All mandatory rules and license metadata pass.':current.status==='REVIEW'?'Evidence is incomplete or context-dependent. CLEAR will not guess.':'A hard license rule failed. AI confidence cannot override it.'}</p>
+        <div className="decision-actions">{current.status==='REVIEW'&&<><button className="primary full" onClick={()=>act('Review assigned to Rights Ops')}>Assign to Rights Ops</button><button className="secondary full" onClick={()=>act('Clearance request drafted')}>Request missing clearance</button></>}{current.status==='CLEARED'&&<button className="primary full" onClick={()=>act('Mock verdict writeback prepared for ScorePlay')}>Approve & write back</button>}{current.status==='BLOCKED'&&<button className="primary full danger" onClick={()=>act('Renewal request drafted for the creator')}>Request new license</button>}</div>
+        <small className="audit-stamp"><GavelRoundedIcon/> Decision + action appended to audit log</small>
+      </aside>
+    </section>
+    <section className="alternatives"><div className="section-heading"><div><b><ContentCopyRoundedIcon/> Safer alternatives</b><span>Find a compliant version of the same moment before abandoning the idea.</span></div><button className="plain explore" onClick={()=>act('Duplicate explorer opened in demo mode')}>Explore all matches →</button></div><div className="alternative-grid">{current.alternatives.map((alt,i)=><article key={alt.title}><span className={`alt-preview ${i?'fiesta':'silver'}`}>▶</span><div><i>{alt.kind}</i><b>{alt.title}</b><p>{alt.why}</p></div><strong>{alt.match}<small> match</small></strong><button onClick={()=>act(`${alt.title} opened`)}>Open</button></article>)}</div></section>
+    {notice&&<div className="action-toast" role="status">✓ {notice}<small>Demo only · no external action taken</small></div>}
+    <p className="assumption">DEMO ASSUMPTION · The rule pack is a draft, not approved legal policy. Video evidence is mocked; destination, sponsor, territory, embargo, license, and consent metadata are required for a final decision.</p>
+  </div>
+}
 
 function Evaluations(){return <div className="content narrow"><div className="eyebrow">PROOFRAIL-INSPIRED EVALUATION HARNESS</div><div className="title-row"><div><h1>Trust is a test suite.</h1><p>Adversarial cases protect against the most expensive outcome: publishing content that is not actually cleared.</p></div><span className="run-badge">6 / 6 passing</span></div><div className="eval-summary"><strong>100%</strong><span>critical policy tests passing</span><i><b style={{width:'100%'}}/></i></div><section className="eval-list">{evals.map(([name,desc,status],i)=><article key={name}><span className="test-num">0{i+1}</span><div><b>{name}</b><p>{desc}</p></div><code>expected → {i===0||i===5?'REVIEW':'BLOCKED'}</code><span className="pass">✓ {status}</span></article>)}</section><div className="assumption-box"><b>Evaluation principle</b><p>When evidence is incomplete or ambiguous, CLEAR fails safe. Rules can block; AI signals can escalate; neither silently expands the license.</p></div></div>}
 

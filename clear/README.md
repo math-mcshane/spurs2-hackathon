@@ -37,11 +37,13 @@ Copy `.env.example` to `.env.local` only when preparing integrations. Mock mode 
 ## What is implemented
 
 - Responsive producer library with search and status filtering.
+- Agentic Rights Review workspace with request context, a review queue, timecoded AI evidence, rule-by-rule findings, deterministic decisions, reviewer actions, and compliant duplicate suggestions.
 - Three demo scenarios: clearable celebration, music/minor review, and expired/restricted block.
 - Asset detail with verdict, reasoning, AI signals, license scope, creator proof, consent ID, expiry, and audit hash.
 - Four-step mobile creator flow: upload placeholder, identity/contact, ownership attestation, granular scope, plain-English micro-license, and acceptance.
 - Pure deterministic policy engine with fail-safe `CLEARED`, `REVIEW`, and `BLOCKED` outcomes.
 - ProofRail-inspired evaluation screen plus executable adversarial test harness.
+- Versioned draft NBA rule-pack evaluator that blocks hard failures, routes missing/ambiguous evidence to review, and requires citations for non-pass findings.
 - Typed ScorePlay and TwelveLabs interfaces, mock adapters, and environment contract.
 
 ## Architecture
@@ -114,9 +116,10 @@ The included adapters return mock values. The app deliberately contains no guess
 1. **Problem (20 sec):** “A fan captures the moment everyone wants to post. The team can find it—but proving permission and usable scope is slow enough that the moment dies.”
 2. **Creator flow (60 sec):** Open **Creator flow**. Continue with the demo clip, show identity and ownership attestation, select platforms/territory/duration, exclude paid use, allow edits, and accept the plain-English micro-license.
 3. **Decision (45 sec):** The new asset opens as `CLEARED`. Point to the reason trail, AI mock signals, exact scope, consent ID, and audit hash. Emphasize that AI informs the decision; policy controls it.
-4. **Fail-safe cases (45 sec):** Return to the library. Open the `REVIEW` clip (music + possible minor) and the `BLOCKED` expired/restricted clip. CLEAR does not convert uncertainty into permission.
-5. **Integrations (30 sec):** Show typed ScorePlay/TwelveLabs adapters in mock mode and the precise facts still needed from vendor docs—no invented APIs.
-6. **Evaluations (30 sec):** Show the policy harness: missing consent, expiry, platform/territory mismatch, and ambiguous third-party rights all fail safely.
+4. **Agentic review (60 sec):** Open **Rights review**. Show the draft NBA rule pack, click timecoded music/minor/tunnel evidence, then switch among `CLEARED`, `REVIEW`, and `BLOCKED` cases. Point out that hard license failures override confidence and that ambiguity goes to a person.
+5. **Find a usable alternative (20 sec):** Open a same-clock or sibling version from **Safer alternatives**. CLEAR tries to preserve the creative idea while replacing the unsafe asset.
+6. **Integrations (30 sec):** Show typed ScorePlay/TwelveLabs adapters in mock mode and the precise facts still needed from vendor docs—no invented APIs.
+7. **Evaluations (30 sec):** Show the policy harness: missing consent, expiry, platform/territory mismatch, missing citations, and ambiguous third-party rights all fail safely.
 
 ## Concise hackathon pitch
 

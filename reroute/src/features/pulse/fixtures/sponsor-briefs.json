@@ -1,0 +1,41 @@
+[
+  {
+    "id": "brief-spurs-matchday",
+    "club": "spurs",
+    "partnerLabel": "Matchday Partner (fictional)",
+    "objective": "Short-form matchday moments that capture in-arena energy, one branded social post per deliverable.",
+    "allowedFormats": ["vertical_short", "square_post"],
+    "audienceSegments": ["Fans discussing in-game highlights"],
+    "topicTags": ["matchday", "bench", "dunk", "celebration"],
+    "contractedDeliverables": 4,
+    "publishedDeliverables": 3,
+    "dueBy": "2026-10-31T23:59:59Z",
+    "publishIntent": { "territory": "FR", "platform": "instagram", "usage": "SPONSORED" },
+    "dataStatus": "DEMO",
+    "disclaimer": "FICTIONAL sample contract invented for the demo. Not an actual Spurs partner agreement."
+  },
+  {
+    "id": "brief-spurs-performance-prospect",
+    "club": "spurs",
+    "partnerLabel": "Performance-brand prospect (fictional)",
+    "objective": "Skill-focused player content a sales lead could pitch as a new activation.",
+    "allowedFormats": ["video_short", "vertical_short"],
+    "audienceSegments": ["Fans discussing player skill moves"],
+    "topicTags": ["skill", "player"],
+    "publishIntent": { "territory": "US", "platform": "youtube", "usage": "SPONSORED" },
+    "dataStatus": "DEMO",
+    "disclaimer": "FICTIONAL prospect. No contract, no price — any concept is PROPOSED / NOT SOLD."
+  },
+  {
+    "id": "brief-tottenham-defence-prospect",
+    "club": "tottenham",
+    "partnerLabel": "'Defensive wall' series prospect (fictional)",
+    "objective": "Partner-compatible short-form concept around defensive performances.",
+    "allowedFormats": ["vertical_short"],
+    "audienceSegments": ["Fans discussing the defensive performance"],
+    "topicTags": ["defence", "match"],
+    "publishIntent": { "territory": "GB", "platform": "instagram", "usage": "SPONSORED" },
+    "dataStatus": "DEMO",
+    "disclaimer": "FICTIONAL prospect. Not an actual Tottenham partner; concepts are sales-reviewable only."
+  }
+]

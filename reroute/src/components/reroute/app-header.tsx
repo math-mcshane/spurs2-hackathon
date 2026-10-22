@@ -1,10 +1,19 @@
 "use client";
 
-import { ShieldAlertIcon } from "lucide-react";
+import Link from "next/link";
+import { ActivityIcon, ShieldAlertIcon } from "lucide-react";
 import type { PoliciesResponse } from "@/lib/api-client";
 import { ErrorState } from "./shared";
 
-export function AppHeader({ policies, policiesError }: { policies: PoliciesResponse | null; policiesError: unknown }) {
+export function AppHeader({
+  policies,
+  policiesError,
+  pulseEnabled = false,
+}: {
+  policies: PoliciesResponse | null;
+  policiesError: unknown;
+  pulseEnabled?: boolean;
+}) {
   const active = policies?.policies.find((p) => p.id === policies.activeId);
   return (
     <header className="border-b border-white/8 bg-zinc-950/80 backdrop-blur">
@@ -18,6 +27,14 @@ export function AppHeader({ policies, policiesError }: { policies: PoliciesRespo
           </span>
         </div>
         <div className="flex items-center gap-2 font-mono text-[10px] text-zinc-500">
+          {pulseEnabled && (
+            <Link
+              href="/pulse"
+              className="mr-2 flex items-center gap-1 rounded-sm border border-sky-500/40 px-1.5 py-0.5 tracking-widest text-sky-300 hover:bg-sky-500/10"
+            >
+              <ActivityIcon className="size-3" aria-hidden /> PULSE
+            </Link>
+          )}
           <span className="inline-block size-1.5 rounded-full bg-red-500 shadow-[0_0_6px] shadow-red-500" aria-hidden />
           RIGHTS DESK
           {active && (

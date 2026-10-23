@@ -84,7 +84,6 @@ export function CampaignBrief({
   saving: boolean;
   onSetDestination: (url: string) => void;
 }) {
-  const audience = c.audience.market ? c.audience.market.label : c.audience.scope === "GLOBAL" ? "Global" : "Not specified";
   return (
     <section aria-labelledby="brief-title" className="border-t border-line pt-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -100,9 +99,7 @@ export function CampaignBrief({
       </figure>
 
       <dl className="mt-8 grid grid-cols-1 gap-x-10 gap-y-5 border-y border-line py-6 sm:grid-cols-2">
-        <Fact label="Audience">
-          {audience} · {c.audience.cohort}
-        </Fact>
+        <Fact label="Audience">{c.audience.cohort}</Fact>
         <Fact label="Primary KPI">
           {goal.kpi.label}
           <span className="mt-0.5 block text-meta text-ink-muted">{goal.kpi.valueText}</span>

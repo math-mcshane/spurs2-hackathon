@@ -34,6 +34,7 @@ const SCENARIOS: { name: string; goal: string; club: Club }[] = [
   { name: "F", goal: "Sell Tottenham jerseys to UK fans", club: "tottenham" },
   { name: "G", goal: "Get more followers in the UK", club: "tottenham" },
   { name: "H", goal: "Grow engagement with Spurs fans in France", club: "spurs" },
+  { name: "I", goal: "Activate our sponsor with Solanke's late goal for UK fans", club: "tottenham" },
 ];
 
 /** What must never be in a committed fixture: any URL (protected footage links), storage locators, e-mails, or token-like material. */

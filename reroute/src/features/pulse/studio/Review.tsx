@@ -99,6 +99,8 @@ export function ReviewView({
               </summary>
               <div className="space-y-4 px-6 pb-6">
                 <WritebackAction
+                  // The dry run quotes the review status: re-plan it once the reviewer decides.
+                  key={goal.reviewStatus}
                   receiptId={receiptId}
                   session={session}
                   onSignIn={onSignIn}

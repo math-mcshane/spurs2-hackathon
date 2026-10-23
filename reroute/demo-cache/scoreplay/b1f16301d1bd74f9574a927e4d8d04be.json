@@ -1,0 +1,47 @@
+{
+  "recordedAt": "2026-10-23T11:40:45.715Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "Solanke"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [
+      {
+        "ID": 736854,
+        "CreatedAt": "2026-10-16T12:39:05.620595Z",
+        "UpdatedAt": "2026-10-16T16:51:30.756942Z",
+        "DeletedAt": null,
+        "first_name": "Dominic Ayodele",
+        "last_name": "Solanke-Mitchell",
+        "full_name": "Dominic Ayodele Solanke-Mitchell",
+        "company_id": 5369,
+        "profile_picture_ai": "",
+        "api_player_id": 0,
+        "run_ai": true,
+        "run_facial_ai": true,
+        "ai_name": "Solanke-Mitchell",
+        "app_access": false,
+        "external_id": "clone:5369:opta_dvj6rdi2k0td95oxldbj6e28l",
+        "receive_media": false,
+        "app_installed": false,
+        "phone_os": "",
+        "ai_threshold": 80,
+        "face_id": "41d98d38-daf5-407b-8652-05e6851d0b1b",
+        "tag_options": null,
+        "sponsors": null,
+        "access_tags": null,
+        "Teams": null,
+        "Managers": null,
+        "Company": null,
+        "media_count": 0
+      }
+    ],
+    "sponsors": [],
+    "tags": []
+  }
+}

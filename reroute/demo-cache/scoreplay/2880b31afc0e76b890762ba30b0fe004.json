@@ -1,0 +1,17 @@
+{
+  "recordedAt": "2026-10-23T11:40:25.918Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "Mexico"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [],
+    "sponsors": [],
+    "tags": []
+  }
+}

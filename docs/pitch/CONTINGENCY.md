@@ -15,18 +15,16 @@
 ## Backup order
 
 1. **Live Studio** (header tag "Live club data · ScorePlay + TwelveLabs"). Measured 2026-10-23 04:25–04:54 UTC (API, local): run 0.8–4.0 s, check rights 0.17–0.37 s, find a way 0.22–1.56 s, apply 0.19–0.34 s.
-2. **Pre-run tabs via `?run=` links** (same server, state restored from the database). The run id and step live in the URL (`/?run=<goal-id>&step=<goal|discover|campaign|review>`); reload restores the exact state (verified for S1-b at 04:26 UTC). Prepare before the jury, on the presenting environment:
-   - S1 merch at the Resolution step (after **Find a way to use it**, before **Use revised plan**).
-   - S1 already applied + submitted (for jumping straight to **Approve** / writeback).
+2. **Pre-run tabs via `?run=` links** (same server, state restored from the database). The run id and step live in the URL (`/?run=<goal-id>&step=<goal|discover|campaign|review>`); reload restores the exact state. Prepare before the jury, on the presenting environment:
+   - **Flagship** "Activate our sponsor with Solanke's late goal for UK fans" → moment 02 *solanke late goal* → **Check rights** → stop at Compliance (Blocked 0/3). A second flagship tab stopped after **Find a way to use it** (Resolution).
    - S2 global engagement at Compliance ("6 of 21 uses allowed").
-   - Sponsor at Compliance (Blocked under the social package).
-   - Mexico at Resolution (no-licensed-path message, single option "Request additional usage rights").
-   - Desk tab: *solanke late goal.mp4* 0:10–0:19, SPONSORED · GB · Instagram, showing BLOCKED (for the desk beat).
-   Rehearsal ids from 04:25 UTC (local Supabase only — create fresh ones on the presenting machine): S1 `goal-126f6106-71e2-4925-a1c1-8e9bdcfc5bbc` (applied), S1-b `goal-78835981-d4ee-4cb3-9521-09aef7b11578` (approved), S2 `goal-62d86ec6-84e0-45ca-8697-e8ebd0833250` (applied), Mexico `goal-d9179aed-831a-4e2e-84ca-2a238f9d6467`, Sponsor `goal-cb8f8b99-38a0-4e3b-8050-288cdce8ee71` (applied).
-   Note: an applied run cannot be "un-applied"; for the live beat keep one tab stopped at Resolution.
-3. **`DEMO_REPLAY=true` (CACHED)** — operator restart, not on stage: `cd reroute && pnpm exec next build && DEMO_REPLAY=true pnpm exec next start -p 3401` (stop any `next dev` on the same project first, or restart it afterwards). Every ScorePlay/TwelveLabs read comes from `reroute/demo-cache/`, **re-recorded 2026-10-23T04:40:23Z** for 8 scenarios — A merch, B global engagement, C Mexico, D tickets, E sponsor, F jerseys UK, G UK followers, H Spurs France (not indexed) — 108 files, recovery searches included, URLs/tokens stripped, secret scan clean, replay verified in a fresh process (reported). Header tag **"Recorded data 23 Oct 2026"** (verified on a production server, reported). A missing recording is an error, nothing is invented. The second Pegasus run is bundled in the repo. Say "recorded", never "live". The desk trim (solanke) is **not** among the recorded scenarios — use its screenshots instead.
+   - S1 merch at the Resolution step (after **Find a way to use it**, before **Use revised plan**).
+   - Desk tab: *solanke late goal.mp4* 0:10–0:19, SPONSORED · GB · Instagram, showing BLOCKED (exact same DHL story on the operator desk).
+   Note: an applied run cannot be "un-applied"; keep one tab per beat stopped before **Use revised plan**.
+3. **`DEMO_REPLAY=true` (CACHED)** — operator restart, not on stage: `cd reroute && pnpm exec next build && DEMO_REPLAY=true pnpm exec next start -p 3401` (stop any `next dev` on the same project first, or restart it afterwards). Every ScorePlay/TwelveLabs read comes from `reroute/demo-cache/`, **re-recorded 2026-10-23 ≈ 11:39 UTC** for 9 scenarios — A merch, B global engagement, C Mexico, D tickets, E sponsor, F jerseys UK, G UK followers, H Spurs France (not indexed), **I flagship Solanke** — 167 files, recovery searches included, URLs/tokens stripped, secret scan clean, replay verified in a fresh process (flagship replay: TRIM "Remove 2 flagged parts (0:14.5–0:17.5, 0:18.5–0:19.7)" → ALLOWED 3 uses). Header tag **"Recorded data 23 Oct 2026"**. A missing recording is an error, nothing is invented. The second Pegasus run is bundled in the repo. Say "recorded", never "live".
 4. **Offline screenshots** in `docs/design/screenshots/recovery/`, announced as screenshots:
-   - `desktop-01-blocked.webp` → `desktop-01b-finding-a-way.webp` → `desktop-02-editor-open.webp` / `desktop-02b-editor-full.webp` → `desktop-03-recommended-replacement.webp` → `desktop-04-other-ways-rejected-trim.webp` → `desktop-05-after-apply.webp`.
+   - Flagship: `flagship-01-discover.webp` → `flagship-02-blocked.webp` → `flagship-03-trim-plan.webp` → `flagship-04-allowed.webp`. S2: `global-01-adapt-markets.webp`, `global-02-international-rules.webp`. S1: `merch-01-replacement-allowed.webp`.
+   - Earlier S1 set: `desktop-01-blocked.webp` → `desktop-01b-finding-a-way.webp` → `desktop-02-editor-open.webp` / `desktop-02b-editor-full.webp` → `desktop-03-recommended-replacement.webp` → `desktop-04-other-ways-rejected-trim.webp` → `desktop-05-after-apply.webp`.
    - Edit plan: `desktop-03b-compare-safe-section.webp`, `desktop-06-after-apply-edited-cut.webp`, `desktop-07-review-edited-cut.webp`.
    - Policy switch: `desktop-08-policy-changed-stale.webp`; Sponsor `v2-sp-desktop-*.webp`; Mexico `v2-mx-desktop-*.webp`; goal briefs `v2-00-goal-briefs.webp`; mobile set `mobile-0*.webp`.
    - Desk trim that works: `desk-desktop-recovery-panel.webp` → `desk-desktop-options.webp` → `desk-desktop-after-apply-cut.webp` / `desk-desktop-after-apply-panel.webp` (+ `desk-mobile-*.webp`); NBA desk: `desk-desktop-nba-needs-review.webp`, `desk-desktop-nba-recovery-panel.webp`.
@@ -40,6 +38,15 @@
 | **Recorded data <date>** (CACHED) | "This replays real responses we recorded on that date — not fetched right now. The tag says so." |
 | **Partly recorded data <date>** (MIXED) | "Some reads are live, some replayed; the tag says which." |
 | evidence tagged "second run" | "That's a second, independent analysis run we recorded this morning; we use both runs." |
+
+## Emergency fallback, click by click
+
+1. **Flagship fails at Find opportunities** (> 15 s or error): switch to the pre-run flagship tab (Compliance). Say "this is the same run from five minutes ago".
+2. **Flagship moment 02 isn't *solanke late goal*** (TwelveLabs ranking moved): click **Why this moment** on any card only if it helps; otherwise go to the pre-run flagship tab. Never pretend another clip is the late goal.
+3. **Find a way errors or is rate-limited**: pre-run flagship tab at Resolution → **Use revised plan**.
+4. **Studio unusable**: open `/desk` tab (pre-staged, BLOCKED) → **Find a way to use it** → recommended "Remove 0:14.5–0:17.5" → **Apply cut** → both kept segments ALLOWED · DEMO. Same DHL story, single cut, 6.0 s of 9.0 s.
+5. **Network down**: operator restarts on `DEMO_REPLAY=true` (step 3 above, scenario I recorded) — header says "Recorded data".
+6. **Everything down**: flagship screenshots 01 → 04, announced as screenshots.
 
 ## If something is slow or fails
 

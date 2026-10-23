@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-23T11:40:49.485Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "analyze",
+    "modelKey": "pegasus1.6:d98df822a16038614d116aa864379da5",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911fe0ca748ea3c0aa69a"
+  },
+  "value": {
+    "data": "{\"observations\":[{\"category\":\"sponsor_brand\",\"confidence\":0.98,\"description\":\"The letters 'AIA' appear as the main chest sponsor logo on the front of the player's dark blue jersey.\",\"end_time\":13.4,\"entity\":\"AIA\",\"start_time\":0.0},{\"category\":\"sponsor_brand\",\"confidence\":0.95,\"description\":\"The Nike swoosh logo is visible on the right chest of the player's jersey and on his socks.\",\"end_time\":13.4,\"entity\":\"Nike\",\"start_time\":0.0},{\"category\":\"sponsor_brand\",\"confidence\":0.92,\"description\":\"The Premier League lion logo patch is visible on the right sleeve of the player's jersey.\",\"end_time\":13.4,\"entity\":\"Premier League\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.99,\"description\":\"A male football player wearing jersey number 17 is the central focus of the clip, celebrating on the pitch.\",\"end_time\":13.4,\"entity\":\"Player #17\",\"start_time\":0.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"single_player\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"The clip shows a single football player (jersey number 17) celebrating on the pitch during a match. Visible sponsor brands include 'AIA' on the chest, the Nike swoosh, and the Premier League sleeve patch. No broadcaster logos, scorebugs, or on-screen graphics are present in the frame, indicating a clean feed. The clip focuses entirely on one player, raising potential rights questions regarding player image rights and jersey sponsorship clearance.\"}",
+    "finishReason": "stop"
+  }
+}

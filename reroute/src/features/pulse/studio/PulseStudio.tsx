@@ -66,8 +66,8 @@ const PROGRESS: Partial<Record<string, { stages: Stage[]; note?: string }>> = {
 };
 
 /**
- * Where each action's result is shown. Selecting, checking, correcting and submitting all stay on Opportunities &
- * Rights; Review & Audit is opened by the user ("Continue to Review & Audit").
+ * Where each action's result is shown. Selecting, checking, correcting and submitting all stay on Rights &
+ * Compliance; Human Review is opened by the user ("Continue to Human Review").
  */
 const VIEW_AFTER: Record<GoalAction["action"], View> = {
   run: "opportunities",
@@ -124,7 +124,7 @@ function reveal(id: string, always = false) {
 }
 
 /**
- * PULSE in three steps: Goal → Opportunities & Rights → Review & Audit. One business goal becomes three real moments;
+ * PULSE in three steps: Intent → Rights & Compliance → Human Review. One business goal becomes three real moments;
  * selecting one opens its campaign draft and a rights decision for every channel × market (with "Find a way to use
  * it" when restricted) beside the cards, then a human review and an audit receipt. The run id and step live in the
  * URL (`?run=…&step=…`, legacy `discover|campaign` = opportunities): a reload restores the exact state.
@@ -216,11 +216,10 @@ export function PulseStudio() {
   /**
    * Opens an opportunity card in the Step 2 detail panel without leaving the step: select its moment (new campaign
    * version) unless it already is the campaign, then record the real rights check when the run has no current one
-   * (same engine, persisted and audited — no separate "Check rights" screen). `explore` (restricted card) continues
-   * into the existing Recovery Engine ("Find a way to use it") and scrolls to the resolution. Each step runs on the
-   * version the previous one returned; nothing is reused from the preflight.
+   * (same engine, persisted and audited — no separate "Check rights" screen). Each step runs on the version the
+   * previous one returned; nothing is reused from the preflight. A fix starts from the panel ("Fix this clip").
    */
-  async function openOpportunity(rec: RecommendationView, explore: boolean) {
+  async function openOpportunity(rec: RecommendationView) {
     if (inflight.current || !goal) return;
     inflight.current = true;
     setFailure(null);
@@ -235,14 +234,10 @@ export function PulseStudio() {
       reveal(PANEL_ID);
       const checked = g.rights.current && g.rights.state !== "NOT_CHECKED";
       if (!checked) await step({ action: "checkRights", id: g.run.id, expectedVersion: g.version }, "rights");
-      const restricted = g.rights.current && (g.rights.state === "BLOCKED" || g.rights.state === "NEEDS_REVIEW");
-      const planned = g.recovery?.forEvaluationId === g.rights.evaluationId;
-      if (explore && restricted && !planned) await step({ action: "findRecovery", id: g.run.id, expectedVersion: g.version }, "recovery");
-      if (explore && restricted) reveal("resolution", true);
     } catch (error) {
       if (isConflict(error)) setConflict(true);
       else {
-        setFailure({ error, retry: () => void openOpportunity(rec, explore) });
+        setFailure({ error, retry: () => void openOpportunity(rec) });
         await pulseApi.goal(g.run.id).then((x) => x && setGoal(x), () => undefined);
       }
     } finally {
@@ -392,9 +387,7 @@ export function PulseStudio() {
                   busy={locked}
                   loadingKey={openingKey}
                   openKey={openKey}
-                  onSelect={(rec) => void openOpportunity(rec, false)}
-                  onExplore={(rec) => void openOpportunity(rec, true)}
-                  onShow={() => reveal(PANEL_ID, true)}
+                  onSelect={(rec) => void openOpportunity(rec)}
                   onSearchAgain={() => void act({ action: "run", goal: goal.run.objective.raw, club: goal.run.club }, "run")}
                   onEditGoal={() => go("goal", id)}
                   detail={
@@ -402,10 +395,6 @@ export function PulseStudio() {
                       goal={goal}
                       open={openKey !== null}
                       opening={openingKey ? goal.recommendations.find((r) => r.key === openingKey) : undefined}
-                      lead={goal.recommendations[0]}
-                      busy={locked}
-                      onSelectLead={() => goal.recommendations[0] && void openOpportunity(goal.recommendations[0], false)}
-                      onContinue={() => go("review", id)}
                       media={goal.campaign && <MediaStage goal={goal} campaign={goal.campaign} onChangeMoment={() => reveal("opportunity-rail", true)} />}
                       lens={
                         <RightsLens
@@ -423,7 +412,7 @@ export function PulseStudio() {
                               !g.rights.current
                                 ? toast("Revised plan saved — check rights again")
                                 : g.rights.state === "ALLOWED"
-                                  ? toast.success("Revised plan saved and re-checked — same goal")
+                                  ? toast.success("Revised plan saved and re-checked")
                                   : toast(`Revised plan saved — re-check: ${g.rights.headline}`),
                             )
                           }
@@ -433,7 +422,7 @@ export function PulseStudio() {
                           }}
                           onSubmit={() =>
                             void act({ action: "submitForReview", id, expectedVersion: v }, "submit", () => {
-                              toast.success("Submitted — audit receipt created");
+                              toast.success("Sent for human review — audit receipt created");
                               reveal(PANEL_ID, true);
                             })
                           }
@@ -473,7 +462,7 @@ export function PulseStudio() {
       </main>
 
       <PulseFooter>
-        PULSE proposes and checks campaigns — it never publishes or buys media. AI video analysis is evidence, not a licence.
+        PULSE proposes and checks campaigns; it never publishes. Rules are illustrative, not legal clearance. AI video analysis is evidence, not a licence.
       </PulseFooter>
 
       <ReviewerSignInDialog

@@ -10,15 +10,15 @@ import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
 import { clock } from "../moment-ranking";
 import type { GoalView } from "../types";
-import { EditPlanView, momentSpan } from "./ComplianceEditor";
+import { clipTitle } from "./opportunity-copy";
 import { MomentPreview, recommendationSource } from "./MomentPreview";
-import { CHANNEL_LABEL, channelList, country, displayTitle, usageWord } from "./parts";
+import { CHANNEL_LABEL, channelList, country, usageWord } from "./parts";
 
 type Campaign = NonNullable<GoalView["campaign"]>;
 
 /**
- * The selected moment, large: what the campaign is built on. Swaps in place when a replacement is adopted; a
- * derived cut is marked as an edit plan (never a rendered file) with its before/after.
+ * The selected clip, large: what the campaign is built on. Swaps in place when a replacement is adopted; a derived
+ * cut plays as its edit plan (the before/after lives in the rights card's revised plan).
  */
 export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalView; campaign: Campaign; onChangeMoment: () => void }) {
   const edit = goal.edit;
@@ -29,7 +29,7 @@ export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalVi
     <Swap id={`${c.key}:${edit?.edlId ?? ""}`}>
       <MomentPreview
         size="stage"
-        label={edit ? "Edited cut" : replacement ? "Replacement moment · re-checked" : "Campaign moment"}
+        label={edit ? "Revised plan" : replacement ? "Replacement clip · re-checked" : undefined}
         source={
           goal.selected
             ? { ...recommendationSource(goal.selected), ...(edit && { start: edit.original.start, end: edit.original.end, skip: edit.removed }) }
@@ -42,25 +42,24 @@ export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalVi
               }
         }
       />
-      <div className="mt-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
-          <h2 className="font-display text-title font-medium text-ink" title={c.media.title}>
-            {displayTitle(c.media.title)}
+          <h2 className="font-display text-headline font-medium text-balance text-ink" title={c.media.title}>
+            {clipTitle(c.media.title)}
           </h2>
-          <p className="tabular mt-2 text-small text-ink-muted">
+          <p className="tabular mt-1 text-small text-ink-muted">
             {!edit
-              ? `${clock(c.media.startSeconds)}–${clock(c.media.endSeconds)} · ${len.toFixed(1)} s cut`
+              ? `${clock(c.media.startSeconds)}–${clock(c.media.endSeconds)} · ${len.toFixed(1)} s`
               : edit.removed.length > 0
-                ? `Edited cut · ${edit.resultDurationSec.toFixed(1)} s of ${edit.originalDurationSec.toFixed(1)} s`
+                ? `Revised cut · ${edit.resultDurationSec.toFixed(1)} s of ${edit.originalDurationSec.toFixed(1)} s`
                 : `${clock(edit.original.start)}–${clock(edit.original.end)} · clean section · ${edit.resultDurationSec.toFixed(1)} s`}
             {context && <span> · {context}</span>}
           </p>
         </div>
-        <Button variant="ghost" size="sm" className="text-ink-muted" onClick={onChangeMoment}>
-          <ArrowLeftRightIcon /> Change moment
+        <Button variant="ghost" size="sm" className="-mr-2 text-ink-muted" onClick={onChangeMoment}>
+          <ArrowLeftRightIcon /> Change clip
         </Button>
       </div>
-      {edit && <EditPlanView timeline={edit} chosen={goal.beforeAfter && momentSpan(goal, goal.beforeAfter.before.key)} compact className="mt-5 max-w-xl" />}
     </Swap>
   );
 }
@@ -85,13 +84,8 @@ export function CampaignBrief({
   onSetDestination: (url: string) => void;
 }) {
   return (
-    <section aria-labelledby="brief-title" className="border-t border-line pt-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="brief-title" className="font-display text-headline font-medium text-ink">
-          Campaign draft
-        </h2>
-        <p className="text-meta text-ink-muted">Version {c.version} · a proposal, nothing is published</p>
-      </div>
+    <section aria-label="Campaign draft" className="pt-2 pb-4">
+      <p className="text-meta text-ink-muted">Version {c.version} · a proposal, nothing is published</p>
 
       <figure className="mt-6">
         <blockquote className="font-display text-[1.625rem] leading-tight font-medium tracking-[-0.02em] text-ink sm:text-[1.875rem]">“{c.creative.hook}”</blockquote>

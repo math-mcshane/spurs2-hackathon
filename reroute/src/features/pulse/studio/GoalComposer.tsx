@@ -57,12 +57,12 @@ export function GoalComposer({
 
   return (
     <section aria-labelledby="goal-title" className="mx-auto flex w-full max-w-[860px] flex-1 flex-col justify-center px-5 py-14 sm:px-8 sm:py-20">
-      <Eyebrow>New campaign · {CLUBS[club].label}</Eyebrow>
+      <Eyebrow>Step 1 · Intent · {CLUBS[club].label}</Eyebrow>
       <h1 id="goal-title" className="mt-5 font-display text-display font-medium text-balance text-ink">
-        What are we trying to achieve?
+        What are you trying to achieve?
       </h1>
       <p className="mt-4 max-w-xl text-body text-ink-muted">
-        Describe a business goal. PULSE finds the club moments that fit it, drafts the campaign and checks the rights before anyone posts.
+        Describe a business goal. PULSE finds the club footage that fits, makes it usable under your rules, and hands the plan to a human for the final call.
       </p>
 
       <form

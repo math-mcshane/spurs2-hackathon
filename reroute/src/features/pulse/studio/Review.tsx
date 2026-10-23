@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckIcon, ChevronRightIcon, ClipboardCopyIcon, Loader2Icon, LockKeyholeIcon, LogInIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  ClapperboardIcon,
+  ClipboardCopyIcon,
+  Loader2Icon,
+  LockKeyholeIcon,
+  LogInIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { MediaRef } from "@/lib/contracts";
 import { Reveal } from "@/components/pulse/motion";
@@ -10,9 +21,23 @@ import { ErrorState, tcRange, utc } from "@/components/reroute/shared";
 import { reviewApi, type AuditedReceipt, type ReviewerSession } from "@/components/reroute/reviewer";
 import { WritebackAction, WritebackLog } from "@/components/reroute/writeback-plan";
 import { reasonFinding } from "../goal-view";
-import type { GoalView } from "../types";
+import type { GoalView, RecoveryKind } from "../types";
 import { MomentPreview, recommendationSource } from "./MomentPreview";
-import { CHANNEL_LABEL, Eyebrow, IssueBlock, PolicyContext, StatusPill, calmDemoLabel, country, displayTitle, groupIssues, rightsStatus, usageWord } from "./parts";
+import {
+  CHANNEL_LABEL,
+  Eyebrow,
+  IssueBlock,
+  PolicyContext,
+  StatusPill,
+  calmDemoLabel,
+  country,
+  displayTitle,
+  groupIssues,
+  rightsStatus,
+  usageWord,
+  usesPhrase,
+  type Status,
+} from "./parts";
 
 const METHOD_TEXT: Record<MediaRef["method"], string> = {
   AUTHORITATIVE_ID: "linked by ScorePlay id",
@@ -23,15 +48,35 @@ const METHOD_TEXT: Record<MediaRef["method"], string> = {
 
 const REVIEW_HEADLINE: Record<GoalView["reviewStatus"], string> = {
   NOT_SUBMITTED: "Not submitted",
-  PENDING: "Waiting for a reviewer",
+  PENDING: "Ready for your decision",
   APPROVED: "Approved",
   REJECTED: "Rejected",
 };
 
+/** The rights result in the words of Step 2. */
+const RESULT: Record<Status, string> = {
+  idle: "Not checked",
+  stale: "Needs a fresh check",
+  clear: "Cleared",
+  provisional: "Allowed under the selected rules",
+  review: "Needs review",
+  blocked: "Restriction found",
+};
+
+/** What a recovery change did, in plain words (same labels as the Step 2 fixes). */
+const CHANGE: Record<RecoveryKind, string> = {
+  TRIM: "Removed the restricted segment",
+  SAFE_SECTION: "Used the clean section of the clip",
+  REPLACE: "Used another clip",
+  ADAPT_CAMPAIGN: "Changed the campaign markets",
+  CHANGE_USAGE: "Changed the type of post",
+  REQUEST_CLEARANCE: "Asked for clearance",
+};
+
 /**
- * Review: the human decision and its record. Left, the audit receipt as a document (decision, policy, uses,
- * media, reviewer, hash-chained trail). Right, the approval and the publication state — a locked publish is a
- * status, never a button — and the ScorePlay record (dry run by default).
+ * Human Review: the final decision, not another dashboard. Left, the final clip or edit plan with the campaign and
+ * what changed; right, the goal, the rights result under the selected rules and one approval action. The audit
+ * receipt and the ScorePlay record (dry run) sit in disclosures below. A locked publish is a status, never a button.
  */
 export function ReviewView({
   goal,
@@ -62,67 +107,166 @@ export function ReviewView({
   }, [receiptId]);
   useEffect(load, [load, version]);
 
+  const summary = "flex cursor-pointer list-none items-center justify-between gap-3 py-4 [&::-webkit-details-marker]:hidden";
+  const chevron = "size-4 shrink-0 text-ink-muted transition-transform";
+
   return (
-    <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
-      <div className="min-w-0 lg:col-span-7">
-        {receipt ? (
-          <Reveal>
-            <ReceiptDocument
-              receipt={receipt}
-              sourceType={goal.policy?.sourceType}
-              titles={goal.campaign ? { [goal.campaign.media.scoreplayAssetId]: displayTitle(goal.campaign.media.title) } : {}}
-            />
-          </Reveal>
-        ) : error !== null ? (
-          <div className="space-y-3">
-            <ErrorState error={error} />
-            <Button size="sm" variant="outline" onClick={load}>
-              <RefreshCwIcon /> Retry
-            </Button>
+    <section aria-labelledby="review-title" className="space-y-10">
+      <div>
+        <Eyebrow>Human Review</Eyebrow>
+        <h1 id="review-title" className="mt-3 font-display text-title font-medium text-balance text-ink">
+          Review the final plan. Make the call.
+        </h1>
+      </div>
+
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
+        <div className="min-w-0 lg:col-span-7">{goal.campaign && <FinalPlan goal={goal} campaign={goal.campaign} />}</div>
+        <aside className="min-w-0 lg:col-span-5">
+          <div className="lg:sticky lg:top-20">
+            <Approval goal={goal} receipt={receipt} session={session} sessionError={sessionError} onRetrySession={onRetrySession} onSignIn={onSignIn} onReviewed={onChanged} />
+          </div>
+        </aside>
+      </div>
+
+      <div className="divide-y divide-line border-y border-line">
+        <details className="group/rc">
+          <summary className={summary}>
+            <span>
+              <span className="block text-small font-medium text-ink">Audit receipt</span>
+              <span className="block text-meta text-ink-muted">
+                Decision record, policy, uses, reviewer and hash-chained trail{receipt ? ` · #${receipt.id.slice(0, 8)}` : ""}
+              </span>
+            </span>
+            <ChevronRightIcon className={`${chevron} group-open/rc:rotate-90`} aria-hidden />
+          </summary>
+          <div className="pb-6">
+            {receipt ? (
+              <Reveal>
+                <ReceiptDocument
+                  receipt={receipt}
+                  sourceType={goal.policy?.sourceType}
+                  titles={goal.campaign ? { [goal.campaign.media.scoreplayAssetId]: displayTitle(goal.campaign.media.title) } : {}}
+                />
+              </Reveal>
+            ) : error !== null ? (
+              <div className="space-y-3">
+                <ErrorState error={error} />
+                <Button size="sm" variant="outline" onClick={load}>
+                  <RefreshCwIcon /> Retry
+                </Button>
+              </div>
+            ) : (
+              <p role="status" className="flex items-center gap-2 text-small text-ink-muted">
+                <Loader2Icon className="size-4 animate-spin" aria-hidden /> Loading the audit receipt…
+              </p>
+            )}
+          </div>
+        </details>
+        <section aria-labelledby="wb-title">
+          <details className="group/wb">
+            <summary className={summary}>
+              <span>
+                <span id="wb-title" className="block text-small font-medium text-ink">
+                  ScorePlay record · dry run
+                </span>
+                <span className="block text-meta text-ink-muted">What would be written back to the asset — nothing is written</span>
+              </span>
+              <ChevronRightIcon className={`${chevron} group-open/wb:rotate-90`} aria-hidden />
+            </summary>
+            <div className="max-w-2xl space-y-4 pb-6">
+              <WritebackAction
+                // The dry run quotes the review status: re-plan it once the reviewer decides.
+                key={goal.reviewStatus}
+                receiptId={receiptId}
+                session={session}
+                onSignIn={onSignIn}
+                onDone={(r) => {
+                  setReceipt((prev) => (prev ? { ...prev, ...r.receipt, audit: prev.audit } : prev));
+                  onChanged();
+                }}
+              />
+              {receipt && (
+                <div className="space-y-1.5 border-t border-line pt-3">
+                  <p className="text-meta text-ink-muted">Attempts on this receipt</p>
+                  <WritebackLog entries={receipt.writeback} />
+                </div>
+              )}
+            </div>
+          </details>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+type Campaign = NonNullable<GoalView["campaign"]>;
+
+/** The final clip (an edit plan plays with its cuts skipped), the campaign line and what changed on the way. */
+function FinalPlan({ goal, campaign: c }: { goal: GoalView; campaign: Campaign }) {
+  const edit = goal.edit;
+  const ba = goal.beforeAfter;
+  const plan = c.plan;
+  const len = c.media.endSeconds - c.media.startSeconds;
+  const before = ba && rightsStatus(ba.before.verdict);
+  const after = ba?.after && rightsStatus(ba.after.verdict, ba.after.clearance);
+  return (
+    <div className="space-y-6">
+      <MomentPreview
+        size="stage"
+        label={edit ? "Edit plan" : "Final clip"}
+        source={
+          goal.selected
+            ? { ...recommendationSource(goal.selected), ...(edit && { start: edit.original.start, end: edit.original.end, skip: edit.removed }) }
+            : {
+                title: c.media.title,
+                scoreplayAssetId: c.media.scoreplayAssetId,
+                start: edit?.original.start ?? c.media.startSeconds,
+                end: edit?.original.end ?? c.media.endSeconds,
+                note: "No playable stream is available for this clip.",
+              }
+        }
+      />
+      <div>
+        <h2 className="font-display text-headline font-medium text-ink first-letter:uppercase" title={c.media.title}>
+          {displayTitle(c.media.title)}
+        </h2>
+        <p className="tabular mt-1.5 text-small text-ink-muted">
+          {edit ? `Edited cut · ${edit.resultDurationSec.toFixed(1)} s of ${edit.originalDurationSec.toFixed(1)} s` : `${len.toFixed(1)} s clip`} ·{" "}
+          {usesPhrase(plan.channels, plan.territories)} · {usageWord(plan.usage)} post
+        </p>
+      </div>
+
+      <blockquote className="border-l-2 border-signal/60 pl-4 font-display text-[1.375rem] leading-snug font-medium text-ink">“{c.creative.hook}”</blockquote>
+
+      <div className="space-y-2 border-t border-line pt-5">
+        <h3 className="text-small font-medium text-ink-muted">Changes made</h3>
+        {ba ? (
+          <div className="space-y-2">
+            <p className="text-body text-ink">
+              {CHANGE[ba.kind]} <span className="text-ink-muted">— {ba.title}</span>
+            </p>
+            {before && (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-small">
+                <StatusPill status={before} label={RESULT[before]} />
+                <ArrowRightIcon className="size-3.5 text-ink-muted" aria-label="then" />
+                {after && ba.after ? (
+                  <StatusPill status={after} label={`${RESULT[after]} · ${ba.after.allowedUses} of ${ba.after.totalUses} uses`} />
+                ) : (
+                  <span className="text-meta text-ink-muted">not re-checked</span>
+                )}
+              </p>
+            )}
+            {edit && (
+              <p className="inline-flex items-center gap-1.5 text-meta text-ink-soft">
+                <ClapperboardIcon className="size-3.5 shrink-0 text-ink-muted" aria-hidden />
+                {edit.executionLabel} — playback skips {edit.removed.map((r) => tcRange(r.start, r.end)).join(", ")}
+              </p>
+            )}
           </div>
         ) : (
-          <p role="status" className="flex items-center gap-2 text-small text-ink-muted">
-            <Loader2Icon className="size-4 animate-spin" aria-hidden /> Loading the audit receipt…
-          </p>
+          <p className="text-small text-ink-soft">None — the clip as selected.</p>
         )}
       </div>
-      <aside className="min-w-0 space-y-6 lg:col-span-5">
-        <div className="lg:sticky lg:top-20 lg:space-y-6">
-          <Approval goal={goal} receipt={receipt} session={session} sessionError={sessionError} onRetrySession={onRetrySession} onSignIn={onSignIn} onReviewed={onChanged} />
-          <section aria-labelledby="wb-title" className="mt-6 rounded-xl bg-surface ring-1 ring-line ring-inset lg:mt-0">
-            <details className="group/wb">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 [&::-webkit-details-marker]:hidden">
-                <span>
-                  <span id="wb-title" className="block text-small font-medium text-ink">
-                    ScorePlay record
-                  </span>
-                  <span className="block text-meta text-ink-muted">What would be written back to the asset · dry run</span>
-                </span>
-                <ChevronRightIcon className="size-4 shrink-0 text-ink-muted transition-transform group-open/wb:rotate-90" aria-hidden />
-              </summary>
-              <div className="space-y-4 px-6 pb-6">
-                <WritebackAction
-                  // The dry run quotes the review status: re-plan it once the reviewer decides.
-                  key={goal.reviewStatus}
-                  receiptId={receiptId}
-                  session={session}
-                  onSignIn={onSignIn}
-                  onDone={(r) => {
-                    setReceipt((prev) => (prev ? { ...prev, ...r.receipt, audit: prev.audit } : prev));
-                    onChanged();
-                  }}
-                />
-                {receipt && (
-                  <div className="space-y-1.5 border-t border-line pt-3">
-                    <p className="text-meta text-ink-muted">Attempts on this receipt</p>
-                    <WritebackLog entries={receipt.writeback} />
-                  </div>
-                )}
-              </div>
-            </details>
-          </section>
-        </div>
-      </aside>
     </div>
   );
 }
@@ -148,7 +292,9 @@ function Approval({
   const [error, setError] = useState<unknown>(null);
   const reviewer = session?.reviewer;
   const last = receipt?.reviews.at(-1);
-  const c = goal.campaign;
+  const r = goal.rights;
+  const status = rightsStatus(r.state, r.clearance);
+  const allowed = r.perIntent.filter((p) => p.verdict === "ALLOWED").length;
 
   async function review(decision: "APPROVED" | "REJECTED") {
     setBusy(decision);
@@ -165,41 +311,38 @@ function Approval({
   }
 
   return (
-    <section aria-labelledby="approval-title" className="overflow-hidden rounded-xl bg-surface ring-1 ring-line ring-inset">
-      {c && (
-        <div className="flex items-center gap-4 border-b border-line px-6 py-4">
-          <MomentPreview
-            size="thumb"
-            className="w-16 shrink-0"
-            source={
-              goal.selected
-                ? { ...recommendationSource(goal.selected), ...(goal.edit && { start: goal.edit.original.start, end: goal.edit.original.end, skip: goal.edit.removed }) }
-                : {
-                    title: c.media.title,
-                    scoreplayAssetId: c.media.scoreplayAssetId,
-                    start: goal.edit?.original.start ?? c.media.startSeconds,
-                    end: goal.edit?.original.end ?? c.media.endSeconds,
-                    note: "",
-                  }
-            }
-          />
-          <div className="min-w-0">
-            <p className="truncate text-small font-medium text-ink">{displayTitle(c.media.title)}</p>
-            <p className="text-meta text-ink-muted">
-              Campaign version {c.version}
-              {goal.edit && ` · Edited cut · ${goal.edit.executionLabel}`}
-            </p>
-          </div>
-          <StatusPill status={rightsStatus(goal.rights.state, goal.rights.clearance)} className="ml-auto" />
-        </div>
-      )}
-
-      <div className="space-y-5 px-6 py-6">
+    <section aria-labelledby="approval-title" className="space-y-6 rounded-xl bg-surface px-6 py-6 ring-1 ring-line ring-inset">
+      <dl className="space-y-5">
         <div>
-          <Eyebrow>
-            <span id="approval-title">Human review</span>
-          </Eyebrow>
-          <h2 className="mt-2 font-display text-headline font-medium text-ink">{REVIEW_HEADLINE[goal.reviewStatus]}</h2>
+          <dt className="text-eyebrow font-medium text-ink-muted uppercase">Goal</dt>
+          <dd className="mt-1.5 text-body text-ink">{goal.run.objective.summary}</dd>
+        </div>
+        <div>
+          <dt className="text-eyebrow font-medium text-ink-muted uppercase">Rights</dt>
+          <dd className="mt-1.5 space-y-1.5">
+            <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <StatusPill status={status} label={RESULT[status]} className="text-small" />
+              {r.perIntent.length > 0 && (
+                <span className="tabular text-meta text-ink-muted">
+                  {allowed} of {r.perIntent.length} uses
+                </span>
+              )}
+            </p>
+            {goal.policy && (
+              <div className="flex flex-wrap items-center gap-2 text-meta text-ink-muted">
+                {goal.policy.title}
+                <PolicyContext verified={goal.policy.verified} sourceType={goal.policy.sourceType} />
+              </div>
+            )}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="space-y-4 border-t border-line pt-5">
+        <div>
+          <h2 id="approval-title" className="font-display text-headline font-medium text-ink">
+            {REVIEW_HEADLINE[goal.reviewStatus]}
+          </h2>
           {last && (
             <p className="mt-1.5 text-small text-ink-muted">
               {last.status === "APPROVED" ? "Approved" : "Rejected"} by {last.reviewer} · {utc(last.at)}
@@ -223,30 +366,30 @@ function Approval({
             <p className="text-small text-ink-soft">Reviewer sign-in is not configured on this server, so nobody can approve or reject yet.</p>
           ) : !reviewer ? (
             <div className="space-y-3">
-              <p className="text-small text-ink-soft">A named rights reviewer approves or rejects. Their name is recorded on the receipt.</p>
-              <Button size="lg" className="h-10 rounded-lg px-4 font-semibold" onClick={onSignIn}>
+              <p className="text-small text-ink-soft">A named rights reviewer makes the call. Their name goes on the audit receipt.</p>
+              <Button size="lg" className="h-11 rounded-lg px-5 font-semibold" onClick={onSignIn}>
                 <LogInIcon /> Sign in as reviewer
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-small text-ink-soft">
-                Reviewing as <span className="text-ink">{reviewer.name}</span>. Read the receipt before deciding — reviews are final.
-              </p>
               <div className="flex flex-wrap gap-2">
-                <Button size="lg" className="h-10 rounded-lg px-4 font-semibold" disabled={busy !== null} onClick={() => void review("APPROVED")}>
+                <Button size="lg" className="h-11 rounded-lg px-6 text-[0.9375rem] font-semibold" disabled={busy !== null} onClick={() => void review("APPROVED")}>
                   {busy === "APPROVED" ? <Loader2Icon className="animate-spin" /> : <CheckIcon />} Approve
                 </Button>
-                <Button size="lg" variant="outline" className="h-10 rounded-lg bg-transparent px-4" disabled={busy !== null} onClick={() => void review("REJECTED")}>
+                <Button size="lg" variant="outline" className="h-11 rounded-lg bg-transparent px-5" disabled={busy !== null} onClick={() => void review("REJECTED")}>
                   {busy === "REJECTED" ? <Loader2Icon className="animate-spin" /> : <XIcon />} Reject
                 </Button>
               </div>
+              <p className="text-meta text-ink-muted">
+                Reviewing as <span className="text-ink-soft">{reviewer.name}</span>. The decision is final and recorded on the audit receipt.
+              </p>
             </div>
           ))}
         {error !== null && <ErrorState error={error} />}
-
-        <Publish goal={goal} />
       </div>
+
+      <Publish goal={goal} />
     </section>
   );
 }

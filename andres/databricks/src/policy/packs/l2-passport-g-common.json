@@ -1,0 +1,74 @@
+{
+  "pack_id": "l2-passport-g-common",
+  "version": "0.1.0",
+  "layer": "G",
+  "name": "Both clubs — people, brands, music, sponsors (irl G-01…G-08)",
+  "demo": true,
+  "disclaimer": "SAMPLE RULES — not legal advice.",
+  "rules": [
+    {
+      "id": "G-01",
+      "verdict": "block",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "minor_visible": true, "guardian_consent": false },
+      "reason": "A likely minor is visible and no guardian consent is on file."
+    },
+    {
+      "id": "G-02",
+      "verdict": "review",
+      "uses": ["sponsor_use", "venue_screen"],
+      "regions": "ALL",
+      "when": { "unknown_people_over": 0, "fan_consent": false, "source_in": ["fan upload", "team shot"] },
+      "reason": "[unknown people] unidentified person(s) visible with no consent on file; check before commercial or public display use."
+    },
+    {
+      "id": "G-03",
+      "verdict": "block",
+      "uses": ["instagram", "tiktok", "youtube", "x", "sponsor_use"],
+      "regions": "ALL",
+      "when": { "music": "uncleared" },
+      "reason": "Contains music that is not cleared for online or commercial use."
+    },
+    {
+      "id": "G-04",
+      "verdict": "block",
+      "uses": ["sponsor_use", "venue_screen"],
+      "regions": "ALL",
+      "when": { "rival_logo_visible": true },
+      "reason": "Rival brand visible ([rival logos]); conflicts with a club partner's category."
+    },
+    {
+      "id": "G-05",
+      "verdict": "review",
+      "uses": ["sponsor_use"],
+      "regions": "ALL",
+      "when": { "shirt_sponsor_visible": false },
+      "reason": "Main shirt sponsor is not visible; partner posts normally require it."
+    },
+    {
+      "id": "G-06",
+      "verdict": "review",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "use_commercial": true, "player_visible": true },
+      "reason": "Commercial use of player likeness ([rostered players]) needs player/union rights clearance."
+    },
+    {
+      "id": "G-07",
+      "verdict": "block",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "use_commercial": true, "opponent_visible": true },
+      "reason": "Opponent players ([opponent players]) cannot be used commercially by this club."
+    },
+    {
+      "id": "G-08",
+      "verdict": "block",
+      "uses": ["venue_screen"],
+      "regions": "ALL",
+      "when": { "venue_sponsor_conflict": true },
+      "reason": "This venue's presenting sponsor competes with a club partner."
+    }
+  ]
+}

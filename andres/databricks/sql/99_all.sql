@@ -90,6 +90,11 @@ CREATE TABLE IF NOT EXISTS spurs2.silver.eligible_artifacts (
   tl_index_id STRING,
   tl_status STRING COMMENT 'pending | ready | failed | skipped',
   attrs_json STRING,
+  club_code STRING COMMENT 'SAS | TOT when known',
+  event_label STRING,
+  game_date DATE,
+  sponsors ARRAY<STRING>,
+  brands_seen ARRAY<STRING>,
   updated_at TIMESTAMP NOT NULL
 )
 USING DELTA

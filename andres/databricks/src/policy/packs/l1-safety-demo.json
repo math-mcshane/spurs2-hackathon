@@ -1,0 +1,28 @@
+{
+  "pack_id": "l1-safety-demo",
+  "version": "0.1.0",
+  "layer": "L1",
+  "name": "L1 safety token reject (DEMO)",
+  "demo": true,
+  "disclaimer": "DEMO safety gate — not a full content-moderation policy.",
+  "rules": [
+    {
+      "id": "L1-TOKEN-REJECT",
+      "verdict": "block",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "l1_reject_tokens": true },
+      "reason": "L1 safety: prohibited token matched in title/description/attrs."
+    }
+  ],
+  "reject_tokens": [
+    "nsfw",
+    "nude",
+    "nudity",
+    "gore",
+    "graphic_violence",
+    "hate_symbol",
+    "drug_use",
+    "csam"
+  ]
+}

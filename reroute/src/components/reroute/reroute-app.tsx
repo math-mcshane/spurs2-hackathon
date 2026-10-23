@@ -8,11 +8,14 @@ import {
   PublishIntentSchema,
   UsageSchema,
   type Asset,
+  type ClubCode,
   type EditDecision,
   type EditPlan,
   type Evidence,
+  type LakeDecideBadge,
   type PublishIntent,
 } from "@/lib/contracts";
+import { nextWeekendPublishAt } from "@/lib/discover/parse";
 import { MEDIA_PREVIEW_DISABLED_NOTE, MEDIA_PREVIEW_REVIEWER_ONLY_NOTE } from "@/features/pulse/flags";
 import { segmentLabel } from "@/features/pulse/studio/MomentPreview";
 import { EDL_EXECUTION_LABEL } from "@/lib/rights/recovery/edl";
@@ -20,6 +23,7 @@ import type { Club, RecoveryOption } from "@/features/pulse/types";
 import { CLUBS } from "@/features/pulse/clubs";
 import { sameClub } from "@/lib/rights/club";
 import { api, isAbort, type AssetDetailResponse, type PoliciesResponse, type ReceiptView } from "@/lib/api-client";
+import { RightsPassport } from "./rights-passport";
 import { AppHeader } from "./app-header";
 import { AssetSearch } from "./asset-search";
 import { ComplianceTimeline, type TimelineLane } from "./compliance-timeline";
@@ -91,6 +95,10 @@ export function RerouteApp() {
     publishAt: "",
   });
   const [decision, setDecision] = useState<EditDecision | null>(null);
+  /** Secondary Databricks lake status from /api/decide; never gates the verdict. */
+  const [lake, setLake] = useState<LakeDecideBadge | null>(null);
+  /** Club scope for partner discover (CDM mirror), kept in step with the intent's publishing club. */
+  const [discoverClub, setDiscoverClub] = useState<ClubCode>("TOT");
   const [deciding, setDeciding] = useState(false);
   const [decideError, setDecideError] = useState<unknown>(null);
   const [decideNonce, setDecideNonce] = useState(0);
@@ -177,6 +185,7 @@ export function RerouteApp() {
       try {
         const d = await api.decide({ edit: original, intent: validIntent }, { signal: ac.signal });
         setDecision(d);
+        setLake(d.lake ?? null);
         setDecideError(null);
         // The gate is always asked server-side; NEEDS_REVIEW waits for an explicit review request
         // so that intent tweaking does not spam review receipts.
@@ -226,6 +235,7 @@ export function RerouteApp() {
     setPlayhead(null);
     setOriginal(defaultEdit(a));
     setDecision(null);
+    setLake(null);
     setDecideError(null);
     setAccess({ status: "idle" });
     resetRecovery();
@@ -441,7 +451,18 @@ export function RerouteApp() {
               <span id="p-find">Find · ScorePlay</span>
             </PanelTitle>
             <div className="p-3">
-              <AssetSearch selectedId={selectedId ?? undefined} onSelect={selectAsset} />
+              <AssetSearch
+                selectedId={selectedId ?? undefined}
+                clubCode={discoverClub}
+                onClubChange={(c) => {
+                  setDiscoverClub(c);
+                  setIntent((i) => ({ ...i, club: c === "TOT" ? "tottenham" : "spurs" }));
+                }}
+                onSelect={selectAsset}
+                onDiscoverMeta={(meta) => {
+                  if (meta.weekendPublish) setIntent((i) => ({ ...i, publishAt: nextWeekendPublishAt() }));
+                }}
+              />
             </div>
           </Panel>
 
@@ -608,6 +629,18 @@ export function RerouteApp() {
               onCheckAccess={checkAccess}
               onUse={use}
             />
+            {lake && lake.status !== "unavailable" && (
+              <p className="border-t border-white/5 px-3 py-2 font-mono text-[10px] text-zinc-500">
+                Lake (Databricks L2): {lake.status} · secondary — the app verdict above is primary
+                {lake.passports.length > 0 &&
+                  ` · ${lake.passports.map((p) => `${p.mediaId}: ${p.verdict ?? "pending"}`).join(", ")}`}
+              </p>
+            )}
+            {selected && (
+              <div className="border-t border-white/5 p-3">
+                <RightsPassport mediaId={selected.id} />
+              </div>
+            )}
           </Panel>
 
           <Panel aria-labelledby="p-reroute">

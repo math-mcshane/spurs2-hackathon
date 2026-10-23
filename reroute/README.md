@@ -112,6 +112,34 @@ back per call to a recording on network error, HTTP 429 or 5xx. `DEMO_CACHE_DIR`
 **Other clubs' indexes:** `PULSE_TWELVELABS_INDEX_ID_<CLUB>` + optional `PULSE_TWELVELABS_API_KEY_<CLUB>` (for an
 index in another TwelveLabs account; falls back to `TWELVELABS_API_KEY`).
 
+### Public integration probes
+
+Hit these after deploy (add Vercel protection bypass query if Deployment Protection is on):
+
+| Endpoint | Checks |
+|---|---|
+| `GET /api/test` | Catalog + env flags; `?run=1` runs all probes |
+| `GET /api/test/scoreplay` | ScorePlay `whoami` |
+| `GET /api/test/twelvelabs` | Index describe |
+| `GET /api/test/supabase` | CDM table counts |
+| `GET /api/test/databricks` | Job id + latest run (read-only) |
+| `GET /api/test/cdm` | Funnel: inbound → eligible → evidence → discover |
+
+CDM mirror reads (match Databricks `sync_eligible_supabase` outputs):
+
+| Endpoint | Source |
+|---|---|
+| `GET /api/eligible?club=SAS` | `eligible_media` |
+| `GET /api/partners?club=TOT` | `partners` + `partnership_agreements` |
+| `GET /api/evidence?mediaId=` | `evidence` |
+| `GET /api/discover?q=Nike&club=SAS` | partner-aware ranking |
+| `GET /api/passport?mediaId=` | Rights Passport 7×3 grid (Supabase mirror) |
+| `POST /api/l2/enqueue` | `{ "mediaId" }` → Databricks pipeline + L2 passport |
+
+Paste `supabase/migrations/20261022240000_media_passports.sql` after the partner migrations for passport sync.
+
+Optional: set `REROUTE_TEST_SECRET` and pass `Authorization: Bearer …` (or `?token=`) to lock `/api/test/*`.
+
 ## Storage (Supabase)
 
 Migrations in `supabase/migrations/` (apply in filename order): `…190000_reroute_store` (receipts, reviews,
@@ -149,8 +177,50 @@ Only ids, timestamps, decisions and evidence text are stored — never media or 
 | `media.create` | `https://spurs2-hackathon.vercel.app/api/webhooks/scoreplay/media-create` |
 | `media.update` | `https://spurs2-hackathon.vercel.app/api/webhooks/scoreplay/media-update` |
 
-Auth: Bearer / Basic / custom header with `SCOREPLAY_WEBHOOK_SECRET`. Browse inbound:
-`GET /api/webhooks/scoreplay/inbound` or Supabase `scoreplay_inbound_media`.
+Auth in ScorePlay: Bearer / Basic / custom header with `SCOREPLAY_WEBHOOK_SECRET`.  
+`GET` on either path returns the config JSON. `POST` appends to `.data/webhooks.json` (ephemeral on Vercel `/tmp`), upserts **Supabase** tables `scoreplay_webhook_events` + `scoreplay_inbound_media`, optionally re-fetches the media via ScorePlay API, then calls Databricks `jobs/run-now` for `DATABRICKS_COMPLIANCE_JOB_ID` with `media_id` (and `force=true` on updates). Job trigger failures are reported in the JSON body and do **not** fail the webhook.
+
+Browse inbound files: Supabase Table Editor → `scoreplay_inbound_media`, or `GET /api/webhooks/scoreplay/inbound`.
+
+### Supabase migrations (SQL Editor)
+
+CLI migrate is optional — paste each file in **Supabase → SQL Editor → Run**, in order:
+
+1. `supabase/migrations/20261022210000_scoreplay_webhook_events.sql` — webhook landings  
+2. `supabase/migrations/20261022220000_twelvelabs_evidence.sql` — `evidence` + `tl_*` on inbound  
+3. `supabase/migrations/20261022230000_partners_eligible_media.sql` — partners, agreements, `eligible_media`  
+4. `supabase/migrations/20261022230100_seed_demo_partners.sql` — **DEMO** SAS/TOT × Nike (+ seed eligible rows)  
+5. `supabase/migrations/20261022240000_media_passports.sql` — L2 passport mirror  
+6. `supabase/migrations/20261022250000_cdm_studio_ops.sql` — receipts, compliance mirrors, L2 request staging
+
+All partnership rows are **FICTIONAL DEMO** — not real club or Nike contracts.
+
+### Partner discover demo (Studio)
+
+1. Run the four SQL files above.  
+2. Deploy/run Databricks `policy_engine_pipeline` (enrich + `sync_eligible_supabase`) so real L1-pass media upsert into `eligible_media` (seed rows work without this).  
+3. `pnpm dev` → **Partner discover** mode → club **SAS** or **TOT**.  
+4. Query: `Nike partner photos from last night we can post this weekend`.  
+5. Select a `partner_safe` card → intent presets Nike + weekend → **Decide**.
+
+API: `GET /api/discover?q=...&club=SAS`.
+
+With Supabase configured, **receipts / reviews / HUMAN evidence** persist in Postgres (CDM SoR).
+Without Supabase, those fall back to `.data/store.json` (ephemeral on Vercel `/tmp`).
+TwelveLabs cache and FFmpeg renders still use local/tmp; FFmpeg stays disabled on Vercel.
+
+## Layout
+
+| Path | Role |
+|---|---|
+| `src/lib/contracts.ts` | Shared types, Zod schemas, API request/response contracts |
+| `src/lib/rights/` | Deterministic policy engine + fictional demo policies (`policies/*.json`) |
+| `src/lib/scoreplay/` | ScorePlay client, asset mapping, writeback taxonomy (`API_NOTES.md`) |
+| `src/lib/twelvelabs/` | Marengo search, Pegasus observations, record/replay cache (`API_NOTES.md`) |
+| `src/lib/server/` | Decision context, resolver, store (Supabase SoR / `.data/` fallback), FFmpeg render |
+| `src/app/api/` | `assets`, `discover`, `eligible`, `partners`, `evidence`, `compliance/*`, `rejected/*`, `lake/compliance`, `decide`, `resolve`, `access`, `receipts`, `observations`, `writeback`, `render`, `policies`, `test/*`, `webhooks/scoreplay/*` |
+| `src/lib/discover/` | NL parse + Supabase eligible/partner ranking |
+| `src/components/reroute/` | One-screen producer UI |
 
 ## Invariants
 

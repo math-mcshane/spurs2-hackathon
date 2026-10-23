@@ -5,7 +5,31 @@ import { MAX_UPLOAD_BYTES, policyLibrary, uploadPolicyPackage } from "@/lib/righ
 import { requireReviewer } from "@/lib/server/auth";
 import { route } from "@/lib/server/http";
 import { clientAddress, consumeRateLimit } from "@/lib/server/rate-limit";
+import { getSupabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
 import { POLICY_WRITE_LIMIT } from "./limits";
+
+/** Unity Catalog policy-pack activations mirrored into Supabase (read-only, best-effort; empty when unavailable). */
+async function lakeActivations(): Promise<
+  { layer: string; packId: string; version: string; clubCode?: string; activatedAt?: string }[]
+> {
+  if (!supabaseConfigured()) return [];
+  try {
+    const { data } = await getSupabaseAdmin()
+      .from("policy_pack_activations")
+      .select("layer,pack_id,version,club_code,activated_at")
+      .order("activated_at", { ascending: false })
+      .limit(40);
+    return (data ?? []).map((r) => ({
+      layer: r.layer,
+      packId: r.pack_id,
+      version: r.version,
+      clubCode: r.club_code || undefined,
+      activatedAt: r.activated_at ?? undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * GET /api/policies[?club=] → { policies: (PolicyPackageSummary & { isDefault })[], defaults: { [club]: packageId },
@@ -23,7 +47,12 @@ export const GET = route(async (req: Request) => {
       ...(reviewer ? { uploadedBy, fileName } : { warnings: p.warnings.filter((w) => !w.startsWith("Uploaded by")) }),
       isDefault: library.defaults[p.club] === p.id,
     }));
-  return Response.json({ policies, defaults: library.defaults, uploadsAvailable: library.uploadsAvailable });
+  return Response.json({
+    policies,
+    defaults: library.defaults,
+    uploadsAvailable: library.uploadsAvailable,
+    lakeActivations: await lakeActivations(),
+  });
 });
 
 const UNSUPPORTED: ApiError = {

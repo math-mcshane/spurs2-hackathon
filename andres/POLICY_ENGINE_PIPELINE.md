@@ -323,3 +323,28 @@ Missing entitlement → `NEEDS_REVIEW` (not silent ALLOWED).
 ## 10. One-sentence architecture
 
 **Databricks ingests every ScorePlay webhook, auto-rejects blatant unsafe artifacts into a triage table, enriches the rest, and runs a second, intent-aware policy pass when marketing asks for a post — factoring player, venue, league, country/region, and campaign — without ever treating “not rejected” as “cleared to publish.”**
+
+---
+
+## 11. Policy pack runbook (Wave 6)
+
+**Author → Validate → Version → Activate → Reprocess** (no Vercel redeploy required for L2 passport).
+
+### Pack files (SoR in git → UC)
+
+| Layer | Path |
+|-------|------|
+| L1 | [`databricks/src/policy/packs/l1-safety-demo.json`](./databricks/src/policy/packs/l1-safety-demo.json) |
+| G/N/P/C/F | [`databricks/src/policy/packs/l2-passport-*.json`](./databricks/src/policy/packs/) |
+| Schema | [`schemas/passport-rules.schema.json`](./schemas/passport-rules.schema.json) |
+| Fixtures | [`databricks/tests/fixtures/passport/`](./databricks/tests/fixtures/passport/) |
+
+1. **Author** — edit pack JSON (e.g. N-02 `max_duration_sec` 60 → 45); bump `version`.
+2. **Validate** — `cd andres/databricks && python -m pytest tests/test_passport_engine.py -v`
+3. **Version** — deploy bundle (`ensure_ddl` MERGEs packs into `rules.l*_policy_packs`).
+4. **Activate** — append `rules.policy_activations` (see [`sql/10_activate_demo_packs.sql`](./databricks/sql/10_activate_demo_packs.sql) or [`scripts/bump-n02-example.sql`](./databricks/scripts/bump-n02-example.sql)).
+5. **Reprocess** — `force=true` pipeline / `POST /api/l2/enqueue` with `mediaId`; Studio reads `GET /api/passport?mediaId=`.
+
+Studio git JSON (`demo-spurs-fr-sponsored` / `demo-tottenham-pl`) still drives `/api/decide` dimensions; **Rights Passport** is the L2 / `/api/passport` path. Dual path until decide is bridged to passport intent.
+
+**Disclaimer:** all irl.group G/N/P/C/F rules are sample / DEMO — not legal advice.

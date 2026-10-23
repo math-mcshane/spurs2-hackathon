@@ -1,0 +1,29 @@
+{
+  "id": "wemby-playoff-clip",
+  "title": "spurs playoff clip wemby block",
+  "facts": {
+    "club_code": "SAS",
+    "source": "broadcast",
+    "duration_sec": 22,
+    "game_date": "2026-05-02",
+    "game_still_live": false,
+    "official_watch_party": false,
+    "broadcaster_graphics": true,
+    "rights_partner": "Amazon",
+    "usage": "ORGANIC"
+  },
+  "now": "2026-05-10T12:00:00+00:00",
+  "expect": {
+    "rules_fired_contains": ["N-02", "N-04", "N-05", "N-06", "N-07"],
+    "cells": {
+      "instagram": { "US": "allow_limited", "UK": "review", "ROW": "review" },
+      "tiktok": { "US": "allow_limited", "UK": "review", "ROW": "review" },
+      "youtube": { "US": "review", "UK": "review", "ROW": "review" },
+      "x": { "US": "allow_limited", "UK": "review", "ROW": "review" },
+      "club_app": { "US": "allow_limited", "UK": "review", "ROW": "review" },
+      "venue_screen": { "US": "block", "UK": "block", "ROW": "block" },
+      "sponsor_use": { "US": "block", "UK": "block", "ROW": "block" }
+    },
+    "usable_until": "2026-06-01"
+  }
+}

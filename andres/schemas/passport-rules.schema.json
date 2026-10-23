@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spurs2.local/schemas/passport-rules.schema.json",
+  "title": "REROUTE Rights Passport rule pack IR",
+  "description": "Shared IR for UC rules.* packs and Studio. Sample/DEMO rules only — not legal advice.",
+  "type": "object",
+  "required": ["pack_id", "version", "layer", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "pack_id": { "type": "string" },
+    "version": { "type": "string" },
+    "layer": { "type": "string", "enum": ["L1", "G", "N", "P", "C", "F", "advertiser"] },
+    "name": { "type": "string" },
+    "demo": { "type": "boolean", "default": true },
+    "disclaimer": { "type": "string" },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "use": {
+      "type": "string",
+      "enum": ["instagram", "tiktok", "youtube", "x", "club_app", "venue_screen", "sponsor_use"]
+    },
+    "region": { "type": "string", "enum": ["US", "UK", "ROW"] },
+    "verdict": {
+      "type": "string",
+      "enum": ["allow", "allow_limited", "review", "block"]
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "verdict", "uses", "regions", "reason", "when"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "verdict": { "$ref": "#/$defs/verdict" },
+        "uses": {
+          "oneOf": [
+            { "type": "string", "const": "ALL" },
+            { "type": "array", "items": { "$ref": "#/$defs/use" }, "minItems": 1 }
+          ]
+        },
+        "regions": {
+          "oneOf": [
+            { "type": "string", "const": "ALL" },
+            { "type": "array", "items": { "$ref": "#/$defs/region" }, "minItems": 1 }
+          ]
+        },
+        "when": { "type": "object", "additionalProperties": true },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_duration_sec": { "type": "number" },
+            "usable_days_after_game": { "type": "integer" },
+            "usable_days_after_upload": { "type": "integer" }
+          }
+        },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

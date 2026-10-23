@@ -12,6 +12,7 @@ import {
 } from "@/lib/scoreplay/webhook";
 import { appendWebhook } from "@/lib/server/webhook-store";
 import { persistWebhookToSupabase } from "@/lib/supabase/webhooks";
+import { triggerComplianceJob } from "@/lib/databricks/jobs";
 import { route } from "@/lib/server/http";
 import type { Asset } from "@/lib/contracts";
 
@@ -46,13 +47,21 @@ export function webhookConfigResponse(kind: "media-create" | "media-update") {
     path,
     url: `${PUBLIC_BASE}${path}`,
     tables: ["scoreplay_webhook_events", "scoreplay_inbound_media"],
+    compliance_job: {
+      env: [
+        "DATABRICKS_HOST or DATABRICKS_URL",
+        "DATABRICKS_TOKEN or DATABRICKS_API_KEY",
+        "DATABRICKS_COMPLIANCE_JOB_ID",
+      ],
+      on: "media.create / media.update with media_id (skipped on duplicate events)",
+    },
     auth: {
       bearer: "Authorization: Bearer <SCOREPLAY_WEBHOOK_SECRET>",
       header: "X-ScorePlay-Webhook-Secret: <SCOREPLAY_WEBHOOK_SECRET>",
       basic: "Authorization: Basic (password = SCOREPLAY_WEBHOOK_SECRET)",
     },
     note:
-      "Writes every webhook to Supabase (when configured). If Vercel Deployment Protection is on, append ?x-vercel-protection-bypass=<VERCEL_AUTOMATION_BYPASS_SECRET> or exclude this path.",
+      "Writes every webhook to Supabase (when configured), then triggers the Databricks compliance job for that media_id. If Vercel Deployment Protection is on, append ?x-vercel-protection-bypass=<VERCEL_AUTOMATION_BYPASS_SECRET> or exclude this path.",
   });
 }
 
@@ -139,6 +148,25 @@ export function scoreplayWebhookPost(kind: "media-create" | "media-update") {
       duplicate,
     });
 
+    // After Supabase land: kick Databricks sync → silver → L1 for this artifact.
+    // media.update uses force so prior L1 decisions are re-evaluated.
+    let complianceJob: Awaited<ReturnType<typeof triggerComplianceJob>> | {
+      ok: true;
+      skipped: true;
+      reason: string;
+    };
+    if (duplicate) {
+      complianceJob = { ok: true, skipped: true, reason: "duplicate event" };
+    } else if (!stored.mediaId) {
+      complianceJob = { ok: true, skipped: true, reason: "media_id missing" };
+    } else {
+      complianceJob = await triggerComplianceJob({
+        mediaId: stored.mediaId,
+        force: expected === "media.update",
+        runMode: "incremental",
+      });
+    }
+
     return Response.json(
       {
         ok: true,
@@ -149,6 +177,7 @@ export function scoreplayWebhookPost(kind: "media-create" | "media-update") {
         receivedAt: stored.receivedAt,
         mediaFetch,
         supabase,
+        complianceJob,
       },
       { status: duplicate ? 200 : 201 },
     );

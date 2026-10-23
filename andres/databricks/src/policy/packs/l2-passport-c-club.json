@@ -1,0 +1,42 @@
+{
+  "pack_id": "l2-passport-c-club",
+  "version": "0.1.0",
+  "layer": "C",
+  "name": "Club-owned content and published edits (irl C-01…C-04)",
+  "demo": true,
+  "disclaimer": "SAMPLE RULES — not legal advice.",
+  "rules": [
+    {
+      "id": "C-01",
+      "verdict": "allow",
+      "uses": ["instagram", "tiktok", "youtube", "x", "club_app", "venue_screen"],
+      "regions": "ALL",
+      "when": { "source": "press conference", "use_editorial": true },
+      "reason": "Press conference footage is club-produced and cleared for editorial use."
+    },
+    {
+      "id": "C-02",
+      "verdict": "allow",
+      "uses": ["instagram", "tiktok", "youtube", "x", "club_app", "venue_screen"],
+      "regions": "ALL",
+      "when": { "source": "team shot" },
+      "reason": "Team-shot photo; club owns the rights."
+    },
+    {
+      "id": "C-03",
+      "verdict": "review",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "source": "published edit", "published_on_matches_use": false },
+      "reason": "Approved for [published on] only; repurposing to another platform needs a check."
+    },
+    {
+      "id": "C-04",
+      "verdict": "allow",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "source": "published edit", "published_on_matches_use": true },
+      "reason": "Already approved and published on [published on]."
+    }
+  ]
+}

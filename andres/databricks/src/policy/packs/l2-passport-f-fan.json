@@ -1,0 +1,35 @@
+{
+  "pack_id": "l2-passport-f-fan",
+  "version": "0.1.0",
+  "layer": "F",
+  "name": "Fan uploads / irl.group (irl F-01…F-03)",
+  "demo": true,
+  "disclaimer": "SAMPLE RULES — not legal advice.",
+  "rules": [
+    {
+      "id": "F-01",
+      "verdict": "allow_limited",
+      "uses": ["instagram", "tiktok", "x", "club_app", "venue_screen"],
+      "regions": "ALL",
+      "when": { "source": "fan upload", "fan_consent": true },
+      "limits": { "usable_days_after_upload": 90 },
+      "reason": "Fan photo with irl.group consent on file; credit the fan; usable for 90 days."
+    },
+    {
+      "id": "F-02",
+      "verdict": "block",
+      "uses": "ALL",
+      "regions": "ALL",
+      "when": { "source": "fan upload", "fan_consent": false },
+      "reason": "Fan upload without consent on file."
+    },
+    {
+      "id": "F-03",
+      "verdict": "review",
+      "uses": ["sponsor_use", "youtube"],
+      "regions": "ALL",
+      "when": { "source": "fan upload" },
+      "reason": "Fan content in sponsor or long-form use needs an extra release from the fan."
+    }
+  ]
+}

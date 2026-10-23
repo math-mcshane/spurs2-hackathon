@@ -75,6 +75,7 @@ $puts = [ordered]@{
   "DATABRICKS_TOKEN"         = $script:Token
   "SCOREPLAY_API_KEY"        = $envMap["SCOREPLAY_API_KEY"]
   "TWELVELABS_API_KEY"       = $envMap["TWELVELABS_API_KEY"]
+  "TWELVELABS_INDEX_ID"      = $envMap["TWELVELABS_INDEX_ID"]
   "SUPABASE_URL"             = $envMap["SUPABASE_URL"]
   "SUPABASE_SECRET_KEY"      = $envMap["SUPABASE_SECRET_KEY"]
   "APP_URL"                  = $envMap["APP_URL"]

@@ -16,6 +16,9 @@ export type Verdict = z.infer<typeof VerdictSchema>;
 export const UsageSchema = z.enum(["EDITORIAL", "ORGANIC", "SPONSORED", "COMMERCIAL"]);
 export type Usage = z.infer<typeof UsageSchema>;
 
+export const ClubCodeSchema = z.enum(["SAS", "TOT"]);
+export type ClubCode = z.infer<typeof ClubCodeSchema>;
+
 export const PublishIntentSchema = z.object({
   territory: z.string().min(2).max(8), // ISO-3166 alpha-2: FR / US / GB
   platform: z.string().min(1).max(40), // instagram / facebook / x / tiktok / youtube
@@ -29,6 +32,10 @@ export const PublishIntentSchema = z.object({
    * policy's brand rules apply literally. Only the policy decides whether it is a partner — naming it grants nothing.
    */
   targetSponsor: z.string().trim().min(1).max(80).optional(),
+  /** DEMO partner id from Supabase partners.id (e.g. partner-nike). */
+  partnerId: z.string().min(1).optional(),
+  /** Club context for partner discover / policy selection. */
+  clubCode: ClubCodeSchema.optional(),
 });
 export type PublishIntent = z.infer<typeof PublishIntentSchema>;
 
@@ -224,6 +231,86 @@ export type MediaRef = z.infer<typeof MediaRefSchema>;
 export const isEvidenceLinkable = (ref: MediaRef): boolean =>
   (ref.method === "AUTHORITATIVE_ID" || ref.method === "FILENAME_DURATION") && !!ref.twelvelabsVideoId && !!ref.scoreplayMediaId;
 
+// ---------- Partner discover + Rights Passport (Supabase CDM mirror) ----------
+
+export const PartnerFitSchema = z.enum(["partner_safe", "conflict", "needs_review"]);
+export type PartnerFit = z.infer<typeof PartnerFitSchema>;
+
+/** Rights Passport (irl.group 7 uses × 3 regions). */
+export const PassportUseSchema = z.enum([
+  "instagram",
+  "tiktok",
+  "youtube",
+  "x",
+  "club_app",
+  "venue_screen",
+  "sponsor_use",
+]);
+export const PassportRegionSchema = z.enum(["US", "UK", "ROW"]);
+export const PassportCellVerdictSchema = z.enum(["allow", "allow_limited", "review", "block"]);
+
+export const PassportCellSchema = z.object({
+  verdict: PassportCellVerdictSchema,
+  reasons: z.array(
+    z.object({
+      rule_id: z.string(),
+      verdict: PassportCellVerdictSchema,
+      text: z.string(),
+    }),
+  ),
+  usable_until: z.string().nullable().optional(),
+  max_duration_sec: z.number().nullable().optional(),
+});
+
+export const PassportResponseSchema = z.object({
+  mediaId: z.string(),
+  verdict: VerdictSchema,
+  policyPackId: z.string().optional(),
+  policyVersion: z.string().optional(),
+  usableUntil: z.string().nullable().optional(),
+  rulesFired: z.array(z.string()),
+  cells: z.record(z.string(), z.record(z.string(), PassportCellSchema)),
+  demoDisclaimer: z.string(),
+  decidedAt: z.string().optional(),
+  source: z.enum(["supabase", "missing"]),
+});
+export type PassportResponse = z.infer<typeof PassportResponseSchema>;
+
+export const DiscoveryIntentSchema = z.object({
+  raw: z.string(),
+  clubCode: ClubCodeSchema.optional(),
+  partnerSlug: z.string().optional(),
+  eventLabel: z.string().optional(),
+  mediaKind: z.enum(["photo", "video", "any"]).default("any"),
+  /** Prefer assets with game_date near "last night". */
+  lastNight: z.boolean().default(false),
+  /** Publish window hint — weekend → check agreement window includes upcoming Sat/Sun. */
+  weekendPublish: z.boolean().default(false),
+  /** Passport clearance filter (e.g. “TikTok in the UK”). */
+  passportUse: PassportUseSchema.optional(),
+  passportRegion: PassportRegionSchema.optional(),
+});
+export type DiscoveryIntent = z.infer<typeof DiscoveryIntentSchema>;
+
+export const DiscoverHitSchema = z.object({
+  asset: AssetSchema,
+  fit: PartnerFitSchema,
+  reasons: z.array(z.string()),
+  brandsSeen: z.array(z.string()).default([]),
+  eventLabel: z.string().optional(),
+  gameDate: z.string().optional(),
+  agreementId: z.string().optional(),
+});
+export type DiscoverHit = z.infer<typeof DiscoverHitSchema>;
+
+export const DiscoverResponseSchema = z.object({
+  intent: DiscoveryIntentSchema,
+  hits: z.array(DiscoverHitSchema),
+  source: z.enum(["supabase", "scoreplay_fallback"]),
+  demoDisclaimer: z.string(),
+});
+export type DiscoverResponse = z.infer<typeof DiscoverResponseSchema>;
+
 /** A time range of one ScorePlay asset. */
 export const SegmentSchema = z.object({
   scoreplayMediaId: z.string(),
@@ -338,7 +425,24 @@ export const AssetsResponseSchema = z.object({ assets: z.array(AssetSchema) });
 
 /** POST /api/decide */
 export const DecideRequestSchema = z.object({ edit: EditPlanSchema, intent: PublishIntentSchema });
-export const DecideResponseSchema = EditDecisionSchema;
+/** Secondary lake badge — app verdict stays primary; lake may lag. */
+export const LakeDecideBadgeSchema = z.object({
+  status: z.enum(["pending", "synced", "unavailable"]),
+  mediaIds: z.array(z.string()),
+  requestIds: z.array(z.string()).default([]),
+  passports: z
+    .array(
+      z.object({
+        mediaId: z.string(),
+        verdict: VerdictSchema.optional(),
+      }),
+    )
+    .default([]),
+});
+export type LakeDecideBadge = z.infer<typeof LakeDecideBadgeSchema>;
+export const DecideResponseSchema = EditDecisionSchema.extend({
+  lake: LakeDecideBadgeSchema.optional(),
+});
 
 /**
  * POST /api/recover — "Find a way to use it" for one moment (exactly one segment of one asset) and every use it

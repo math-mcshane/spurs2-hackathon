@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import { getMediaResolver } from "@/lib/media";
 import type { AnalysisStatus } from "@/lib/rights";
 import { getScorePlayClient } from "@/lib/scoreplay";
+import { loadEligibleAsset, loadSupabaseEvidence } from "@/lib/supabase/evidence";
 import { getVideoIntelligence } from "@/lib/twelvelabs";
 import { recordedObservations } from "@/lib/twelvelabs/recorded-runs";
 import { listHumanObservations } from "./store";
@@ -23,7 +24,16 @@ export interface ContextDeps {
 /** Live dependencies; `club` picks the club's TwelveLabs index (per-club override, else the shared one). */
 export function defaultDeps(club?: string): ContextDeps {
   return {
-    getAsset: (id) => getScorePlayClient().getAsset(id),
+    getAsset: async (id) => {
+      try {
+        return await getScorePlayClient().getAsset(id);
+      } catch {
+        // CDM fallback: an asset mirrored into Supabase eligible_media (Databricks sync) when ScorePlay is unreachable.
+        const cached = await loadEligibleAsset(id);
+        if (cached) return cached;
+        throw new AppError("NOT_FOUND", `Asset ${id} not in ScorePlay or eligible_media`);
+      }
+    },
     video: () => getVideoIntelligence(club),
     mediaRef: (id) => getMediaResolver(club).forScoreplay(id),
     humanObservations: listHumanObservations,
@@ -103,6 +113,12 @@ export class DecisionContext {
   }
 
   private async machineObservations(id: string): Promise<{ status: AnalysisStatus; evidence: Evidence[] }> {
+    // Prefer Supabase evidence cache (Databricks sync / seed) for partner-fit decide
+    const cached = await loadSupabaseEvidence(id);
+    if (cached.length) {
+      return { status: { status: "AVAILABLE" }, evidence: cached };
+    }
+
     const video = this.video();
     if ("status" in video) return { status: video, evidence: [] };
     let ref: MediaRef;

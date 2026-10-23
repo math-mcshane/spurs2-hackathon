@@ -38,6 +38,18 @@ export const SCOREPLAY_TAXONOMY = {
     REJECTED: "reroute:review:rejected",
   } satisfies Record<Exclude<HumanReviewStatus, "PENDING">, string>,
 
+  /**
+   * Rights Passport summary tags (proposal — confirm with ScorePlay staff). Managed names only: the passport is
+   * a Supabase/Databricks CDM view, and writeback never writes these for demo policies.
+   */
+  passportTags: {
+    allow: "reroute:passport:allow",
+    allowLimited: "reroute:passport:allow-limited",
+    review: "reroute:passport:review",
+    block: "reroute:passport:block",
+    prefix: "reroute:passport:",
+  },
+
   /** `raw_tags` on derivatives uploaded by REROUTE (distinct assets needing their own decision). */
   derivativeTag: "reroute:derivative",
 
@@ -79,5 +91,20 @@ export type ScorePlayTaxonomy = typeof SCOREPLAY_TAXONOMY;
 /** Every tag-option name REROUTE manages on a media (a newer write supersedes the others). */
 export function managedTagNames(): string[] {
   const t = SCOREPLAY_TAXONOMY;
-  return [...Object.values(t.verifiedVerdictTags), ...Object.values(t.reviewTags)];
+  return [
+    ...Object.values(t.verifiedVerdictTags),
+    ...Object.values(t.reviewTags),
+    t.passportTags.allow,
+    t.passportTags.allowLimited,
+    t.passportTags.review,
+    t.passportTags.block,
+  ];
+}
+
+/** Map overall L2 / decide verdict → passport summary tag. */
+export function passportTagForVerdict(verdict: Verdict): string {
+  const t = SCOREPLAY_TAXONOMY.passportTags;
+  if (verdict === "ALLOWED") return t.allow;
+  if (verdict === "BLOCKED") return t.block;
+  return t.review;
 }

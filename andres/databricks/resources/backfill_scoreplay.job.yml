@@ -1,0 +1,33 @@
+resources:
+  jobs:
+    scoreplay_backfill:
+      name: spurs2-scoreplay-backfill
+      tags:
+        project: spurs2
+        track: policy-engine
+        purpose: backfill
+      description: >
+        One-shot ScorePlay library pull into bronze.scoreplay_webhooks
+        (event_type=backfill). Run policy_engine_pipeline with run_mode=full after.
+      queue:
+        enabled: true
+      max_concurrent_runs: 1
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+      tasks:
+        - task_key: ensure_ddl
+          notebook_task:
+            notebook_path: ../src/pipeline/00_ensure_ddl.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              bundle_root: ${workspace.file_path}
+
+        - task_key: backfill_scoreplay_media
+          depends_on:
+            - task_key: ensure_ddl
+          notebook_task:
+            notebook_path: ../src/pipeline/backfill_scoreplay_media.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon

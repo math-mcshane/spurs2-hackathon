@@ -36,8 +36,13 @@ CREATE TABLE IF NOT EXISTS spurs2.silver.eligible_artifacts (
   l1_passed_at TIMESTAMP NOT NULL,
   tl_asset_id STRING COMMENT 'TwelveLabs asset id after URL ingest',
   tl_index_id STRING,
-  tl_status STRING COMMENT 'pending | ready | failed | skipped',
+  tl_status STRING COMMENT 'pending | ready | failed | skipped (no URL / not in index)',
   attrs_json STRING,
+  club_code STRING COMMENT 'SAS | TOT when known',
+  event_label STRING COMMENT 'e.g. last_night_game',
+  game_date DATE,
+  sponsors ARRAY<STRING> COMMENT 'ScorePlay sponsor labels',
+  brands_seen ARRAY<STRING> COMMENT 'TL brand slugs e.g. nike',
   updated_at TIMESTAMP NOT NULL
 )
 USING DELTA

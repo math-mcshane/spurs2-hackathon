@@ -1,0 +1,43 @@
+{
+  "pack_id": "l2-passport-p-tottenham",
+  "version": "0.1.0",
+  "layer": "P",
+  "name": "Tottenham Hotspur (PL) match footage (irl P-01…P-04)",
+  "demo": true,
+  "disclaimer": "SAMPLE RULES — not Premier League or club terms; not legal advice.",
+  "rules": [
+    {
+      "id": "P-01",
+      "verdict": "block",
+      "uses": ["instagram", "tiktok", "x", "club_app", "youtube"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "hours_since_final_whistle_under": 2, "club_code": "TOT" },
+      "reason": "Match footage is embargoed until 2 hours after the final whistle."
+    },
+    {
+      "id": "P-02",
+      "verdict": "allow_limited",
+      "uses": ["instagram", "tiktok", "x", "club_app"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "club_code": "TOT" },
+      "limits": { "max_duration_sec": 30, "usable_days_after_game": 7 },
+      "reason": "Short match clips allowed on club channels: max 30s, for 7 days after the match."
+    },
+    {
+      "id": "P-03",
+      "verdict": "block",
+      "uses": ["instagram", "tiktok", "x", "club_app"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "longer_than_sec": 30, "club_code": "TOT" },
+      "reason": "Clip is [duration s]s; match clips are limited to 30s."
+    },
+    {
+      "id": "P-04",
+      "verdict": "block",
+      "uses": ["youtube", "sponsor_use", "venue_screen"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "club_code": "TOT" },
+      "reason": "Match footage is not cleared for YouTube, sponsor or public venue use by the club."
+    }
+  ]
+}

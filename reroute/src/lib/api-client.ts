@@ -9,15 +9,18 @@ import {
   ApiErrorSchema,
   AssetSchema,
   AssetsResponseSchema,
+  DiscoverResponseSchema,
   DecideResponseSchema,
   EvidenceSchema,
   MediaRefSchema,
+  PassportResponseSchema,
   RenderResponseSchema,
   RightsReceiptSchema,
   WritebackResponseSchema,
   type AccessActionSchema,
   type RecoverRequestSchema,
   type ApiError,
+  type ClubCode,
   type EditPlan,
   type Evidence,
   type PublishIntent,
@@ -54,6 +57,18 @@ export const PolicySummarySchema = z.object({
 export type PolicySummary = z.infer<typeof PolicySummarySchema>;
 export const PoliciesResponseSchema = z.object({
   policies: z.array(PolicySummarySchema),
+  /** Unity Catalog policy-pack activations mirrored into Supabase (best-effort; absent/empty when unavailable). */
+  lakeActivations: z
+    .array(
+      z.object({
+        layer: z.string(),
+        packId: z.string(),
+        version: z.string(),
+        clubCode: z.string().optional(),
+        activatedAt: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 export type PoliciesResponse = z.infer<typeof PoliciesResponseSchema>;
 
@@ -128,7 +143,28 @@ export const api = {
   policies: (o?: Sig) => request(PoliciesResponseSchema, "/api/policies", o),
   searchAssets: (q: string, o?: Sig) =>
     request(AssetsResponseSchema, `/api/assets?${new URLSearchParams({ q, limit: "12" })}`, o),
+  discover: (q: string, club?: ClubCode, o?: Sig) => {
+    const params = new URLSearchParams({ q, limit: "12" });
+    if (club) params.set("club", club);
+    return request(DiscoverResponseSchema, `/api/discover?${params}`, o);
+  },
+
   asset: (id: string, o?: Sig) => request(AssetDetailResponseSchema, `/api/assets/${encodeURIComponent(id)}`, o),
+  passport: (mediaId: string, o?: Sig) =>
+    request(PassportResponseSchema, `/api/passport?${new URLSearchParams({ mediaId })}`, o),
+  enqueueL2: (mediaId: string, force = true) =>
+    request(
+      z.object({
+        ok: z.boolean(),
+        skipped: z.boolean().optional(),
+        reason: z.string().optional(),
+        runId: z.number().optional(),
+        jobId: z.number().optional(),
+        note: z.string().optional(),
+      }),
+      "/api/l2/enqueue",
+      { method: "POST", body: { mediaId, force } },
+    ),
   addObservation: (evidence: Omit<Evidence, "source" | "origin">) =>
     request(ObservationResponseSchema, "/api/observations", {
       method: "POST",

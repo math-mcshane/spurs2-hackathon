@@ -1,0 +1,67 @@
+{
+  "pack_id": "l2-passport-n-spurs",
+  "version": "0.1.0",
+  "layer": "N",
+  "name": "San Antonio Spurs (NBA) broadcast (irl N-01…N-07)",
+  "demo": true,
+  "disclaimer": "SAMPLE RULES — not NBA or club terms; not legal advice.",
+  "rules": [
+    {
+      "id": "N-01",
+      "verdict": "block",
+      "uses": ["youtube", "sponsor_use", "venue_screen"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "game_still_live": true, "club_code": "SAS" },
+      "reason": "Broadcast footage during the live game is reserved for the rights partner ([rights partner])."
+    },
+    {
+      "id": "N-02",
+      "verdict": "allow_limited",
+      "uses": ["instagram", "tiktok", "x", "club_app"],
+      "regions": ["US"],
+      "when": { "source": "broadcast", "club_code": "SAS" },
+      "limits": { "max_duration_sec": 60, "usable_days_after_game": 30 },
+      "reason": "Short broadcast highlights allowed on club social in the US: max 60s, for 30 days after the game."
+    },
+    {
+      "id": "N-03",
+      "verdict": "block",
+      "uses": ["instagram", "tiktok", "x", "club_app"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "longer_than_sec": 60, "club_code": "SAS" },
+      "reason": "Clip is [duration s]s; broadcast highlights are limited to 60s."
+    },
+    {
+      "id": "N-04",
+      "verdict": "review",
+      "uses": ["instagram", "tiktok", "x", "club_app", "youtube"],
+      "regions": ["UK", "ROW"],
+      "when": { "source": "broadcast", "club_code": "SAS" },
+      "reason": "International rights holders may hold this footage outside the US; geo-check before posting."
+    },
+    {
+      "id": "N-05",
+      "verdict": "review",
+      "uses": ["youtube"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "club_code": "SAS" },
+      "reason": "Long-form YouTube use of game broadcast needs league approval."
+    },
+    {
+      "id": "N-06",
+      "verdict": "block",
+      "uses": ["venue_screen"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "official_watch_party": false, "club_code": "SAS" },
+      "reason": "Public display of broadcast footage is only for official, licensed watch parties."
+    },
+    {
+      "id": "N-07",
+      "verdict": "block",
+      "uses": ["sponsor_use"],
+      "regions": "ALL",
+      "when": { "source": "broadcast", "broadcaster_graphics": true, "club_code": "SAS" },
+      "reason": "Broadcaster graphics ([rights partner]) are visible; can't be used in sponsor content."
+    }
+  ]
+}

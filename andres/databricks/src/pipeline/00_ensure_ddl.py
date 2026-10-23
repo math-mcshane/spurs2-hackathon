@@ -35,7 +35,10 @@ def _sql_paths(root: str) -> list[Path]:
     )
     for c in candidates:
         if c.exists():
-            return sorted(c.glob("0*.sql"))
+            # Numbered migrations; skip convenience 99_all.sql
+            return sorted(
+                p for p in c.glob("[0-9]*.sql") if not p.name.startswith("99_")
+            )
     return []
 
 
@@ -71,7 +74,7 @@ def _rewrite_catalog(sql_text: str, catalog_name: str) -> str:
 paths = _sql_paths(bundle_root)
 if not paths:
     raise FileNotFoundError(
-        f"No sql/0*.sql found (bundle_root={bundle_root!r}). "
+        f"No sql/[0-9]*.sql found (bundle_root={bundle_root!r}). "
         "Deploy the bundle so sql/ syncs to the workspace."
     )
 
@@ -83,6 +86,52 @@ for path in paths:
     stmts = _split_statements(text)
     print(f"  → {path.name}: {len(stmts)} statements")
     for stmt in stmts:
-        spark.sql(stmt)
+        try:
+            spark.sql(stmt)
+        except Exception as e:
+            msg = str(e).lower()
+            # ALTER ADD COLUMNS / MERGE seed re-runs are expected after first apply
+            if any(
+                t in msg
+                for t in (
+                    "already exists",
+                    "field_already_exists",
+                    "fields_already_exists",
+                    "duplicate column",
+                    "cannot be resolved",  # view recreate before columns exist (ordering race)
+                )
+            ):
+                print(f"    skip (already applied / deferred): {type(e).__name__}: {str(e)[:160]}")
+                continue
+            raise
 
 print("[ensure_ddl] done")
+
+# COMMAND ----------
+# Seed passport / L1 packs from src/policy/packs/*.json into UC rules.*
+
+import sys
+from pathlib import Path
+
+_policy_roots = []
+if bundle_root:
+    _policy_roots.append(Path(bundle_root) / "src")
+_policy_roots.extend(
+    [
+        Path.cwd() / "src",
+        Path.cwd().parent / "src",
+        Path("/Workspace") / "src",
+    ]
+)
+for root in _policy_roots:
+    if (root / "policy").exists():
+        sys.path.insert(0, str(root))
+        break
+
+try:
+    from policy.uc_seed import seed_packs_via_spark
+
+    seeded = seed_packs_via_spark(spark, catalog)
+    print(f"[ensure_ddl] seeded packs: {seeded}")
+except Exception as e:
+    print(f"[ensure_ddl] pack seed skipped: {type(e).__name__}: {e}")

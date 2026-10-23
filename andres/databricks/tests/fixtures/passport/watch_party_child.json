@@ -1,0 +1,28 @@
+{
+  "id": "watch-party-child",
+  "title": "watch party fan photo child",
+  "facts": {
+    "club_code": "SAS",
+    "source": "fan upload",
+    "fan_consent": true,
+    "guardian_consent": false,
+    "minor_visible": true,
+    "rival_logo_visible": false,
+    "shirt_sponsor_visible": false,
+    "upload_date": "2026-10-01",
+    "usage": "ORGANIC"
+  },
+  "now": "2026-10-10T12:00:00+00:00",
+  "expect": {
+    "rules_fired_contains": ["G-01", "G-05", "F-01", "F-03"],
+    "cells": {
+      "instagram": { "US": "block", "UK": "block", "ROW": "block" },
+      "tiktok": { "US": "block", "UK": "block", "ROW": "block" },
+      "youtube": { "US": "block", "UK": "block", "ROW": "block" },
+      "x": { "US": "block", "UK": "block", "ROW": "block" },
+      "club_app": { "US": "block", "UK": "block", "ROW": "block" },
+      "venue_screen": { "US": "block", "UK": "block", "ROW": "block" },
+      "sponsor_use": { "US": "block", "UK": "block", "ROW": "block" }
+    }
+  }
+}

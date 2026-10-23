@@ -1,0 +1,29 @@
+{
+  "id": "watch-party-rival-beer",
+  "title": "watch party fan photo rival beer",
+  "facts": {
+    "club_code": "SAS",
+    "source": "fan upload",
+    "fan_consent": true,
+    "guardian_consent": true,
+    "minor_visible": false,
+    "rival_logo_visible": true,
+    "rival_logos": ["Rival Beer Co"],
+    "shirt_sponsor_visible": false,
+    "upload_date": "2026-10-01",
+    "usage": "ORGANIC"
+  },
+  "now": "2026-10-10T12:00:00+00:00",
+  "expect": {
+    "rules_fired_contains": ["G-04", "G-05", "F-01", "F-03"],
+    "cells": {
+      "instagram": { "US": "allow_limited", "UK": "allow_limited", "ROW": "allow_limited" },
+      "tiktok": { "US": "allow_limited", "UK": "allow_limited", "ROW": "allow_limited" },
+      "youtube": { "US": "review", "UK": "review", "ROW": "review" },
+      "x": { "US": "allow_limited", "UK": "allow_limited", "ROW": "allow_limited" },
+      "club_app": { "US": "allow_limited", "UK": "allow_limited", "ROW": "allow_limited" },
+      "venue_screen": { "US": "block", "UK": "block", "ROW": "block" },
+      "sponsor_use": { "US": "block", "UK": "block", "ROW": "block" }
+    }
+  }
+}

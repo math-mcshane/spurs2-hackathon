@@ -3,6 +3,7 @@
 # MAGIC %md
 # MAGIC # Silver — project `assets` from bronze webhooks
 # MAGIC Best-effort JSON extraction. Missing fields stay null (never invent rights).
+# MAGIC `run_mode=full` ignores lookback (full-catalog / backfill).
 
 # COMMAND ----------
 
@@ -11,52 +12,65 @@ from pyspark.sql.window import Window
 
 dbutils.widgets.text("catalog", "spurs2")
 dbutils.widgets.text("lookback_hours", "24")
+dbutils.widgets.dropdown("run_mode", "incremental", ["incremental", "full"])
+dbutils.widgets.text("media_id", "")
 
 catalog = dbutils.widgets.get("catalog")
 lookback_hours = int(dbutils.widgets.get("lookback_hours"))
+run_mode = dbutils.widgets.get("run_mode").strip().lower()
+media_id = dbutils.widgets.get("media_id").strip()
 
 bronze = f"{catalog}.bronze.scoreplay_webhooks"
 assets = f"{catalog}.silver.assets"
 
 # COMMAND ----------
 
-cutoff = F.current_timestamp() - F.expr(f"INTERVAL {lookback_hours} HOURS")
-raw = (
-    spark.table(bronze)
-    .where(F.col("received_at") >= cutoff)
-    .where(F.col("media_id").isNotNull())
+raw = spark.table(bronze).where(F.col("media_id").isNotNull())
+if media_id:
+    raw = raw.where(F.col("media_id") == media_id)
+    print(f"[silver] scoped to media_id={media_id}")
+elif run_mode != "full":
+    cutoff = F.current_timestamp() - F.expr(f"INTERVAL {lookback_hours} HOURS")
+    raw = raw.where(F.col("received_at") >= cutoff)
+
+# Prefer get_json_object — ScorePlay payloads are nested objects, not flat string maps
+parsed = raw.select(
+    F.col("media_id"),
+    F.coalesce(
+        F.col("company_id"),
+        F.get_json_object(F.col("payload"), "$.company_id"),
+        F.get_json_object(F.col("payload"), "$.companyId"),
+    ).alias("company_id"),
+    F.coalesce(
+        F.get_json_object(F.col("payload"), "$.name"),
+        F.get_json_object(F.col("payload"), "$.title"),
+        F.get_json_object(F.col("payload"), "$.media.name"),
+    ).alias("title"),
+    F.coalesce(
+        F.get_json_object(F.col("payload"), "$.description"),
+        F.get_json_object(F.col("payload"), "$.media.description"),
+    ).alias("description"),
+    F.coalesce(
+        F.get_json_object(F.col("payload"), "$.type"),
+        F.get_json_object(F.col("payload"), "$.media_type"),
+        F.get_json_object(F.col("payload"), "$.media.type"),
+    ).alias("media_type"),
+    F.get_json_object(F.col("payload"), "$.status").alias("status"),
+    F.coalesce(
+        F.get_json_object(F.col("payload"), "$.streaming_url"),
+        F.get_json_object(F.col("payload"), "$.proxy_large"),
+        F.get_json_object(F.col("payload"), "$.cdn_url"),
+        F.get_json_object(F.col("payload"), "$.url"),
+    ).alias("cdn_url"),
+    F.coalesce(
+        F.get_json_object(F.col("payload"), "$.thumbnail_url"),
+        F.get_json_object(F.col("payload"), "$.proxy_small"),
+    ).alias("thumbnail_url"),
+    F.col("event_id").alias("source_event_id"),
+    F.col("payload").alias("attrs_json"),
+    F.col("received_at"),
 )
 
-# ScorePlay payloads vary; pull common keys when present
-parsed = (
-    raw.withColumn("j", F.from_json(F.col("payload"), "MAP<STRING,STRING>"))
-    .select(
-        F.col("media_id"),
-        F.coalesce(F.col("company_id"), F.col("j")["company_id"], F.col("j")["companyId"]).alias(
-            "company_id"
-        ),
-        F.coalesce(F.col("j")["title"], F.col("j")["name"]).alias("title"),
-        F.col("j")["description"].alias("description"),
-        F.coalesce(F.col("j")["media_type"], F.col("j")["type"], F.col("j")["mediaType"]).alias(
-            "media_type"
-        ),
-        F.coalesce(F.col("j")["status"]).alias("status"),
-        F.coalesce(
-            F.col("j")["cdn_url"],
-            F.col("j")["url"],
-            F.col("j")["download_url"],
-            F.col("j")["cdnUrl"],
-        ).alias("cdn_url"),
-        F.coalesce(F.col("j")["thumbnail_url"], F.col("j")["thumbnailUrl"]).alias(
-            "thumbnail_url"
-        ),
-        F.col("event_id").alias("source_event_id"),
-        F.col("payload").alias("attrs_json"),
-        F.col("received_at"),
-    )
-)
-
-# Keep latest event per media_id in the window
 w = (
     parsed.withColumn(
         "rn",
@@ -89,10 +103,10 @@ staged = w.select(
 )
 
 n = staged.count()
-print(f"[silver_assets] candidates={n} → {assets}")
+print(f"[silver_assets] run_mode={run_mode} candidates={n} → {assets}")
 
 if n == 0:
-    print("[silver_assets] nothing to merge (bronze empty or no media_id in lookback)")
+    print("[silver_assets] nothing to merge")
 else:
     staged.createOrReplaceTempView("_assets_stage")
     spark.sql(

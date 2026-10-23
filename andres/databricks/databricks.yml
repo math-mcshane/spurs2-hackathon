@@ -18,8 +18,8 @@ targets:
     default: true
     mode: development
     workspace:
+      # Auth via DATABRICKS_HOST + DATABRICKS_TOKEN (PAT); do not pin a stale OAuth profile
       host: https://adb-4090431820227854.14.azuredatabricks.net
-      profile: DEFAULT
       root_path: ~/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: spurs2
@@ -28,7 +28,6 @@ targets:
     mode: production
     workspace:
       host: https://adb-4090431820227854.14.azuredatabricks.net
-      profile: DEFAULT
       root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: spurs2

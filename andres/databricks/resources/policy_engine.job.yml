@@ -7,9 +7,9 @@ resources:
         track: policy-engine
         purpose: pipeline
       description: >
-        Preliminary policy engine: ensure UC DDL → project silver assets from
-        bronze webhooks → L1 safety gate → enrich eligible (stub) → L2 batch
-        for queued intents (stub rules).
+        Policy engine: DDL → Supabase webhook sync → bronze QA → silver assets →
+        L1 safety → compliance mirror → TwelveLabs enrich → eligible sync →
+        Studio L2 request pull → L2 batch → passport/triage sync.
       queue:
         enabled: true
       max_concurrent_runs: 1
@@ -18,19 +18,41 @@ resources:
           default: ${var.catalog}
         - name: lookback_hours
           default: "24"
+        - name: run_mode
+          default: incremental
+        - name: force
+          default: "false"
+        - name: media_id
+          default: ""
+        - name: enrich_max_items
+          default: "10"
+        - name: enrich_force
+          default: "false"
+        - name: twelvelabs_index_id
+          default: ""
       tasks:
         - task_key: ensure_ddl
-          description: CREATE IF NOT EXISTS for catalog/schemas/tables
+          description: CREATE IF NOT EXISTS + compliance views
           notebook_task:
             notebook_path: ../src/pipeline/00_ensure_ddl.py
             base_parameters:
               catalog: "{{job.parameters.catalog}}"
               bundle_root: ${workspace.file_path}
 
-        - task_key: bronze_webhooks
-          description: Normalize / validate bronze.scoreplay_webhooks (append path ready)
+        - task_key: sync_supabase_webhooks
+          description: Supabase scoreplay_webhook_events → bronze
           depends_on:
             - task_key: ensure_ddl
+          notebook_task:
+            notebook_path: ../src/pipeline/06_sync_supabase_webhooks.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon
+
+        - task_key: bronze_webhooks
+          description: Validate / report bronze.scoreplay_webhooks volume
+          depends_on:
+            - task_key: sync_supabase_webhooks
           notebook_task:
             notebook_path: ../src/pipeline/01_bronze_webhooks.py
             base_parameters:
@@ -38,7 +60,7 @@ resources:
               lookback_hours: "{{job.parameters.lookback_hours}}"
 
         - task_key: silver_assets
-          description: Upsert silver.assets from recent webhook payloads
+          description: MERGE silver.assets from bronze payloads
           depends_on:
             - task_key: bronze_webhooks
           notebook_task:
@@ -46,6 +68,8 @@ resources:
             base_parameters:
               catalog: "{{job.parameters.catalog}}"
               lookback_hours: "{{job.parameters.lookback_hours}}"
+              run_mode: "{{job.parameters.run_mode}}"
+              media_id: "{{job.parameters.media_id}}"
 
         - task_key: l1_preprocess
           description: L1 AUTO_REJECT | PASS_L1 → gold + eligible / rejected
@@ -56,21 +80,94 @@ resources:
             base_parameters:
               catalog: "{{job.parameters.catalog}}"
               lookback_hours: "{{job.parameters.lookback_hours}}"
+              run_mode: "{{job.parameters.run_mode}}"
+              force: "{{job.parameters.force}}"
+              media_id: "{{job.parameters.media_id}}"
 
-        - task_key: enrich_eligible
-          description: Stub enrich for PASS_L1 pool (TL observations later)
+        - task_key: sync_compliance_supabase
+          description: Upsert compliance_rejected + l1_decisions + summary → Supabase
           depends_on:
             - task_key: l1_preprocess
+          notebook_task:
+            notebook_path: ../src/pipeline/08_sync_compliance_to_supabase.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon
+              max_rows: "500"
+
+        - task_key: enrich_eligible
+          description: TwelveLabs asset resolve/create + Pegasus → silver.observations
+          depends_on:
+            - task_key: sync_compliance_supabase
           notebook_task:
             notebook_path: ../src/pipeline/04_enrich_eligible.py
             base_parameters:
               catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon
+              max_items: "{{job.parameters.enrich_max_items}}"
+              force: "{{job.parameters.enrich_force}}"
+              media_id: "{{job.parameters.media_id}}"
+              index_id: "{{job.parameters.twelvelabs_index_id}}"
 
-        - task_key: l2_contextual
-          description: Batch L2 for queued gold.l2_requests (preliminary rules)
+        - task_key: sync_eligible_supabase
+          description: Upsert eligible_media + evidence into Supabase for Studio
           depends_on:
             - task_key: enrich_eligible
+          notebook_task:
+            notebook_path: ../src/pipeline/07_sync_eligible_to_supabase.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon
+              max_rows: "500"
+
+        - task_key: sync_l2_requests_supabase
+          description: Pull Studio-queued l2_requests → gold.l2_requests
+          depends_on:
+            - task_key: sync_eligible_supabase
+          notebook_task:
+            notebook_path: ../src/pipeline/06b_sync_l2_requests_from_supabase.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon
+
+        - task_key: enqueue_l2
+          description: Queue Rights Passport L2 for eligible media
+          depends_on:
+            - task_key: sync_l2_requests_supabase
+          notebook_task:
+            notebook_path: ../src/pipeline/05a_enqueue_l2.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              media_id: "{{job.parameters.media_id}}"
+              max_enqueue: "200"
+
+        - task_key: l2_contextual
+          description: Rights Passport L2 evaluate for queued gold.l2_requests
+          depends_on:
+            - task_key: enqueue_l2
           notebook_task:
             notebook_path: ../src/pipeline/05_l2_contextual.py
             base_parameters:
               catalog: "{{job.parameters.catalog}}"
+              bundle_root: ${workspace.file_path}
+
+        - task_key: sync_passport_supabase
+          description: Upsert passports + l2_decisions to Supabase
+          depends_on:
+            - task_key: l2_contextual
+          notebook_task:
+            notebook_path: ../src/pipeline/07b_sync_passport_to_supabase.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon
+              max_rows: "500"
+
+        - task_key: sync_triage_supabase
+          description: Write Studio triage patches back to gold.rejected_artifacts
+          depends_on:
+            - task_key: sync_passport_supabase
+          notebook_task:
+            notebook_path: ../src/pipeline/09_sync_triage_from_supabase.py
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              secret_scope: spurs2-hackathon

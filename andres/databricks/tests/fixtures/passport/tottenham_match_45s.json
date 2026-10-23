@@ -1,0 +1,26 @@
+{
+  "id": "tottenham-match-45s",
+  "title": "tottenham match clip 45s",
+  "facts": {
+    "club_code": "TOT",
+    "source": "broadcast",
+    "duration_sec": 45,
+    "game_date": "2026-10-18",
+    "hours_since_final_whistle": 5,
+    "usage": "ORGANIC"
+  },
+  "now": "2026-10-20T12:00:00+00:00",
+  "expect": {
+    "rules_fired_contains": ["P-02", "P-03", "P-04"],
+    "cells": {
+      "instagram": { "US": "block", "UK": "block", "ROW": "block" },
+      "tiktok": { "US": "block", "UK": "block", "ROW": "block" },
+      "youtube": { "US": "block", "UK": "block", "ROW": "block" },
+      "x": { "US": "block", "UK": "block", "ROW": "block" },
+      "club_app": { "US": "block", "UK": "block", "ROW": "block" },
+      "venue_screen": { "US": "block", "UK": "block", "ROW": "block" },
+      "sponsor_use": { "US": "block", "UK": "block", "ROW": "block" }
+    },
+    "usable_until": null
+  }
+}

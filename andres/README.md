@@ -30,6 +30,17 @@ Working notes for the Spurs² **Rights & Compliance** track, aligning:
 
 Chat-side summary canvas (optional): `reroute-spurs2.canvas.tsx` in the Cursor canvases folder.
 
+## Partner discover (SAS + TOT)
+
+Studio searches Supabase `eligible_media` + DEMO `partnership_agreements` (Nike). Databricks syncs the L1-pass pool:
+
+1. **You — Supabase SQL Editor** (order matters): see `../reroute/supabase/migrations/`  
+   - `…230000_partners_eligible_media.sql`  
+   - `…230100_seed_demo_partners.sql`  
+2. **Databricks** (`databricks/`): `bundle deploy` + `bundle run -t dev policy_engine_pipeline`  
+   - New task `sync_eligible_supabase` → upserts `eligible_media` + `evidence`  
+3. **Studio** (`../reroute`): Partner discover → “Nike… last night… weekend” → fit badges → decide  
+
 ## Demo disclosures
 
 All sample policies are **DEMO POLICY — NOT AN ACTUAL TEAM OR LEAGUE AGREEMENT**.  

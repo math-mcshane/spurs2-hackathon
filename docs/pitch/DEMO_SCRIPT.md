@@ -1,51 +1,60 @@
 # Demo script — 3 minutes, Studio (`/`)
 
-Rehearsed in Chromium as signed-in reviewer on the Vercel preview https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app and on the local production build (`next start -p 3400`), 2026-10-23 ≈ 12:15–12:30 UTC. Both return the **same** flagship result (same cached Pegasus analysis — see [`CONTINGENCY.md`](CONTINGENCY.md)). Timings on the preview: moments ≈ 6 s, check rights 1.3 s, Find a way 3.4 s, apply 2.4 s.
+Validated end to end in Chromium, signed in as reviewer, on the Vercel preview **https://spurs2-hackathon-inpdx7om5-merlins-projects-2b20d832.vercel.app** (commit `e3c5a2b`), 2026-10-23 ≈ 12:55 UTC — all three use cases from goal to dry-run writeback, no console errors. Fallback preview (previous build, same data): https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app.
+
+## What is real, what is illustrative (say it once, at 0:40)
+
+The Rights panel shows one indicator — **Illustrative rules ⓘ** — whose panel lists the four limits: the rule set is written for this demo (not a club agreement, "Allowed" is not legal clearance); logos and people on screen are TwelveLabs machine observations, not human-verified; cuts are edit plans, not rendered files; ScorePlay writeback is a dry run. Everything else on screen — ScorePlay assets and tags, TwelveLabs moments and analysis, timecodes, the audit trail — is real.
 
 ## Before the jury (5 min)
 
-1. Chrome, one window, zoom 100–110 %, `/` open on the preview (or a freshly started local production build). Header tag "Live club data · ScorePlay + TwelveLabs" visible.
-2. **Reviewer sign-in** off the projector (header button, `presenter` + the NEW passcode from `reroute/.reviewers.local.txt`). Signed in, the Studio shows the real footage (TwelveLabs stream), ScorePlay thumbnails and photo thumbnails — reviewer-only, as confirmed with the organizers. Signed out it shows timecode placeholders.
-3. Run the flagship once end to end (warms caches and the video player), then **New goal**.
-4. Pre-run backup tabs in a second window (see [`CONTINGENCY.md`](CONTINGENCY.md)): flagship at Compliance and at Resolution, S2 at Compliance.
-5. Don't click **Find a way to use it** more than a few times in the last minute (10 per minute per IP).
+1. Chrome, one window, zoom 100–110 %, the preview URL above on the goal screen.
+2. **Reviewer sign-in** off the projector (`presenter` + passcode from `reroute/.reviewers.local.txt`). Signed in, moments play the real footage and photos show thumbnails; signed out, timecode placeholders.
+3. Run use case 1 once end to end (warms caches), then **New goal**.
+4. Backup tabs in a second window: use case 1 stopped at Compliance (after **Check rights**), use case 3 stopped at Resolution (after **Find a way to use it**).
+5. Don't click **Find a way to use it** repeatedly in the last minute (10 per minute per IP).
 
-## 0:00–0:15 — Hook (no clicks)
+## Use case 1 — Sponsor activation (0:00–1:50)
 
-> "Sports clubs don't have a content shortage. They have a content usage problem. We don't just detect a problem — we find a way to solve it."
+ScorePlay asset **130851444** "solanke late goal.mp4" ↔ TwelveLabs video 6ad91200968fe117efe706a5.
 
-## 0:15–2:00 — Flagship: a sponsor post from Solanke's late goal
-
-| Time | Click | What appears | Say |
+| Time | Click | Screen | Say |
 |---|---|---|---|
-| 0:15 | Chip **Sponsor a goal moment** | Goal field: "Activate our sponsor with Solanke's late goal for UK fans" | "A commercial goal: a sponsor post from Solanke's late goal, for UK fans." |
-| 0:20 | **Find opportunities** | ~6 s. "Searched only the 15 videos ScorePlay tags with **Dominic Ayodele Solanke-Mitchell**". Three playing moments; **moment 02 · solanke late goal · 0:09–0:20** | "ScorePlay knows which videos Solanke is tagged in; TwelveLabs finds the seconds inside them." |
-| 0:35 | (optional) **Why this moment** on moment 02 | "#5 for 'player celebrating a goal with the sponsor logo on his shirt clearly visible'" · "The club's ScorePlay title names what the goal asks for (solanke, late, goal) (×2)" | "Video search plus the club's own naming — every factor shown." |
-| 0:40 | Moment 02 → **Use this moment** | Campaign: Sponsored · United Kingdom · Instagram, Facebook, X · 10.7 s cut, player at 0:09 | "That's the moment. Can we post it for the sponsor?" |
-| 0:45 | **Check rights** | "Can’t be used as planned · 0 of 3 uses allowed" — Brands on screen: "DHL logo visible on the advertising hoardings behind the celebrating players. (15–17 s)", *TwelveLabs video analysis*; rule THFC-13-partner-exclusivity | "No. A DHL board, 15 to 17 seconds, in a post for our sponsor — partner exclusivity. Found by video AI, not by a person." |
-| 1:00 | **Find a way to use it** | **Recommended: Remove 0:14.5–0:17.5** · Before/After bars · "Result 7.7 s of 10.7 s" · **Edit plan — not rendered** · independent re-check "Allowed · demo policy · 3 of 3" | "Same clip, same goal. Cut those seconds with a half-second margin — nearly eight seconds of the goal remain — and the cut is re-checked on its own." |
-| 1:15 | **Use revised plan**, then press ▶ on the player | "Allowed under the demo policy · 3 of 3 uses", Before Blocked 0/3 → After Allowed 3/3. Player chip "Plays the kept seconds, skips 14.5–17.5 s · edit plan, not a rendered file" — playback jumps over the DHL seconds | "Watch: it plays the kept seconds and jumps the cut. A preview of the plan — not a rendered file." |
-| 1:35 | **Send for human review** | Receipt: Allowed · demo policy, demo-tottenham-pl v2026-10-23.1, "solanke late goal · 0:09.1–0:14.5" and "0:17.5–0:19.7 · ScorePlay 130851444" | "A person still signs off." |
-| 1:45 | **Approve** | "Approved by Demo presenter" · "Publishing locked" | "Approved — and still not publishable: this is a demo rule set, not legal clearance." |
-| 1:52 | **ScorePlay record** → **Preview writeback (dry run)** | "Dry run — nothing is written to ScorePlay"; `POST /video/logs`, 2 timecoded logs, review=APPROVED; "Live write refused." | "The decision goes back into ScorePlay as timecoded logs. Dry run today." |
+| 0:00 | — | Goal screen | "Clubs don't lack content — they lack content they can safely use. PULSE turns a business goal into a campaign the club is allowed to run." |
+| 0:10 | Chip **Sponsor a goal moment** → **Find opportunities** | ~7 s. "Searched only the 15 videos ScorePlay tags with Dominic Ayodele Solanke-Mitchell". Three playing moments; **moment 02 · solanke late goal · 0:09–0:20** | "Our goal: a sponsor post from Solanke's late goal for UK fans. ScorePlay knows which videos he's tagged in; TwelveLabs finds the exact seconds." |
+| 0:30 | Moment 02 → **Use this moment** | Campaign draft: Sponsored · United Kingdom · Instagram, Facebook, X | "A campaign draft in one click." |
+| 0:40 | **Check rights** | "Can’t be used as planned · 0 of 3 uses allowed" · Brands on screen: "DHL logo visible on the advertising hoardings behind the celebrating players (15–17 s)" — TwelveLabs video analysis · Illustrative rule THFC-13-partner-exclusivity. Point at **Illustrative rules ⓘ** | "A DHL board for two seconds, in a post for our sponsor. The rules here are illustrative — written for this demo — and the board is machine-observed. That's this indicator; everything else is real data." |
+| 1:00 | **Find a way to use it** | Recommended **Remove 0:14.5–0:17.5** · before/after bars · Result 7.7 s of 10.7 s · Edit plan — not rendered · Independent re-check: Allowed · illustrative · 3 of 3 | "Same clip, same goal: cut exactly those seconds with a half-second margin. The cut is re-checked on its own." |
+| 1:15 | **Use revised plan**, press ▶ on the player | "Allowed under these rules · 3 of 3 uses"; Before Blocked → After Allowed; player label "Edit plan preview · skips 14.5–17.5 s" — playback jumps the cut | "Watch it skip the board. An edit plan with exact timecodes — not a rendered file." |
+| 1:30 | **Send for human review** → **Approve** | Receipt: Allowed · illustrative, 3 uses · 2 segments of ScorePlay 130851444; Approved by Demo presenter; **Publishing locked** | "A named person signs off, and the decision is a hash-chained audit record. Publishing stays locked — these aren't the club's real rules." |
+| 1:42 | **ScorePlay record** → **Preview writeback (dry run)** | "Dry run — nothing is written to ScorePlay" · 2 timecoded logs for media 130851444 | "The decision would go back into ScorePlay as timecoded logs. Dry run today." |
 
-## 2:00–2:40 — Territory: fix the plan, not the clip (S2)
+## Use case 2 — Global engagement (1:50–2:30)
 
-**New goal** → chip **Grow engagement** → **Find opportunities** → moment 01 **Goal Slo Mo Man United** → **Build campaign** → **Check rights**: "Not cleared for every use · 6 of 21 uses allowed · 7 markets".
+ScorePlay asset **130851421** "Goal Slo Mo Man United 9x16 (A) v1.mp4" 0:00–0:15 ↔ TwelveLabs 6ad911f32cc348c0bd20121c (#2 "player shooting just over the crossbar").
 
-| Click | What appears | Say |
+| Click | Screen | Say |
 |---|---|---|
-| **Find a way to use it** | Recommended "Limit to licensed markets: GB, US" (kept/dropped chips) | "Here the clip is fine — the plan isn't. Another clip would hit the same rule, so PULSE shrinks the plan to the licensed markets." |
-| **Use revised plan** | "Allowed under the demo policy · 6 of 6 uses allowed · 2 markets" | "Smallest valid change. Same clip." |
+| **New goal** → chip **Grow engagement** → **Find opportunities** → moment 01 **Build campaign** → **Check rights** | "Not cleared for every use · 6 of 21 uses allowed · 7 markets" — FR, ES, DE, IN, NG not licensed | "Same club, a global goal. The clip is fine — the plan isn't: five markets aren't licensed." |
+| **Find a way to use it** | Recommended **Limit to licensed markets: GB, US** (kept / dropped chips) | "Another clip would hit the same wall, so PULSE changes the plan, not the footage." |
+| **Use revised plan** | "Allowed under these rules · 6 of 6 uses · 2 markets"; audience "Tottenham Hotspur supporters in United Kingdom and United States" | "Smallest valid change, re-checked." |
 
-## 2:40–3:00 — Close
+## Close (2:30–3:00)
 
-> "Other tools identify what you can't publish. PULSE finds the best way to achieve your goal anyway — and shows exactly why. The rules are a demo package; the footage, the AI evidence and the audit trail are real."
+> "Other tools tell you what you can't publish. PULSE finds a way to reach the goal anyway — a cut, a different market, or different footage — and shows exactly why, with every limit labelled. Plug in the club's real agreements and the same flow becomes a working rights desk."
 
-## Don'ts
+## Optional fallback — Use case 3, Merchandise (replace use case 2 if needed)
 
-- Never say "cleared", "legal" or "live" about a demo verdict or a "Recorded data" tag.
-- Never call the edit a video: it is an **edit plan, not rendered** (the player only skips the cut seconds).
-- Never say a human checked the DHL board: it is AI-observed by two Pegasus runs, not visually verified.
-- Never show footage while signed out and claim it's "blocked" — signed out it's just reviewer-only.
-- No numbers about revenue, conversion or time saved.
+ScorePlay asset **130851320** "Fans clap Man United A 9x16.mp4" 0:06.9–0:14.7 ↔ TwelveLabs 6ad911e365b4aff96dc7bacd → replacement ScorePlay **130851415** "Slide 6 - Away End Singing Pre-KO.mov" 0:01.1–0:08.9.
+
+| Click | Screen | Say |
+|---|---|---|
+| **New goal** → chip **Sell merchandise** → **Find opportunities** → moment 02 **Fans clap Man United** → **Use this moment** → **Check rights** | "Can’t be used as planned · 0 of 3" — Player #18 (0:06.9–0:07.0, AI-named, not matched to the squad) and the Manchester United logo (0:09.0–0:14.5, both analysis runs) | "A Manchester United crest in a merchandise post." |
+| **Find a way to use it** | "First, PULSE tried cutting the flagged footage — Rejected: it would leave 1.0 s of 7.8 s — below the 3.1 s minimum" · Recommended **Use "Slide 6 - Away End Singing Pre-KO.mov" 0:01.1–0:08.9** (search rank 2), re-checked Allowed · illustrative 3 of 3 | "Cutting would leave one second, so it rejects its own idea and finds another real clip from the library." |
+| **Use revised plan** | "Allowed under these rules · 3 of 3 uses" | "Re-checked from scratch." |
+
+## Wording
+
+- Say "allowed under these rules" / "illustrative rules" — never "cleared", "legal", "approved for publication".
+- Say "edit plan" for cuts, "dry run" for ScorePlay, "machine-observed" for TwelveLabs analysis.
+- No revenue, conversion or time-saved numbers.

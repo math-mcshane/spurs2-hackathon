@@ -124,6 +124,7 @@ long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is i
 - **Checks (2026-10-23 ≈ 12:24 UTC, `2f3d299`):** vitest 35 files — 418 passed / 15 skipped; `tsc` clean; `eslint` clean; `next build` passes.
 - **Verified flows:** `docs/demo/DEMO_EVIDENCE.md` (final flagship record, preview + local identical).
 - **Preview (Ready ≈ 12:24 UTC, `2f3d299`):** https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app — public, the only remaining Preview deployment. Production untouched.
+- **Presentation cleanup (≈ 12:50 UTC, `3ebc1b3`, `2f17a22`, `e3c5a2b`):** repeated "demo policy — not legal clearance" boxes replaced by one "Illustrative rules ⓘ" indicator (rules, evidence, edits, ScorePlay limits); verdict "Allowed under these rules"; calmer receipt/publish/writeback copy; campaign audience names the licensed markets after a recovery. Preview https://spurs2-hackathon-inpdx7om5-merlins-projects-2b20d832.vercel.app — all three use cases validated in Chromium as reviewer; `hi425s3gm` kept as fallback.
 
 ## Safe merge to main
 

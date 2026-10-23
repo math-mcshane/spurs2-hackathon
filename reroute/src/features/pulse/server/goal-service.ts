@@ -3,12 +3,14 @@ import type { z } from "zod";
 import { isEvidenceLinkable, type EditPlan, type MediaRef, type PublishIntent, type ResolveRequestSchema, type ResolveResponseSchema } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { getMediaResolver, previewFor } from "@/lib/media";
+import { forMediaAccess, type MediaAccess } from "@/lib/media/preview";
 import { mergeProvenance, trackProvenance } from "@/lib/media/provenance";
 import { decideCampaign, type CampaignDecision } from "@/lib/server/decide";
 import { alternatives, campaigns, evaluations, events, goalRuns } from "@/lib/server/repositories";
 import { resolve } from "@/lib/server/resolver";
 import { createReceipt, getReceipt } from "@/lib/server/store";
 import { CLUBS } from "../clubs";
+import { MEDIA_PREVIEW_DISABLED_NOTE, MEDIA_PREVIEW_REVIEWER_ONLY_NOTE } from "../flags";
 import { configuredDestination, onClubDomain } from "../commerce";
 import { buildGoalCampaign, editFor, proposedPublishAt } from "../goal-campaign";
 import { goalPlan, parseMatch } from "../goal-intents";
@@ -52,6 +54,8 @@ export type GoalDeps = {
   resolveMedia(scoreplayMediaId: string, club: Club): Promise<MediaRef>;
   /** Playable reference for a linked video, resolved per request (never stored). */
   preview(ref: MediaRef, club: Club): Promise<Preview | undefined>;
+  /** The caller's right to footage-derived URLs (previews AND thumbnails); anything but ALLOWED strips them all. */
+  media: MediaAccess;
   now(): Date;
 };
 
@@ -61,7 +65,16 @@ const defaultDeps: GoalDeps = {
   resolve: (input) => resolve(input),
   resolveMedia: (id, club) => getMediaResolver(club).forScoreplay(id),
   preview: (ref, club) => previewFor(ref, { club }),
+  media: "DISABLED",
   now: () => new Date(),
+};
+
+/** Live deps for one request; `media` comes from `mediaAccess(req)` (lib/media/preview). */
+export const goalDeps = (media: MediaAccess): GoalDeps => ({ ...defaultDeps, media });
+
+const UNAVAILABLE_NOTE: Record<Exclude<MediaAccess, "ALLOWED">, string> = {
+  DISABLED: MEDIA_PREVIEW_DISABLED_NOTE,
+  REVIEWER_ONLY: MEDIA_PREVIEW_REVIEWER_ONLY_NOTE,
 };
 
 /** An existing run and the version of it the caller last saw. */
@@ -104,6 +117,10 @@ async function present(run: GoalRun, version: number, deps: GoalDeps): Promise<G
   for (const r of [...run.pool.slice(0, 3), ...run.adopted.filter((a) => a.key === run.campaign?.key)]) shown.set(r.key, r.media);
   for (const a of run.alternatives.filter((x) => x.forEvaluationId === latest?.id)) for (const c of a.candidates) shown.set(c.key, c.media);
   const previews = new Map<string, Preview>();
+  if (deps.media !== "ALLOWED") {
+    // No stream lookups at all, and no thumbnail/preview URL anywhere in the view.
+    return forMediaAccess(deps.media, buildGoalView(run, { version, receipt, previews, previewUnavailable: UNAVAILABLE_NOTE[deps.media] }));
+  }
   await Promise.all(
     [...shown].map(async ([key, ref]) => {
       const p = await deps.preview(ref, run.club);

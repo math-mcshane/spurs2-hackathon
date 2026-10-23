@@ -147,6 +147,7 @@ function deps(over: Partial<GoalDeps> = {}): GoalDeps {
     resolve: vi.fn(async (input) => ({ query: input.query ?? "q", blocker: CLIP, candidates: [candidate("907", 3, 8.4, "ALLOWED", input.edit)], best: undefined })),
     resolveMedia: vi.fn(async (id: string) => ref(id)),
     preview: vi.fn(async (r: MediaRef) => ({ source: "TWELVELABS_STREAM" as const, url: `https://cdn.example/${r.twelvelabsVideoId}.m3u8`, hls: true })),
+    media: "ALLOWED",
     now: () => NOW,
     ...over,
   };
@@ -384,6 +385,45 @@ describe("goal → campaign → rights → alternative → review", () => {
     ]);
     const kinds = (await repos.evaluations.listForCampaign(v.campaign!.campaignId)).map((e) => e.kind);
     expect(kinds.filter((k) => k === "ALTERNATIVE")).toHaveLength(3);
+  });
+
+  it("footage-derived URLs (previews, thumbnails) reach the goal view only when media access is ALLOWED", async () => {
+    const MEDIA_URL = /https?:\/\/[^"\s]*(scoreplay|amazonaws|cloudfront|twelvelabs)/i;
+    const withThumbs = (s: GoalSearch): GoalSearch => ({
+      ...s,
+      pool: s.pool.map((r) => ({ ...r, candidate: { ...r.candidate, thumbnailUrl: `https://cdn.scoreplay.io/thumbs/${r.candidate.scoreplayAssetId}.jpg` } })),
+    });
+    const media = (access: GoalDeps["media"]) =>
+      deps({
+        media: access,
+        search: vi.fn(async ({ objective }) => withThumbs(searchFor(objective.raw))),
+        decideCampaign: campaignDecider({ "901": "BLOCKED", "907": "ALLOWED" }),
+        resolve: vi.fn(async (input) => {
+          const c = candidate("907", 3, 8.4, "ALLOWED", input.edit);
+          return { query: input.query ?? "q", blocker: CLIP, candidates: [{ ...c, hit: { ...c.hit, thumbnailUrl: "https://thumbs.twelvelabs.io/tl-907/3.jpg" } }] };
+        }),
+        preview: vi.fn(async (r: MediaRef) => ({ source: "TWELVELABS_STREAM" as const, url: `https://d1abc.cloudfront.net/${r.twelvelabsVideoId}.m3u8`, hls: true })),
+      });
+    const allowed = media("ALLOWED");
+    let v = await goals.runGoal(A, "tottenham", allowed);
+    v = await goals.checkGoalRights(at(v), allowed);
+    v = await goals.findAlternatives(at(v), allowed);
+
+    const reviewer = JSON.stringify(await goals.getGoal(v.run.id, allowed));
+    expect(reviewer).toMatch(MEDIA_URL);
+    expect(reviewer).toContain("cloudfront.net/tl-");
+    expect(reviewer).toContain("thumbs.twelvelabs.io");
+
+    for (const access of ["DISABLED", "REVIEWER_ONLY"] as const) {
+      const d = media(access);
+      const view = (await goals.getGoal(v.run.id, d))!;
+      expect(GoalViewSchema.safeParse(view).success).toBe(true);
+      expect(view.recommendations.length + (view.alternatives?.candidates.length ?? 0)).toBeGreaterThan(1);
+      expect(view.campaign).toBeDefined();
+      expect(JSON.stringify(view)).not.toMatch(MEDIA_URL);
+      expect(d.preview).not.toHaveBeenCalled();
+      expect(view.recommendations[0].previewNote).toMatch(access === "DISABLED" ? /Video preview disabled until the organizers confirm playback rights/ : /signed-in reviewers only/);
+    }
   });
 
   it("alternatives of an earlier moment are not offered after switching moments", async () => {

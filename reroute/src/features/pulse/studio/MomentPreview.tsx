@@ -1,12 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FilmIcon, RefreshCwIcon, VideoOffIcon } from "lucide-react";
+import { RefreshCwIcon, VideoOffIcon } from "lucide-react";
+import { reviewApi } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
+import { MEDIA_PREVIEW_DISABLED_NOTE } from "../flags";
 import { clock } from "../moment-ranking";
 import type { Preview } from "../types";
 
 const HLS_MIME = "application/vnd.apple.mpegurl";
+
+/** The server's MEDIA_PREVIEW_ENABLED (via the session endpoint), read once per page; any failure = disabled. */
+let mediaPreviewFlag: Promise<boolean> | undefined;
+const serverMediaPreview = () => (mediaPreviewFlag ??= reviewApi.session().then((s) => s.mediaPreview, () => false));
+
+/** "0:07–0:15 of 0:30": the exact moment inside its asset. */
+export function segmentLabel(start: number, end: number | undefined, durationSec: number | undefined): string {
+  const span = `${clock(start)}–${clock(end ?? start)}`;
+  return durationSec === undefined ? span : `${span} of ${clock(durationSec)}`;
+}
 
 export type MomentPreviewSource = {
   title: string;
@@ -25,6 +37,8 @@ export type MomentPreviewSource = {
  * seeks to the TwelveLabs start and pauses once at its end. Nothing is downloaded or stored. The
  * player is (re)initialised only when the stream URL or start changes — never because a parent
  * re-rendered with an equal preview — and the fallback appears only after a real playback error.
+ * Without a stream (always while MEDIA_PREVIEW_ENABLED is off) it renders a neutral, static placeholder:
+ * the exact segment, the asset title and its ScorePlay id — no player, no thumbnail, no spinner.
  */
 export function MomentPreview({ source: s, className }: { source: MomentPreviewSource; className?: string }) {
   const video = useRef<HTMLVideoElement>(null);
@@ -33,6 +47,7 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
   const tearingDown = useRef(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [previewsOn, setPreviewsOn] = useState(false);
   const url = s.preview?.url;
   const hlsStream = s.preview?.hls ?? false;
   const start = s.start;
@@ -83,38 +98,49 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
     };
   }, [url, hlsStream, start, attempt]);
 
+  useEffect(() => {
+    if (url) return;
+    let live = true;
+    void serverMediaPreview().then((on) => live && setPreviewsOn(on));
+    return () => {
+      live = false;
+    };
+  }, [url]);
+
   const span = `${clock(start)}–${clock(s.end ?? start)}`;
   if (!s.preview || failed) {
     return (
-      <div className={cn("relative flex aspect-video w-full flex-col justify-end overflow-hidden rounded-lg border border-white/10 bg-zinc-900", className)}>
-        {s.thumbnailUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- ScorePlay/TwelveLabs thumbnail reference
-          <img src={s.thumbnailUrl} alt="" className="absolute inset-0 size-full object-cover opacity-40" onError={(e) => (e.currentTarget.style.display = "none")} />
-        ) : (
-          <FilmIcon className="absolute top-1/2 left-1/2 size-8 -translate-1/2 text-zinc-700" aria-hidden />
+      <div
+        role="note"
+        aria-label={`${s.title}, moment ${span}`}
+        className={cn("flex aspect-video w-full flex-col justify-center gap-2 overflow-hidden rounded-lg border border-white/10 bg-zinc-900 p-4 text-[11px] text-zinc-300", className)}
+      >
+        <p className="flex items-center gap-1.5 font-mono text-sm text-zinc-100">
+          <VideoOffIcon className="size-4 shrink-0 text-zinc-500" aria-hidden /> {segmentLabel(start, s.end, s.durationSec)}
+        </p>
+        <p className="truncate font-medium text-zinc-200" title={s.title}>
+          {s.title}
+        </p>
+        <p className="font-mono text-[10px] text-zinc-500">ScorePlay asset {s.scoreplayAssetId}</p>
+        <p className="text-zinc-400">
+          {failed
+            ? `This stream could not be played in your browser. To watch it, open ScorePlay asset ${s.scoreplayAssetId} at ${span}.`
+            : previewsOn
+              ? s.note
+              : MEDIA_PREVIEW_DISABLED_NOTE}
+        </p>
+        {failed && (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 self-start text-sky-300 underline-offset-2 hover:underline"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            <RefreshCwIcon className="size-3" aria-hidden /> Try again
+          </button>
         )}
-        <div className="relative space-y-1 bg-gradient-to-t from-black/90 to-transparent p-3 pt-8 text-[11px] text-zinc-300">
-          <p className="flex items-center gap-1.5 font-medium text-zinc-100">
-            <VideoOffIcon className="size-3.5" aria-hidden /> Preview not available
-          </p>
-          <p>{failed ? `This stream could not be played in your browser. To watch it, open ScorePlay asset ${s.scoreplayAssetId} at ${span}.` : s.note}</p>
-          {failed && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-sky-300 underline-offset-2 hover:underline"
-              onClick={() => {
-                setFailed(false);
-                setAttempt((n) => n + 1);
-              }}
-            >
-              <RefreshCwIcon className="size-3" aria-hidden /> Try again
-            </button>
-          )}
-          <p className="font-mono text-[10px] text-zinc-500">
-            ScorePlay {s.scoreplayAssetId}
-            {s.durationSec !== undefined && ` · ${clock(s.durationSec)} long`} · moment {span}
-          </p>
-        </div>
       </div>
     );
   }

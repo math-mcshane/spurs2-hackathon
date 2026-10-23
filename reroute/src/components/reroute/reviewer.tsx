@@ -12,10 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorState } from "./shared";
 
-/** `GET/POST/DELETE /api/auth/session`. `enabled=false` = reviewer sign-in is not configured on the server. */
+/**
+ * `GET/POST/DELETE /api/auth/session`. `enabled=false` = reviewer sign-in is not configured on the server.
+ * `mediaPreview` mirrors the server's MEDIA_PREVIEW_ENABLED flag (missing = previews disabled).
+ */
 const SessionSchema = z.object({
   enabled: z.boolean(),
-  reviewer: z.object({ name: z.string(), expiresAt: z.string() }).nullable(),
+  reviewer: z.object({ id: z.string(), name: z.string(), expiresAt: z.string() }).nullable(),
+  mediaPreview: z.boolean().default(false),
 });
 export type ReviewerSession = z.infer<typeof SessionSchema>;
 
@@ -64,7 +68,7 @@ const receiptPath = (id: string) => `/api/receipts/${encodeURIComponent(id)}`;
 /** Reviewer-gated REROUTE calls. The reviewer's identity always comes from the HttpOnly session cookie, never the body. */
 export const reviewApi = {
   session: () => call(SessionSchema, "/api/auth/session"),
-  signIn: (passcode: string, name: string) => call(SessionSchema, "/api/auth/session", "POST", { passcode, name }),
+  signIn: (reviewer: string, passcode: string) => call(SessionSchema, "/api/auth/session", "POST", { reviewer, passcode }),
   signOut: () => call(SessionSchema, "/api/auth/session", "DELETE"),
   receipt: (id: string) => call(AuditedReceiptSchema, receiptPath(id)),
   review: (id: string, status: "APPROVED" | "REJECTED") => call(ReceiptViewSchema, `${receiptPath(id)}/review`, "POST", { status }),
@@ -90,7 +94,10 @@ export function useReviewerSession() {
   return { session, error, setSession, refresh };
 }
 
-/** Passcode + name sign-in. The server sets an HttpOnly cookie; the name becomes the reviewer on every review it records. */
+/**
+ * Named reviewer sign-in: reviewer id (or display name) + personal passcode. The server sets an HttpOnly cookie;
+ * the reviewer's configured display name is recorded on every review — nothing typed here becomes the identity.
+ */
 export function ReviewerSignInDialog({
   open,
   onOpenChange,
@@ -100,7 +107,7 @@ export function ReviewerSignInDialog({
   onOpenChange: (open: boolean) => void;
   onSignedIn: (s: ReviewerSession) => void;
 }) {
-  const [name, setName] = useState("");
+  const [reviewer, setReviewer] = useState("");
   const [passcode, setPasscode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -114,7 +121,7 @@ export function ReviewerSignInDialog({
             setBusy(true);
             setError(null);
             try {
-              const s = await reviewApi.signIn(passcode, name.trim());
+              const s = await reviewApi.signIn(reviewer.trim(), passcode);
               setPasscode("");
               onSignedIn(s);
               onOpenChange(false);
@@ -127,11 +134,23 @@ export function ReviewerSignInDialog({
         >
           <DialogHeader>
             <DialogTitle>Reviewer sign-in</DialogTitle>
-            <DialogDescription>Only a signed-in rights reviewer can approve or reject. Your name is recorded on the audit receipt.</DialogDescription>
+            <DialogDescription>
+              Only a named rights reviewer can approve or reject. Use the reviewer id and personal passcode issued to you; your
+              configured name is recorded on the audit receipt.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor="reviewer-name">Your name</Label>
-            <Input id="reviewer-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" required />
+            <Label htmlFor="reviewer-id">Reviewer id</Label>
+            <Input
+              id="reviewer-id"
+              value={reviewer}
+              onChange={(e) => setReviewer(e.target.value)}
+              maxLength={80}
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="reviewer-passcode">Reviewer passcode</Label>
@@ -139,7 +158,7 @@ export function ReviewerSignInDialog({
           </div>
           {error !== null && <ErrorState error={error} />}
           <DialogFooter>
-            <Button type="submit" disabled={busy || !name.trim() || !passcode}>
+            <Button type="submit" disabled={busy || !reviewer.trim() || !passcode}>
               {busy ? <Loader2Icon className="animate-spin" /> : <LogInIcon />} Sign in
             </Button>
           </DialogFooter>

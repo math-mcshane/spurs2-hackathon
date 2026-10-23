@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FilmIcon, GitBranchIcon, Loader2Icon, LogInIcon, TriangleAlertIcon } from "lucide-react";
+import { FilmIcon, GitBranchIcon, LogInIcon, TriangleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,8 @@ import {
   type Evidence,
   type PublishIntent,
 } from "@/lib/contracts";
+import { MEDIA_PREVIEW_DISABLED_NOTE, MEDIA_PREVIEW_REVIEWER_ONLY_NOTE } from "@/features/pulse/flags";
+import { segmentLabel } from "@/features/pulse/studio/MomentPreview";
 import { api, isAbort, type AssetDetailResponse, type PoliciesResponse, type ReceiptView } from "@/lib/api-client";
 import { AppHeader } from "./app-header";
 import { AssetSearch } from "./asset-search";
@@ -402,35 +404,35 @@ export function RerouteApp() {
                     }}
                     onTimeUpdate={(e) => setPlayhead({ mediaId: playerAsset.id, t: e.currentTarget.currentTime })}
                   />
-                ) : playerAsset && !session?.reviewer ? (
-                  <>
-                    {playerAsset.thumbnailUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element -- remote ScorePlay thumbnail
-                      <img src={playerAsset.thumbnailUrl} alt="" className="absolute inset-0 size-full object-contain opacity-30" />
+                ) : playerAsset ? (
+                  <div role="note" className="flex max-w-md flex-col items-center gap-2 px-4 text-center text-xs text-zinc-300">
+                    {(() => {
+                      const seg = activeEdit?.segments.find((s) => s.scoreplayMediaId === playerAsset.id);
+                      return (
+                        <span className="font-mono text-sm text-zinc-100">
+                          {seg ? segmentLabel(seg.start, seg.end, playerAsset.durationSec) : segmentLabel(0, playerAsset.durationSec, playerAsset.durationSec)}
+                        </span>
+                      );
+                    })()}
+                    <span className="font-medium text-zinc-200">{playerAsset.title}</span>
+                    <span className="font-mono text-[10px] text-zinc-500">ScorePlay asset {playerAsset.id}</span>
+                    {!session?.mediaPreview ? (
+                      <span className="text-zinc-400">{MEDIA_PREVIEW_DISABLED_NOTE}</span>
+                    ) : !session.reviewer ? (
+                      <>
+                        <span className="text-zinc-400">{MEDIA_PREVIEW_REVIEWER_ONLY_NOTE}</span>
+                        <Button size="sm" variant="outline" disabled={!session.enabled} onClick={() => setSignInOpen(true)}>
+                          <LogInIcon /> {session.enabled ? "Sign in as reviewer to preview" : "Reviewer sign-in not configured"}
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-zinc-400">No authorized preview stream from ScorePlay for this asset. The moment and its timestamps are real.</span>
                     )}
-                    <div className="relative flex flex-col items-center gap-2 px-4 text-center text-xs text-zinc-300">
-                      <span>Video previews are available to signed-in reviewers only.</span>
-                      <Button size="sm" variant="outline" disabled={session?.enabled === false} onClick={() => setSignInOpen(true)}>
-                        <LogInIcon /> {session?.enabled === false ? "Reviewer sign-in not configured" : "Sign in as reviewer to preview"}
-                      </Button>
-                    </div>
-                  </>
-                ) : playerAsset?.thumbnailUrl ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- remote ScorePlay thumbnail */}
-                    <img src={playerAsset.thumbnailUrl} alt={playerAsset.title} className="size-full object-contain" />
-                    <span className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[10px] text-zinc-300">
-                      No authorized preview stream from ScorePlay — thumbnail only
-                    </span>
-                  </>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-zinc-600">
-                    {playerDetail?.status === "loading" ? (
-                      <Loader2Icon className="size-6 animate-spin" />
-                    ) : (
-                      <FilmIcon className="size-8" aria-hidden />
-                    )}
-                    <span className="text-xs">{playerAsset ? "No preview or thumbnail for this asset" : "No asset selected"}</span>
+                    <FilmIcon className="size-8" aria-hidden />
+                    <span className="text-xs">{playerDetail?.status === "loading" ? "Loading asset…" : "No asset selected"}</span>
                   </div>
                 )}
                 <div className="pointer-events-none absolute top-2 left-2 font-mono text-[10px] text-red-400/80">

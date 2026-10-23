@@ -1,9 +1,10 @@
-import { isVideoPreviewEnabled } from "@/features/pulse/flags";
+import { isMediaPreviewEnabled } from "@/features/pulse/flags";
 import { defaultScorePlayHttp, getMedia, type ScorePlayHttp } from "@/features/pulse/server/scoreplay-discovery";
 import { createTwelveLabsSdk, videoStream, type TwelveLabsSdk } from "@/features/pulse/server/twelvelabs-moments";
 import type { Preview } from "@/features/pulse/types";
 import { isEvidenceLinkable, type MediaRef } from "@/lib/contracts";
 import { mapMediaToAsset } from "@/lib/scoreplay/map";
+import { getSession } from "@/lib/server/auth";
 import { readTwelveLabsConfig } from "@/lib/twelvelabs/config";
 import { demoReplayEnabled } from "./replay";
 
@@ -47,12 +48,12 @@ async function resolve(ref: MediaRef, deps: PreviewDeps): Promise<Preview | unde
 
 /**
  * Authorized playable reference for a MediaRef — the ScorePlay proxy when it is https, else the TwelveLabs
- * HLS stream of a linkable ref — or undefined (also when PULSE_VIDEO_PREVIEW=off, and always under
+ * HLS stream of a linkable ref — or undefined (also unless MEDIA_PREVIEW_ENABLED=true, and always under
  * DEMO_REPLAY: previews are never recorded). Never persisted: cached in memory for PREVIEW_TTL_MS.
  * Nothing is downloaded.
  */
 export function previewFor(ref: MediaRef, opts: { club?: string; deps?: PreviewDeps } = {}): Promise<Preview | undefined> {
-  if (!isVideoPreviewEnabled() || demoReplayEnabled()) return Promise.resolve(undefined);
+  if (!isMediaPreviewEnabled() || demoReplayEnabled()) return Promise.resolve(undefined);
   const deps = opts.deps ?? defaultDeps(opts.club);
   const now = (deps.now ?? Date.now)();
   const key = `${ref.twelvelabsIndexId ?? ""}|${ref.scoreplayMediaId ?? ""}|${isEvidenceLinkable(ref) ? ref.twelvelabsVideoId : ""}`;
@@ -62,3 +63,32 @@ export function previewFor(ref: MediaRef, opts: { club?: string; deps?: PreviewD
   cache.set(key, { at: now, preview });
   return preview;
 }
+
+/**
+ * Who may receive URLs derived from footage (streams, proxies, thumbnails):
+ * DISABLED = MEDIA_PREVIEW_ENABLED is not "true" (default) — nobody; REVIEWER_ONLY = enabled, anonymous
+ * caller — nobody; ALLOWED = enabled AND a reviewer session.
+ */
+export type MediaAccess = "DISABLED" | "REVIEWER_ONLY" | "ALLOWED";
+
+export async function mediaAccess(req: Request): Promise<MediaAccess> {
+  if (!isMediaPreviewEnabled()) return "DISABLED";
+  return (await getSession(req)) ? "ALLOWED" : "REVIEWER_ONLY";
+}
+
+/** Fields that carry footage-derived URLs anywhere in an API payload (Asset, SearchHit, candidates, Preview). */
+const MEDIA_URL_KEYS: ReadonlySet<string> = new Set(["thumbnailUrl", "previewUrl", "preview"]);
+
+/** Deep copy of a JSON payload without any footage-derived URL field. Applied at every API boundary unless ALLOWED. */
+export function withoutMediaUrls<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(withoutMediaUrls) as T;
+  if (value === null || typeof value !== "object") return value;
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) if (!MEDIA_URL_KEYS.has(k)) out[k] = withoutMediaUrls(v);
+  return out as T;
+}
+
+/** The payload as this caller may see it: unchanged only when ALLOWED. */
+export const forMediaAccess = <T>(access: MediaAccess, value: T): T => (access === "ALLOWED" ? value : withoutMediaUrls(value));

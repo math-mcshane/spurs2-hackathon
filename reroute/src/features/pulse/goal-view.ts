@@ -220,13 +220,13 @@ export function presentRights(run: GoalRun): RightsView {
   };
 }
 
-function recommendationView(run: GoalRun, rec: Recommendation, previews: ReadonlyMap<string, Preview>): RecommendationView {
+function recommendationView(run: GoalRun, rec: Recommendation, previews: ReadonlyMap<string, Preview>, unavailable: string): RecommendationView {
   const e = run.evaluations.findLast((x) => x.key === rec.key);
-  const shown = withPreview(rec, previews.get(rec.key), PREVIEW_UNAVAILABLE);
+  const shown = withPreview(rec, previews.get(rec.key), unavailable);
   return { ...shown, rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" } };
 }
 
-const PREVIEW_UNAVAILABLE = "No browser-playable stream is available for this video (or previews are switched off).";
+const PREVIEW_UNAVAILABLE = "No browser-playable stream is available for this video.";
 
 /** The review receipt for the current campaign version, if one was submitted. */
 type Receipt = Pick<RightsReceipt, "id" | "decision" | "humanReviewStatus" | "writeback">;
@@ -275,7 +275,8 @@ function nextStep(
 
 export function buildGoalView(
   run: GoalRun,
-  opts: { version: number; receipt?: Receipt | null; previews?: ReadonlyMap<string, Preview> },
+  /** `previewUnavailable`: the note shown instead of a player (defaults to "no playable stream"). */
+  opts: { version: number; receipt?: Receipt | null; previews?: ReadonlyMap<string, Preview>; previewUnavailable?: string },
 ): GoalView {
   const { pool, adopted, campaign: draft } = run;
   const previews = opts.previews ?? new Map<string, Preview>();
@@ -349,7 +350,7 @@ export function buildGoalView(
     ],
   };
 
-  const view = (r: Recommendation) => recommendationView(run, r, previews);
+  const view = (r: Recommendation) => recommendationView(run, r, previews, opts.previewUnavailable ?? PREVIEW_UNAVAILABLE);
   const seconds = (to: string) => Math.round((Date.parse(to) - Date.parse(run.submittedAt)) / 100) / 10;
   return {
     version: opts.version,

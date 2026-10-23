@@ -14,7 +14,14 @@ export function pulseSignalSource(): SignalSourceSetting | { unsupported: string
 }
 
 /**
- * `PULSE_VIDEO_PREVIEW=off` hides in-app players (ScorePlay proxy / TwelveLabs stream references)
- * if organizers do not permit embedding; recommendations then show asset metadata and timecodes.
+ * `MEDIA_PREVIEW_ENABLED=true` (exactly) allows URLs derived from footage — ScorePlay proxies/streams,
+ * TwelveLabs HLS, thumbnails — in API responses, and then only to a reviewer session. Off by default:
+ * the organizers have not confirmed playback rights for the hackathon footage.
  */
-export const isVideoPreviewEnabled = (): boolean => process.env.PULSE_VIDEO_PREVIEW !== "off";
+export const isMediaPreviewEnabled = (): boolean => process.env.MEDIA_PREVIEW_ENABLED === "true";
+
+/** Shown instead of a player while `MEDIA_PREVIEW_ENABLED` is off. */
+export const MEDIA_PREVIEW_DISABLED_NOTE = "Video preview disabled until the organizers confirm playback rights. The moment and its timestamps are real.";
+
+/** Shown instead of a player when previews are enabled but the viewer is not a signed-in reviewer. */
+export const MEDIA_PREVIEW_REVIEWER_ONLY_NOTE = "Video preview is available to signed-in reviewers only. The moment and its timestamps are real.";

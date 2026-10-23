@@ -1,6 +1,7 @@
 import { boardRoute } from "@/features/pulse/server/http";
 import { listOpportunities, refresh } from "@/features/pulse/server/service";
 import { RefreshRequestSchema } from "@/features/pulse/types";
+import { forMediaAccess, mediaAccess } from "@/lib/media/preview";
 import { parseBody } from "@/lib/server/http";
 
 /**
@@ -9,5 +10,5 @@ import { parseBody } from "@/lib/server/http";
  */
 export const POST = boardRoute(async (req) => {
   await refresh(await parseBody(req, RefreshRequestSchema));
-  return Response.json(await listOpportunities());
+  return Response.json(forMediaAccess(await mediaAccess(req), await listOpportunities()));
 });

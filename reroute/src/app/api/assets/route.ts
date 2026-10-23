@@ -1,8 +1,8 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import type { AssetsResponseSchema } from "@/lib/contracts";
+import { forMediaAccess, mediaAccess } from "@/lib/media/preview";
 import { getScorePlayClient } from "@/lib/scoreplay";
-import { getSession } from "@/lib/server/auth";
 import { parseInput, route } from "@/lib/server/http";
 
 const QuerySchema = z.object({
@@ -10,7 +10,10 @@ const QuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(24),
 });
 
-/** GET /api/assets?q=&limit= — ScorePlay asset search. Authorized preview URLs only for a reviewer session. */
+/**
+ * GET /api/assets?q=&limit= — ScorePlay asset search. previewUrl/thumbnailUrl only when MEDIA_PREVIEW_ENABLED=true
+ * AND the caller is a reviewer session; stripped otherwise.
+ */
 export const GET = route(async (req: Request) => {
   await connection();
   const params = new URL(req.url).searchParams;
@@ -18,7 +21,6 @@ export const GET = route(async (req: Request) => {
     q: params.get("q") ?? undefined,
     limit: params.get("limit") ?? undefined,
   });
-  const [assets, session] = await Promise.all([getScorePlayClient().searchAssets(q, limit), getSession(req)]);
-  const visible = session ? assets : assets.map(({ previewUrl: _hidden, ...asset }) => asset);
-  return Response.json({ assets: visible } satisfies z.infer<typeof AssetsResponseSchema>);
+  const [assets, access] = await Promise.all([getScorePlayClient().searchAssets(q, limit), mediaAccess(req)]);
+  return Response.json(forMediaAccess(access, { assets }) satisfies z.infer<typeof AssetsResponseSchema>);
 });

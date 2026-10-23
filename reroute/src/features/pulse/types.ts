@@ -851,6 +851,18 @@ export const RightsIssueSchema = z.object({
 });
 export type RightsIssue = z.infer<typeof RightsIssueSchema>;
 
+/**
+ * One reason split into its two halves: what was actually FOUND (real data, tagged with where it came
+ * from) and the RULE that was applied to it (tagged demo/fictional or verified).
+ */
+export const ReasonFindingSchema = z.object({
+  dimension: z.string(),
+  outcome: z.enum(["DENY", "MISSING"]),
+  found: z.array(z.object({ text: z.string(), source: z.string() })).min(1),
+  rule: z.object({ id: z.string().optional(), text: z.string(), tag: z.enum(["Demo policy · fictional", "Verified policy"]) }),
+});
+export type ReasonFinding = z.infer<typeof ReasonFindingSchema>;
+
 /** REROUTE's answer for one channel × territory, in plain English. */
 export const ChannelRightsSchema = z.object({
   channel: z.string(),
@@ -865,6 +877,8 @@ export const ChannelRightsSchema = z.object({
   /** REROUTE's reasons verbatim (incl. `basis`), for the diagnostics drawer. */
   reasons: z.array(ReasonSchema).default([]),
   issues: z.array(RightsIssueSchema),
+  /** Non-permitting reasons split into real evidence vs the rule applied. */
+  findings: z.array(ReasonFindingSchema).default([]),
   missingFacts: z.array(z.string()),
 });
 export type ChannelRights = z.infer<typeof ChannelRightsSchema>;

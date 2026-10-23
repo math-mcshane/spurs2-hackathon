@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RefreshCwIcon, VideoOffIcon } from "lucide-react";
+import { FilmIcon, RefreshCwIcon } from "lucide-react";
 import { reviewApi } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
 import { MEDIA_PREVIEW_DISABLED_NOTE } from "../flags";
@@ -14,9 +14,13 @@ const HLS_MIME = "application/vnd.apple.mpegurl";
 let mediaPreviewFlag: Promise<boolean> | undefined;
 const serverMediaPreview = () => (mediaPreviewFlag ??= reviewApi.session().then((s) => s.mediaPreview, () => false));
 
-/** "0:07–0:15 of 0:30": the exact moment inside its asset. */
+/**
+ * "0:07–0:15 of 0:30": the exact moment inside its asset. The segment is clamped to the duration before
+ * rounding (rounding is monotonic), so the end can never read past the asset's length.
+ */
 export function segmentLabel(start: number, end: number | undefined, durationSec: number | undefined): string {
-  const span = `${clock(start)}–${clock(end ?? start)}`;
+  const cap = (t: number) => (durationSec === undefined ? t : Math.min(t, durationSec));
+  const span = `${clock(cap(start))}–${clock(cap(end ?? start))}`;
   return durationSec === undefined ? span : `${span} of ${clock(durationSec)}`;
 }
 
@@ -107,28 +111,29 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
     };
   }, [url]);
 
-  const span = `${clock(start)}–${clock(s.end ?? start)}`;
+  const span = segmentLabel(start, s.end, s.durationSec);
   if (!s.preview || failed) {
+    // Compact card (~100 px): segment, title, asset id, one-line note — no empty video-sized box.
     return (
       <div
         role="note"
         aria-label={`${s.title}, moment ${span}`}
-        className={cn("flex aspect-video w-full flex-col justify-center gap-2 overflow-hidden rounded-lg border border-white/10 bg-zinc-900 p-4 text-[11px] text-zinc-300", className)}
+        className={cn("flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-900 p-3 text-[11px] text-zinc-300", className)}
       >
-        <p className="flex items-center gap-1.5 font-mono text-sm text-zinc-100">
-          <VideoOffIcon className="size-4 shrink-0 text-zinc-500" aria-hidden /> {segmentLabel(start, s.end, s.durationSec)}
-        </p>
-        <p className="truncate font-medium text-zinc-200" title={s.title}>
-          {s.title}
-        </p>
-        <p className="font-mono text-[10px] text-zinc-500">ScorePlay asset {s.scoreplayAssetId}</p>
-        <p className="text-zinc-400">
-          {failed
-            ? `This stream could not be played in your browser. To watch it, open ScorePlay asset ${s.scoreplayAssetId} at ${span}.`
-            : previewsOn
-              ? s.note
-              : MEDIA_PREVIEW_DISABLED_NOTE}
-        </p>
+        <FilmIcon className="mt-0.5 size-5 shrink-0 text-zinc-500" aria-hidden />
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="font-mono text-xs text-zinc-100">{span}</p>
+          <p className="truncate font-medium text-zinc-200" title={s.title}>
+            {s.title}
+          </p>
+          <p className="font-mono text-[10px] text-zinc-500">ScorePlay asset {s.scoreplayAssetId}</p>
+          <p className={cn("text-zinc-400", !failed && "truncate")} title={failed ? undefined : previewsOn ? s.note : MEDIA_PREVIEW_DISABLED_NOTE}>
+            {failed
+              ? `This stream could not be played in your browser. To watch it, open ScorePlay asset ${s.scoreplayAssetId} at ${span}.`
+              : previewsOn
+                ? s.note
+                : MEDIA_PREVIEW_DISABLED_NOTE}
+          </p>
         {failed && (
           <button
             type="button"
@@ -141,6 +146,7 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
             <RefreshCwIcon className="size-3" aria-hidden /> Try again
           </button>
         )}
+        </div>
       </div>
     );
   }

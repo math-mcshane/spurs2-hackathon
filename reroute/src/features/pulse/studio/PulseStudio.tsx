@@ -60,12 +60,12 @@ const PROGRESS: Partial<Record<string, { stages: Stage[]; note?: string }>> = {
       { after: 2, text: "Searching comparable footage" },
       { after: 8, text: "Re-checking each candidate independently" },
     ],
-    note: "each candidate gets its own REROUTE check; this can take up to ~70 s",
+    note: "each replacement gets its own rights check; this can take up to ~70 s",
   },
   alt: {
     stages: [
       { after: 0, text: "Saving a new campaign version" },
-      { after: 1, text: "Re-checking the replacement with REROUTE" },
+      { after: 1, text: "Checking rights for the replacement" },
     ],
   },
   remedy: { stages: [{ after: 0, text: "Limiting the campaign to its licensed uses" }, { after: 1, text: "Saving a new campaign version" }] },
@@ -268,7 +268,7 @@ export function PulseStudio() {
         {/* 1 · Goal */}
         <section aria-labelledby="s-goal-title" className="space-y-3">
           {!goal && busy !== "load" && <PromiseHero />}
-          <StepHeading id="s-goal" n={1} active={at === 0} title="What do you want to achieve?" sub="Describe the business objective — market, product, match. PULSE finds real footage for it." />
+          <StepHeading id="s-goal" n={1} active={at === 0} title="What do you want to achieve?" sub="Describe the business objective — market, product, match. We find real club footage for it." />
           <form
             className="space-y-3 rounded-xl border border-white/10 bg-zinc-950/60 p-4"
             onSubmit={(e) => {
@@ -369,7 +369,11 @@ export function PulseStudio() {
               sub={
                 goal.recommendations.length ? (
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span>Each preview plays the exact TwelveLabs timestamp from the authorized stream. Pick the one to build on.</span>
+                    <span>
+                      {goal.recommendations.some((r) => r.preview)
+                        ? "Real moments from the club's ScorePlay library, located by TwelveLabs with exact timestamps. Pick the one to build on."
+                        : "Real moments from the club's ScorePlay library, located by TwelveLabs with exact timestamps. Video playback is off until the organizers confirm playback rights."}
+                    </span>
                     {goal.dataOrigin && <ProvenanceBadge origin={goal.dataOrigin} />}
                   </span>
                 ) : (
@@ -382,7 +386,7 @@ export function PulseStudio() {
                 <SearchXIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <div className="space-y-2">
                   <p>
-                    PULSE never fills the gap with invented clips.
+                    We never fill the gap with invented clips.
                     {goal.run.search.status === "NOT_INDEXED"
                       ? " This club's footage is not indexed in TwelveLabs yet."
                       : goal.run.search.status === "UNAVAILABLE"
@@ -404,6 +408,7 @@ export function PulseStudio() {
                     selected={goal.campaign?.key === rec.key}
                     busy={locked}
                     loading={busy === `select:${rec.key}`}
+                    primary={!goal.campaign}
                     onChoose={() => id && void act({ action: "select", id, expectedVersion: v, key: rec.key }, `select:${rec.key}`, () => toast.success("Proposal rebuilt for this moment"))}
                   />
                 ))}
@@ -441,7 +446,7 @@ export function PulseStudio() {
               title="Rights"
               sub={
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span>Decided by REROUTE from ScorePlay metadata and the applicable policy. AI observations are evidence, never a licence.</span>
+                  <span>Checked against the clip&apos;s ScorePlay data and the club&apos;s rights policy. What the video analysis sees is evidence, never a licence.</span>
                   {goal.dataOrigin && <ProvenanceBadge origin={goal.dataOrigin} />}
                 </span>
               }
@@ -450,6 +455,7 @@ export function PulseStudio() {
               rights={goal.rights}
               busy={busy === "rights" || busy === "alternatives" ? busy : null}
               disabled={locked}
+              searched={goal.alternatives?.forEvaluationId === goal.rights.evaluationId}
               onCheck={() => void act({ action: "checkRights", id, expectedVersion: v }, "rights")}
               onFindAnotherWay={() => void act({ action: "findAlternatives", id, expectedVersion: v }, "alternatives")}
             />
@@ -567,7 +573,7 @@ function Understood({ goal }: { goal: GoalView }) {
         ))}
       </div>
       <p className="text-zinc-400">
-        REROUTE will check{" "}
+        We will check rights for{" "}
         <span className="text-zinc-200">
           {p.usage.toLowerCase()} use on {p.channels.map((ch) => CHANNEL_LABEL[ch] ?? ch).join(", ")} × {p.territories.join(", ")}
         </span>{" "}

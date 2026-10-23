@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, tcRange, utc } from "@/components/reroute/shared";
 import { reviewApi, type AuditedReceipt, type ReviewerSession } from "@/components/reroute/reviewer";
 import { WritebackAction, WritebackLog } from "@/components/reroute/writeback-plan";
-import { CHANNEL_LABEL, DemoPolicyBadge, RightsPill } from "./parts";
+import { reasonFinding } from "../goal-view";
+import { CHANNEL_LABEL, DemoPolicyBadge, ReasonFindings, RightsPill } from "./parts";
 
 const METHOD_TEXT: Record<MediaRef["method"], string> = {
   AUTHORITATIVE_ID: "linked by ScorePlay id",
@@ -62,6 +63,7 @@ export function ReceiptView({
 
   const d = receipt.decision;
   const uses = receipt.intents?.length ? receipt.intents : [receipt.intent];
+  const findings = d.reasons.flatMap((r) => reasonFinding(r, { evidence: d.evidence, fictional: d.policyFictional }) ?? []);
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
       <article aria-label={`Audit receipt ${receipt.id}`} className="min-w-0 space-y-3 rounded-xl border border-white/10 bg-zinc-950/70 p-4 text-xs">
@@ -87,6 +89,14 @@ export function ReceiptView({
             {d.policyId} v{d.policyVersion} · {d.policySelection?.kind ?? (d.policyFictional ? "DEMO" : "VERIFIED")}
             {d.policyFictional && <span className="text-amber-300"> (fictional demo policy)</span>}
           </dd>
+          {findings.length > 0 && (
+            <>
+              <dt className="text-zinc-500">Why</dt>
+              <dd>
+                <ReasonFindings findings={findings} />
+              </dd>
+            </>
+          )}
           <dt className="text-zinc-500">{uses.length === 1 ? "Use covered" : `${uses.length} uses covered`}</dt>
           <dd className="space-y-0.5 text-zinc-100">
             {uses.map((u) => (

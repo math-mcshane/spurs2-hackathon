@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckIcon, DatabaseIcon, Loader2Icon, OctagonXIcon, RadioIcon, ShieldAlertIcon, ShieldCheckIcon, ShieldQuestionIcon, TriangleAlertIcon } from "lucide-react";
 import { DEMO_CLEARANCE_LABEL, type Clearance } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
-import type { RightsState, RunProvenance } from "../types";
+import type { ReasonFinding, RightsState, RunProvenance } from "../types";
 
 type Tone = "neutral" | "review" | "blocked" | "cleared" | "demo";
 
@@ -54,6 +54,49 @@ export function DemoPolicyBadge({ label = DEMO_CLEARANCE_LABEL, className }: { l
     >
       <TriangleAlertIcon className="size-3.5 shrink-0" aria-hidden /> {label}
     </span>
+  );
+}
+
+const TOPIC_LABEL: Record<string, string> = { territory: "Territory", platform: "Channel", usage: "Use", competition: "Competition", people: "People", sponsor: "Sponsor", expiry: "Dates" };
+
+/**
+ * Each reason as two halves: "What we found" (real data, provenance-tagged) and "Rule applied"
+ * (tagged fictional demo policy or verified policy). Compact enough for a table cell or a card.
+ */
+export function ReasonFindings({ findings, className }: { findings: ReasonFinding[]; className?: string }) {
+  return (
+    <ul className={cn("space-y-2", className)}>
+      {findings.map((f, n) => (
+        <li key={n} className="min-w-0 space-y-1 break-words">
+          <p className={cn("text-[11px] font-semibold", f.outcome === "DENY" ? "text-red-200" : "text-amber-100")}>
+            {TOPIC_LABEL[f.dimension.toLowerCase()] ?? f.dimension}: {f.outcome === "DENY" ? "not permitted" : "not confirmed"}
+          </p>
+          <div className="border-l-2 border-sky-400/50 pl-2">
+            <span className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">What we found</span>
+            {f.found.map((x, i) => (
+              <p key={i} className="text-[11px] text-zinc-200">
+                {x.text} <span className="ml-1 inline-block rounded border border-sky-400/40 px-1 text-[10px] whitespace-nowrap text-sky-200">{x.source}</span>
+              </p>
+            ))}
+          </div>
+          <div className="border-l-2 border-amber-400/50 pl-2">
+            <span className="text-[10px] font-semibold tracking-wide text-zinc-500 uppercase">Rule applied</span>
+            <p className="text-[11px] text-zinc-400">
+              {f.rule.text}{" "}
+              <span
+                className={cn(
+                  "ml-1 inline-block rounded border px-1 text-[10px] whitespace-nowrap",
+                  f.rule.tag === "Verified policy" ? "border-emerald-400/40 text-emerald-200" : "border-amber-400/50 text-amber-200",
+                )}
+              >
+                {f.rule.tag}
+                {f.rule.id && ` · ${f.rule.id}`}
+              </span>
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

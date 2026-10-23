@@ -602,7 +602,7 @@ describe("more goals at plan level", () => {
     expect(v.rights.perIntent.every((p) => p.territory === "MX" && p.verdict === "NEEDS_REVIEW")).toBe(true);
     v = await goals.findAlternatives(at(v), d);
     expect(v.blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
-    expect(v.blocker!.explanation).toMatch(/Not licensed in MX/);
+    expect(v.blocker!.explanation).toMatch(/Not licensed for Mexico \(MX\)/);
     expect(v.alternatives!.candidates).toEqual([]);
     // REROUTE's raw remedy lists the policy's territories elsewhere; it stays in the audit record only.
     expect(v.alternatives!.remedy).toEqual({ territories: LICENSED });
@@ -645,7 +645,7 @@ describe("more goals at plan level", () => {
     expect(v.campaign!.cta).toMatchObject({ text: "View ticket options", status: "NOT_CONFIGURED" });
     expect(v.campaign!.channels[0].copy).toContain("Be there next time.");
     expect(v.campaign!.channels[0].copy).not.toMatch(/View ticket options|on sale|available|\d{1,2}\s*(?:Oct|Nov|Dec)/i);
-    expect(v.nextStep).toMatch(/ticketing link is not configured/);
+    expect(v.nextStep).toMatch(/ticketing link isn't set yet/);
     expect(v.kpi).toMatchObject({ label: "Ticket sales", value: null, valueText: "Sales attribution not connected." });
     await expect(goals.draftGoalCampaign(at(v), "https://tickets.example.com/spurs", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     const linked = await goals.draftGoalCampaign(at(v), "https://www.tottenhamhotspur.com/tickets/", d);

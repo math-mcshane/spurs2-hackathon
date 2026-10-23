@@ -43,6 +43,12 @@ export function reasonScope(r: Reason, policies: readonly Policy[] = BUNDLED_POL
 
 const unique = <T>(xs: readonly T[]) => [...new Set(xs)];
 const list = (xs: readonly string[]) => xs.join(", ");
+const COUNTRY: Record<string, string> = { GB: "United Kingdom", IE: "Ireland", US: "United States", CA: "Canada", AU: "Australia", NZ: "New Zealand", FR: "France", ES: "Spain", DE: "Germany", IT: "Italy", IN: "India", NG: "Nigeria", MX: "Mexico", BR: "Brazil", JP: "Japan", CN: "China" };
+/** "France (FR), Spain (ES) and India (IN)". */
+const countries = (xs: readonly string[]) => {
+  const named = xs.map((c) => (COUNTRY[c] ? `${COUNTRY[c]} (${c})` : c));
+  return named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}` : named.join("");
+};
 
 /** Licensed values of an intent field, from the policy's PERMIT rules that are not tied to particular footage. */
 function licensed(policy: Policy, dimension: "territory" | "platform" | "usage"): string[] {
@@ -80,9 +86,9 @@ export function classifyBlocker(items: readonly IntentDecision[], policies: read
   const policy = policies.find((p) => p.id === policyId);
 
   const sentences: string[] = [];
-  if (badTerritories.length) sentences.push(`Not licensed in ${list(badTerritories)}.`);
+  if (badTerritories.length) sentences.push(`Not licensed for ${countries(badTerritories)}.`);
   if (badPlatforms.length) sentences.push(`Not licensed on ${list(badPlatforms)}.`);
-  if (badUsages.length) sentences.push(`${list(badUsages)} use is not licensed.`);
+  if (badUsages.length) sentences.push(`${list(badUsages)} use isn't licensed.`);
   for (const o of campaign) {
     const intentField = ["territory", "platform", "usage"].includes(o.reason.dimension);
     const rule = findRule(o.reason.ruleId, policies);

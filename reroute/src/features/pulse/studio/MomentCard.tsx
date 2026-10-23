@@ -3,9 +3,8 @@
 import { ArrowRightIcon, CheckIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { clock } from "../moment-ranking";
 import type { RecommendationView } from "../types";
-import { MomentPreview, recommendationSource } from "./MomentPreview";
+import { MomentPreview, recommendationSource, segmentLabel } from "./MomentPreview";
 import { RightsPill } from "./parts";
 
 /** Filename without extension, separators as spaces: what a social manager recognizes. */
@@ -19,6 +18,7 @@ export function MomentCard({
   selected,
   busy,
   loading,
+  primary,
   onChoose,
 }: {
   rec: RecommendationView;
@@ -28,6 +28,8 @@ export function MomentCard({
   busy: boolean;
   /** This card's own action is running. */
   loading: boolean;
+  /** Choosing a moment is the current step (no campaign yet): the button is the filled primary action. */
+  primary: boolean;
   onChoose: () => void;
 }) {
   const c = rec.candidate;
@@ -47,8 +49,7 @@ export function MomentCard({
               {displayTitle(c.title)}
             </h3>
             <p className="font-mono text-[11px] text-zinc-500">
-              {clock(c.startSeconds ?? 0)}–{clock(c.endSeconds ?? 0)}
-              {c.durationSec !== undefined && ` of ${clock(c.durationSec)}`}
+              {segmentLabel(c.startSeconds ?? 0, c.endSeconds, c.durationSec)}
               {rec.season && ` · ${rec.season}`}
             </p>
           </div>
@@ -78,7 +79,7 @@ export function MomentCard({
           </div>
         </dl>
 
-        <Button className="mt-auto w-full" variant={selected ? "outline" : "default"} disabled={busy || selected} onClick={onChoose}>
+        <Button className="mt-auto w-full" variant={selected || !primary ? "outline" : "default"} disabled={busy || selected} onClick={onChoose}>
           {loading ? <Loader2Icon className="animate-spin" /> : selected ? <CheckIcon /> : <ArrowRightIcon />}
           {selected ? "In your campaign" : "Use this moment"}
         </Button>

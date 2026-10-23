@@ -357,12 +357,13 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
       continue;
     }
     const club = ctx.policy.applicability.clubNames[0];
+    const post = usage === "COMMERCIAL" ? "a sales post" : usage === "SPONSORED" ? "a sponsored post" : `${usage.toLowerCase()} use`;
     const text =
       dim === "sponsor"
-        ? `Brand "${s.display}" is not an official partner listed in ${ctx.policy.title}, so it is not cleared for ${usage} use.`
+        ? `${s.display} isn't an official partner in ${ctx.policy.title}, so it can't appear in ${post}.`
         : s.club === "OTHER"
-          ? `${s.display} is registered to ${s.clubs.join(", ")} in ScorePlay, so the ${club} image-rights pool does not cover ${usage} use of this person.`
-          : `${s.display}: ScorePlay does not register this person in the ${club} squad, so ${usage} image rights cannot be assumed.`;
+          ? `${s.display} plays for ${s.clubs.join(", ")} (per ScorePlay), so ${club}'s image rights can't cover them in ${post}.`
+          : `${s.display} isn't on ${club}'s registered squad in ScorePlay, so the club's image rights can't cover them in ${post}.`;
     out.push(reason(ctx, `subject:${s.label}`, dim, "MISSING", "LEGAL_ENTITLEMENT", text, s.evidence));
   }
   if (dim === "people" && !gap && ctx.people.length === 0) {
@@ -409,8 +410,8 @@ function evaluateDimension(dim: Dimension, ctx: SegmentContext, all: RuleCheck[]
     return strong.map((c) => {
       if (!c.rule.match.evidenceLabels) return reason(ctx, c.rule.id, dim, "DENY", "LEGAL_ENTITLEMENT", c.rule.explanation, c.triggering);
       const seen = c.triggering.filter(canBlock);
-      const what = [...new Set(seen.map((e) => `${entityOf(e)} (${e.source === "HUMAN" ? "reviewer" : "video analysis"}${e.start !== undefined ? `, ${e.start}–${e.end ?? e.start}s` : ""})`))];
-      return reason(ctx, c.rule.id, dim, "DENY", "LEGAL_ENTITLEMENT", `${c.rule.explanation} Seen in this clip: ${what.join("; ")}.`, seen);
+      const what = [...new Set(seen.map((e) => `${entityOf(e)} (${e.source === "HUMAN" ? "flagged by reviewer" : "crest/kit or boards"})${e.start !== undefined ? `, ${e.start}–${e.end ?? e.start} s` : ""}`))];
+      return reason(ctx, c.rule.id, dim, "DENY", "LEGAL_ENTITLEMENT", `${c.rule.explanation} Third-party branding on screen: ${what.join("; ")}.`, seen);
     });
   }
 

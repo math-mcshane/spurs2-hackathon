@@ -8,7 +8,7 @@ Architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Integration 
 
 ```bash
 pnpm install
-cp .env.example .env.local                 # fill ScorePlay + TwelveLabs keys, reviewer passcode/secret
+cp .env.example .env.local                 # fill ScorePlay + TwelveLabs keys, reviewer hashes + session secret
 ~/.local/bin/supabase start                # local Docker Supabase (prints URL + secret key)
 ~/.local/bin/supabase db reset             # applies supabase/migrations/*.sql in order
 # .env.local: SUPABASE_URL=http://127.0.0.1:54321, SUPABASE_SECRET_KEY=<local secret key>
@@ -25,8 +25,9 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    market / product / KPI; `goal-intents.ts` turns it into weighted visual questions.
 2. **Three moments** — ScorePlay lists the club's videos; each question is a live TwelveLabs Marengo search in those
    videos; hits are linked back to ScorePlay assets by `MediaResolver` (filename + duration, unique both ways) with exact
-   timestamps; `moment-ranking.ts` picks the top three distinct assets. Previews are resolved per request (ScorePlay
-   proxy, else TwelveLabs HLS stream), never stored and never downloaded.
+   timestamps; `moment-ranking.ts` picks the top three distinct assets. Video previews are off unless
+   `MEDIA_PREVIEW_ENABLED=true` (then only for a signed-in reviewer, resolved per request, never stored or downloaded);
+   while off, no footage URL appears in any API response.
 3. **Campaign** — localized Instagram / Facebook / X copy (e.g. es-MX for Mexico), cut, CTA, intents for every
    channel × territory. Each edit is a new campaign version. The CTA links only to a configured
    `PULSE_COMMERCE_DESTINATIONS` entry (e.g. `tottenham:tickets:*=https://…`) or a producer link on the club's site.
@@ -42,7 +43,8 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    jerseys in Mexico": "No licensed path in Mexico (MX)") there is no remedy and the campaign cannot be submitted:
    the verdict stays NEEDS_REVIEW and `submitForReview` is refused with "No licence covers Mexico (MX) — request a
    licence before review." PULSE never re-targets the goal to other countries.
-6. **Review** — submit → reviewer signs in → approve/reject → receipt with every use and a hash-chained audit trail.
+6. **Review** — submit → a named reviewer signs in (Reviewer id + personal passcode) → approve/reject → receipt with
+   every use, the reviewer's configured name and a hash-chained audit trail.
 7. **Writeback** — ScorePlay writeback plan (dry run by default).
 
 All bundled policies are fictional: verdicts show **DEMO POLICY — NOT VERIFIED LEGAL CLEARANCE** and `publishable`
@@ -53,7 +55,7 @@ stays false. Unknown never becomes ALLOWED; an AI observation is evidence about 
 | Route | What |
 |---|---|
 | `/` | Studio (the product journey above) |
-| `/desk` | Advanced rights desk: asset search, segment decisions, resolver, receipts (previews need reviewer sign-in) |
+| `/desk` | Advanced rights desk: asset search, segment decisions, resolver, receipts (previews only with `MEDIA_PREVIEW_ENABLED=true` + reviewer sign-in) |
 | `/pulse/board`, `/pulse/opportunity/[id]` | Fan-signal board with **SIMULATED** signals; 404 unless `PULSE_BOARD_ENABLED=true` |
 | `/api/pulse/goal` | Studio actions: `run`, `select`, `draft`, `checkRights`, `findAlternatives`, `useAlternative`, `applyRemedy`, `submitForReview`; `GET ?id=`. All but `run` need `expectedVersion` |
 | `/api/{decide,resolve,access,assets,policies}` | REROUTE engine |
@@ -102,9 +104,12 @@ Only ids, timestamps, decisions and evidence text are stored — never media or 
 - Root directory `reroute`, framework Next.js. Set env vars per deployment (deploy-time env or project env);
   **never commit `.env*`** files.
 - Keep `SCOREPLAY_WRITEBACK_MODE=dry-run`, `MEDIA_PROCESSING_APPROVED=false`, `SCOREPLAY_UPLOAD_APPROVED=false`,
-  `PULSE_BOARD_ENABLED=false`. Use a reviewer passcode ≥ 12 chars and a ≥ 32-char session secret.
-- Recommended: Vercel Deployment Protection and a Firewall rate-limit rule on `/api/*` (the in-app sign-in limiter
-  is per instance only).
+  `PULSE_BOARD_ENABLED=false`, `MEDIA_PREVIEW_ENABLED` unset/false until playback rights are confirmed.
+- Reviewers: `pnpm exec tsx scripts/reviewer-credentials.ts <id>="<Display Name>" …` prints `REROUTE_REVIEWERS`
+  (scrypt hashes only) and writes the personal passcodes to the gitignored `reroute/.reviewers.local.txt` (mode 600)
+  for out-of-band handover. Plus a ≥ 32-char `REROUTE_SESSION_SECRET`. Never put passcodes in env files or docs.
+- Per-IP API rate limits (`src/lib/server/rate-limit.ts`) are in memory per instance — best-effort on serverless.
+  Recommended: Vercel Deployment Protection and a Firewall rate-limit rule on `/api/*`.
 - Demo replay reads the committed `demo-cache/` (set `DEMO_REPLAY=true` for a network-independent demo); FFmpeg
   render is unavailable on Vercel.
 

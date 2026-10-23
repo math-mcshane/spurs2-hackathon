@@ -21,7 +21,7 @@
       "intent": { "territories": ["FR", "US"], "platforms": ["instagram", "youtube"], "usage": ["EDITORIAL", "ORGANIC", "SPONSORED"] },
       "validFrom": "2026-10-01T00:00:00Z",
       "validUntil": "2026-12-31T23:59:59Z",
-      "explanation": "NBA game footage may be published in FR and US on Instagram and YouTube, for editorial, organic or sponsored posts, until 31 Dec 2026."
+      "explanation": "NBA game footage is allowed in FR and US on Instagram and YouTube (editorial, organic or sponsored) until 31 Dec 2026."
     },
     {
       "id": "SPURS-2-in-game-people-and-signage",
@@ -31,7 +31,7 @@
       "covers": ["person:*", "brand:*"],
       "validFrom": "2026-10-01T00:00:00Z",
       "validUntil": "2026-12-31T23:59:59Z",
-      "explanation": "Players, officials and arena signage that appear in NBA game footage are cleared for club social use."
+      "explanation": "Players, officials and arena signage in NBA game footage are cleared for club social posts."
     },
     {
       "id": "SPURS-3-rival-sponsor-exclusivity",
@@ -39,7 +39,7 @@
       "dimensions": ["sponsor"],
       "match": { "evidenceLabels": ["brand:rival-sponsor"] },
       "intent": { "usage": ["SPONSORED"] },
-      "explanation": "Sponsored campaign posts must not show a rival sponsor's branding (exclusivity clause). A reviewer flags rival branding with the label brand:rival-sponsor."
+      "explanation": "Sponsored posts can't show a rival sponsor's branding (exclusivity). Reviewers flag it with the label brand:rival-sponsor."
     },
     {
       "id": "SPURS-4-gb-geo-block",
@@ -47,7 +47,7 @@
       "dimensions": ["territory"],
       "match": { "competition": ["NBA"] },
       "intent": { "territories": ["GB"] },
-      "explanation": "NBA game footage is geo-blocked in GB because a broadcaster holds an exclusive window there."
+      "explanation": "NBA game footage can't be shown in GB — a broadcaster holds an exclusive window there."
     },
     {
       "id": "SPURS-5-no-sponsored-tiktok",
@@ -55,7 +55,7 @@
       "dimensions": ["platform"],
       "match": { "competition": ["NBA"] },
       "intent": { "platforms": ["tiktok"], "usage": ["SPONSORED"] },
-      "explanation": "Sponsored NBA footage may not be posted on TikTok."
+      "explanation": "Sponsored NBA footage can't be posted on TikTok."
     }
   ]
 }

@@ -137,7 +137,7 @@ describe("resolve", () => {
     const intents = ["GB", "FR", "ES", "DE", "IN", "US"].map((territory) => ({ ...editorial, territory }));
     const result = await resolve({ edit, intent: intents[0], intents, segmentIndex: 0, limit: 3 }, { deps: deps(), now });
     expect(result.blocker.scope).toBe("CAMPAIGN");
-    expect(result.blocker.explanation).toMatch(/Not licensed in FR, ES, DE, IN\./);
+    expect(result.blocker.explanation).toMatch(/Not licensed for France \(FR\), Spain \(ES\), Germany \(DE\) and India \(IN\)\./);
     expect(result.blocker.suggestion).toMatch(/Drop FR, ES, DE, IN/);
     expect(result.remedy).toEqual({ territories: ["GB", "US"] });
     expect(result.candidates).toEqual([]);

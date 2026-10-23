@@ -22,7 +22,7 @@ function submitBlockedReason(goal: GoalView): string {
   const r = goal.rights;
   if (r.state === "NOT_CHECKED") return "Check rights first.";
   if (!r.current) return "The campaign changed after the last check — check rights again.";
-  if (r.state === "BLOCKED") return "REROUTE blocked this use. Find another way first.";
+  if (r.state === "BLOCKED") return "This clip can't be used as planned. Find another way first.";
   return goal.nextStep;
 }
 
@@ -79,7 +79,7 @@ export function ReviewStage({
         {goal.reviewStatus === "NOT_SUBMITTED" ? (
           <>
             <p className="text-xs text-zinc-400">
-              Submitting creates an audit receipt with REROUTE&apos;s verdict, the policy, the exact media and every channel × territory checked.
+              Submitting creates an audit receipt with the rights verdict, the policy, the exact clip and every channel and country checked.
             </p>
             <Button size="lg" disabled={disabled || !goal.canSubmit} onClick={onSubmit} aria-describedby={goal.canSubmit ? undefined : "submit-why"}>
               {submitting ? <Loader2Icon className="animate-spin" /> : <SendIcon />} Submit for review

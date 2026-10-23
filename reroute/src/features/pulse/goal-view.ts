@@ -1,4 +1,4 @@
-import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type PublishIntent, type Reason, type RightsReceipt } from "@/lib/contracts";
+import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type Evidence, type PublishIntent, type Reason, type RightsReceipt } from "@/lib/contracts";
 import { withPreview } from "./moment-ranking";
 import { MARKETS, PRODUCTS } from "./objective-parser";
 import { MarketCodeSchema } from "./types";
@@ -16,6 +16,7 @@ import type {
   ReviewStatus,
   RightsIssue,
   RightsView,
+  ReasonFinding,
 } from "./types";
 
 /**
@@ -152,6 +153,64 @@ export function rightsIssues(reasons: readonly Pick<Reason, "dimension" | "outco
   return [...byTopic.values()].sort((a, b) => Number(b.outcome === "DENY") - Number(a.outcome === "DENY"));
 }
 
+const SOURCE: Record<Evidence["source"], string> = { TWELVELABS: "Video analysis · TwelveLabs", SCOREPLAY: "ScorePlay data", HUMAN: "Reviewer observation" };
+/** Evidence labels that can back a reason, per dimension (labels set by the TwelveLabs parser / reviewers). */
+const EVIDENCE_PREFIX: Record<string, string> = { sponsor: "brand:", people: "person:" };
+const secs = (n: number) => `${Math.round(n * 10) / 10}`;
+
+/**
+ * Splits one REROUTE reason into REAL evidence ("what we found", with provenance) and the RULE applied
+ * (REROUTE's explanation verbatim, tagged fictional or verified). Wording is never parsed: findings come
+ * from the decision's evidence, else from where the reason's basis says the fact came from.
+ */
+export function reasonFinding(
+  r: Pick<Reason, "dimension" | "outcome" | "explanation"> & Partial<Pick<Reason, "ruleId" | "basis" | "scoreplayMediaId" | "start" | "end">>,
+  ctx: { evidence?: readonly Evidence[]; fictional: boolean; plannedUse?: string },
+): ReasonFinding | null {
+  if (r.outcome === "PERMIT") return null;
+  const prefix = EVIDENCE_PREFIX[r.dimension.toLowerCase()];
+  const seen = prefix
+    ? (ctx.evidence ?? []).filter(
+        (e) =>
+          e.label?.toLowerCase().startsWith(prefix) &&
+          (!r.scoreplayMediaId || e.scoreplayMediaId === r.scoreplayMediaId) &&
+          (r.start === undefined || r.end === undefined || e.start === undefined || ((e.end ?? e.start) >= r.start && e.start <= r.end)),
+      )
+    : [];
+  const found = seen.length
+    ? [...new Map(seen.map((e) => [`${e.source}|${e.observation}|${e.start}|${e.end}`, e])).values()].map((e) => ({
+        text: e.start === undefined ? e.observation : `${e.observation} (${secs(e.start)}–${secs(e.end ?? e.start)} s)`,
+        source: SOURCE[e.source],
+      }))
+    : [fallbackFinding(r, ctx.plannedUse)];
+  return {
+    dimension: r.dimension,
+    outcome: r.outcome,
+    found,
+    rule: { id: r.ruleId, text: r.explanation, tag: ctx.fictional ? "Demo policy · fictional" : "Verified policy" },
+  };
+}
+
+function fallbackFinding(r: Pick<Reason, "dimension"> & Partial<Pick<Reason, "basis" | "scoreplayMediaId">>, plannedUse?: string): ReasonFinding["found"][number] {
+  const asset = r.scoreplayMediaId ? ` (asset ${r.scoreplayMediaId})` : "";
+  if (r.basis === "TECHNICAL_OBSERVATION") return { text: `No video analysis is available for this clip${asset}.`, source: "Video analysis · TwelveLabs" };
+  if (r.basis === "MEDIA_IDENTITY") return { text: `This clip${asset} could not be matched to exactly one analysed video.`, source: "ScorePlay ↔ TwelveLabs link" };
+  if (LICENCE[r.dimension.toLowerCase()]) return { text: plannedUse ? `Planned use: ${plannedUse}.` : "The campaign's planned channel, country, use and date.", source: "Your campaign plan" };
+  return { text: `What ScorePlay records about this clip${asset}.`, source: "ScorePlay data" };
+}
+
+/** "all 3 planned uses (Instagram, Facebook, X · GB · commercial)": the uses a re-check actually covered. */
+export function plannedUsesLabel(intents: readonly Pick<PublishIntent, "platform" | "territory" | "usage">[]): string {
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  const parts = [
+    uniq(intents.map((i) => PLATFORM[i.platform.toLowerCase()] ?? i.platform)).join(", "),
+    uniq(intents.map((i) => i.territory)).join(", "),
+    uniq(intents.map((i) => i.usage.toLowerCase())).join(", "),
+  ];
+  const n = intents.length;
+  return `${n === 1 ? "the planned use" : `all ${n} planned uses`} (${parts.join(" · ")})`;
+}
+
 const isDemo = (d: Pick<Decision, "policyFictional" | "clearance">) => d.policyFictional || d.clearance === "DEMO";
 
 function channelRights(intent: PublishIntent, d: Decision): ChannelRights {
@@ -167,6 +226,7 @@ function channelRights(intent: PublishIntent, d: Decision): ChannelRights {
     policySelection: d.policySelection,
     reasons: d.reasons,
     issues: rightsIssues(d.reasons),
+    findings: d.reasons.flatMap((r) => reasonFinding(r, { evidence: d.evidence, fictional: d.policyFictional, plannedUse: describeUse(intent) }) ?? []),
     missingFacts: d.missingFacts,
   };
 }
@@ -183,7 +243,7 @@ export function presentRights(run: GoalRun): RightsView {
     return {
       state: "NOT_CHECKED",
       headline: "Not checked yet",
-      detail: "REROUTE has not evaluated this proposal yet. Nothing is cleared until it does.",
+      detail: "This proposal hasn't been checked yet. Nothing is cleared until it is.",
       current: false,
       perIntent: [],
       issues: [],
@@ -200,9 +260,9 @@ export function presentRights(run: GoalRun): RightsView {
   const copy: Record<Decision["verdict"], { headline: string; detail: string }> = {
     ALLOWED: demo
       ? { headline: "Allowed under a demo policy", detail: `${DEMO_CLEARANCE_LABEL}. ${tally} This can go to review for the demo, but it can never authorize publication.` }
-      : { headline: "Cleared by REROUTE for every proposed use", detail: `${tally} Policy ${d.policyId} v${d.policyVersion}.` },
-    NEEDS_REVIEW: { headline: "Needs a rights review", detail: `REROUTE could not confirm everything. ${tally} A person must review it — or find another way.` },
-    BLOCKED: { headline: "Restricted for at least one proposed use", detail: `REROUTE found a restriction PULSE cannot override. ${tally} Find another way to keep the same goal.` },
+      : { headline: "Cleared for every planned use", detail: `${tally} Policy ${d.policyId} v${d.policyVersion}.` },
+    NEEDS_REVIEW: { headline: "Needs a rights review", detail: `Some uses aren't covered yet. ${tally} A person must review it — or find another way.` },
+    BLOCKED: { headline: "Restricted for at least one planned use", detail: `This clip can't be used for this campaign as planned. ${tally} Find another way to reach the same goal.` },
   };
   return {
     state: d.verdict,
@@ -254,18 +314,18 @@ function nextStep(
   if (!run.campaign) return run.pool.length ? "Pick one of the three moments to build its campaign." : "No usable moment was found — refine the goal or index more footage.";
   if (run.campaign.cta.status === "NOT_CONFIGURED" && review === "NOT_SUBMITTED" && rights.state === "NOT_CHECKED") {
     const link = run.objective.product && PRODUCTS[run.objective.product.key].commerce === "ticketing" ? "ticketing link" : "store link";
-    return `Check rights with REROUTE. The ${link} is not configured — add an https link on the club's domain (optional before review).`;
+    return `Check rights for every planned channel and country. The ${link} isn't set yet — you can add the club's https link now or later.`;
   }
-  if (rights.state === "NOT_CHECKED" || !rights.current) return "Check rights with REROUTE for every proposed channel and territory.";
+  if (rights.state === "NOT_CHECKED" || !rights.current) return "Check rights for every planned channel and country.";
   if (review === "APPROVED")
     return publishable
-      ? "Approved with verified clearance — ready to publish outside PULSE, then record the ScorePlay writeback."
-      : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Run the ScorePlay writeback (dry-run) to record the decision.`;
+      ? "Approved with verified clearance — ready to publish in the club's own tool, then record it back in ScorePlay."
+      : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Preview the ScorePlay record (dry run) to log the decision.`;
   if (review === "REJECTED") return "The reviewer rejected this version. Find another way or change the proposal, then submit again.";
-  if (review === "PENDING") return "Waiting for a reviewer to approve or reject the receipt.";
-  if (gap) return `${noLicenceReason(gap)}. PULSE offers no remedy and never re-targets the goal to other markets.`;
-  if (remedy) return "The restriction is tied to where or how the campaign runs, not to the clip: apply REROUTE's remedy, then check rights again.";
-  if (rights.state === "BLOCKED") return "Restricted. Find another way: REROUTE searches comparable footage and re-checks it independently.";
+  if (review === "PENDING") return "Waiting for a reviewer to approve or reject.";
+  if (gap) return `${noLicenceReason(gap)}. Request a licence — we won't move your campaign to other markets.`;
+  if (remedy) return "The problem is where or how the campaign runs, not the clip: apply the suggested change, then check rights again.";
+  if (rights.state === "BLOCKED") return "This clip can't be used as planned. Find another way — we'll look for comparable footage and check it for you.";
   if (canSubmit)
     return rights.state === "NEEDS_REVIEW"
       ? "Submit for human review — or find another way first."

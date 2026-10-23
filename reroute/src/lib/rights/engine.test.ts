@@ -173,7 +173,7 @@ describe("Tottenham demo policy", () => {
     expect(d.verdict).toBe("BLOCKED");
     const deny = d.reasons.find((r) => r.outcome === "DENY")!;
     expect(deny).toMatchObject({ ruleId: "THFC-6-no-broadcast-footage-in-ads", dimension: "usage", basis: "LEGAL_ENTITLEMENT" });
-    expect(deny.explanation).toMatch(/may not be used to sell merchandise/);
+    expect(deny.explanation).toMatch(/can't be used to sell merchandise/);
     expect(blockerOf(d, commercial).scope).toBe("CLIP");
   });
 
@@ -213,7 +213,7 @@ describe("Tottenham demo policy", () => {
   it("COMMERCIAL: a player registered to another club is not covered by the image-rights pool", () => {
     const rival = thfc("rival", { people: ["Bruno Fernandes"], peopleTeams: { "Bruno Fernandes": ["Manchester United"] } });
     const d = decide(rival, commercial, { observations: [rubric("rival", "single_player")] });
-    expect(open(d)[0].explanation).toMatch(/registered to Manchester United/);
+    expect(open(d)[0].explanation).toMatch(/plays for Manchester United/);
   });
 
   it("COMMERCIAL: a third-party brand seen with confidence ≥ 0.6 ⇒ BLOCKED; below 0.6 it cannot block", () => {
@@ -256,7 +256,7 @@ describe("Tottenham demo policy", () => {
     const uses = ["GB", "FR", "ES", "US", "IN"].map((territory) => ({ ...base, territory }));
     const { blocker, remedy } = classifyBlocker(uses.map((intent) => ({ intent, decision: decide(playerClip, intent) })));
     expect(blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"], ruleIds: ["THFC-3-licensed-territories"] });
-    expect(blocker.explanation).toMatch(/Not licensed in FR, ES, IN\./);
+    expect(blocker.explanation).toMatch(/Not licensed for France \(FR\), Spain \(ES\) and India \(IN\)\./);
     expect(blocker.suggestion).toMatch(/Drop FR, ES, IN; licensed territories: GB, IE, US, CA, AU, NZ/);
     expect(remedy).toEqual({ territories: ["GB", "US"] });
   });

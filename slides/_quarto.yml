@@ -1,16 +1,15 @@
 author:
   - name: Ryan McShane, Ph.D.
     affiliations:
-      - Department of Statistics
-      - The University of Chicago
+      - "![The University of Chicago, Department of Statistics](images/logos/uchicago.svg){.affil-logo}"
   - name: Merlin Salesse
-    affiliations: Naboo.app
+    affiliations: "![Naboo](images/logos/naboo.svg){.affil-logo}"
   - name: Andres de la Garza
-    affiliations: Right on Bracket
+    affiliations: "![Right On Bracket](images/logos/right-on-bracket.png){.affil-logo}"
   - name: Maurice Thomas
     affiliations: Library Labs
   - name: Raj
-    affiliations: Salesforce Consultant
+    affiliations: "![Salesforce](images/logos/salesforce.svg){.affil-logo}"
 format:
   revealjs:
     theme: [default, knit-files/mcshane-scss-theme.scss, knit-files/spurs2-scss-theme.scss]

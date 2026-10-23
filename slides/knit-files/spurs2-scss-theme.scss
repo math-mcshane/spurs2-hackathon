@@ -151,8 +151,20 @@ $selection-bg: $thfc-raised;
 #title-slide .quarto-title-affiliation {
   font-size: 0.48em;
   color: $thfc-ink-muted;
-  margin: 0.1em 0 0 0;
+  margin: 0.35em 0 0 0;
+  line-height: 1;
 }
+
+// affiliations are company logos (see _quarto.yml); one optical height for all
+#title-slide .quarto-title-affiliation img {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: 240px;
+  margin: 0;
+}
+#title-slide .quarto-title-affiliation img[aria-label="Salesforce"] { height: 58px; }
+#title-slide .quarto-title-affiliation img[aria-label="Right On Bracket"] { height: 46px; }
 
 #title-slide .date {
   font-size: 0.5em;

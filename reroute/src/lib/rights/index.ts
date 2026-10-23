@@ -1,6 +1,7 @@
 export { classifyBlocker, reasonScope, type IntentDecision, type Remedy } from "./blocker";
 export { KNOWN_CLUB_NAMES, clubKey, sameClub } from "./club";
 export {
+  CLUB_PARTNER_RULE_PREFIX,
   MIN_DENY_CONFIDENCE,
   PAST_PUBLISH_GRACE_MS,
   PAST_PUBLISH_RULE_ID,

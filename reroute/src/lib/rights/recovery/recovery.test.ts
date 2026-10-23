@@ -364,7 +364,7 @@ describe("Recovery engine — planRecovery", () => {
     const source = thfc("src16");
     const keyHighlights = thfc("kh", { people: ["Dominic Solanke-Mitchell"] }, 200);
     const named = ["pedro-porro", "giovani-lo-celso", "angelo-stiller", "ange-postecoglou"];
-    const ctx = ctxOf([source, keyHighlights], [ev("src16", "brand:kraken", 0, 30), ...named.map((p) => ev("kh", `person:${p}`, 115, 118))]);
+    const ctx = ctxOf([source, keyHighlights], [ev("src16", "brand:dhl", 0, 30), ...named.map((p) => ev("kh", `person:${p}`, 115, 118))]);
     const intents = SALES.map((i) => ({ ...i, usage: "SPONSORED" as const }));
     const segment = { scoreplayMediaId: "kh", start: 114.7, end: 120.1 };
     const plan = planRecovery({
@@ -384,6 +384,19 @@ describe("Recovery engine — planRecovery", () => {
     expect(plan.noPathMessage).toMatch(/^No verified correction: .*One candidate still needs a reviewer — not a fix\./);
     // Ranked: what clears every use (here only by changing the goal) before what still needs a reviewer.
     expect(plan.options.map((o) => o.outcome)).toEqual(["RESOLVES_DEMO", "NEEDS_REVIEW", "NOT_VIABLE", "NEXT_STEP"]);
+  });
+
+  it("a club partner on screen (Kraken sleeve) is a contract question: no cut or section is proposed to remove it, nothing is recommended", () => {
+    const asset = thfc("slo");
+    const ctx = ctxOf([asset], [ev("slo", "brand:aia", 0, 46), ev("slo", "brand:kraken", 15, 46)]);
+    const intents = SALES.map((i) => ({ ...i, usage: "SPONSORED" as const, targetSponsor: "AIA" }));
+    const plan = planRecovery({ ctx, source: { assetId: "slo", title: asset.title, range: { start: 14.8, end: 20.2 } }, intents, idPrefix: "c" });
+    expect(plan.current.verdict).toBe("NEEDS_REVIEW");
+    expect(plan.licenceGap).toBe(false);
+    expect(plan.options.filter((o) => o.kind === "TRIM" || o.kind === "SAFE_SECTION")).toEqual([]);
+    expect(plan.recommendedId).toBeUndefined();
+    expect(plan.headline).toBe("To confirm: Kraken (0:15.0–0:20.2) — club partner these rules don't list; a contract question, not a conflict");
+    expect(plan.options.map((o) => [o.kind, o.outcome])).toEqual([["REQUEST_CLEARANCE", "NEXT_STEP"]]);
   });
 
   it("recommended is only ever an option that clears every use and keeps the goal", () => {

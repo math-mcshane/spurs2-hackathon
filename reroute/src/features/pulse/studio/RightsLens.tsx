@@ -340,8 +340,9 @@ type Sponsor = NonNullable<GoalView["sponsorContext"]>;
 const ROLE: Record<Sponsor["brands"][number]["role"], { text: string; tone: string }> = {
   TARGET: { text: "the partner this post promotes", tone: "text-ink-soft" },
   OTHER_PARTNER: { text: "official partner — allowed", tone: "text-ink-soft" },
-  COMPETING_RESTRICTED: { text: "not a partner — restricted", tone: "text-status-blocked" },
+  COMPETING_RESTRICTED: { text: "restricted for this use by the rule shown", tone: "text-status-blocked" },
   INCIDENTAL: { text: "incidental — allowed for this use", tone: "text-ink-soft" },
+  CLUB_PARTNER: { text: "club partner, not named by these rules — reviewer confirms the contract, not a conflict", tone: "text-status-review" },
   UNKNOWN: { text: "no rule covers it — reviewer must confirm", tone: "text-status-review" },
 };
 
@@ -377,7 +378,9 @@ function SponsorCheck({ goal, sponsor }: { goal: GoalView; sponsor: Sponsor }) {
                   {t.name} <span className="text-ink-soft">— partner under {t.ruleId} (illustrative rules), not a conflict</span>
                 </span>
               ) : (
-                <span className="text-status-review">{t.name} — relationship not described by these illustrative rules · a reviewer must confirm</span>
+                <span className="text-status-review">
+                  {t.name} — {t.clubPartner ? `${t.clubPartner}; ` : ""}relationship not described by these illustrative rules · a reviewer must confirm
+                </span>
               )}
               {onScreen && (
                 <span className="block text-meta text-ink-muted">
@@ -395,6 +398,7 @@ function SponsorCheck({ goal, sponsor }: { goal: GoalView; sponsor: Sponsor }) {
             others.map((b) => (
               <p key={b.label}>
                 <span className="text-ink">{b.name}</span> <span className={ROLE[b.role].tone}>— {ROLE[b.role].text}</span>
+                {b.clubPartner && <span className="block text-meta text-ink-muted">{b.clubPartner} · club partner list</span>}
                 <span className="block text-meta text-ink-muted">
                   {b.spans.length ? `${b.spans.join(", ")} · ` : ""}
                   {CERTAINTY[b.certainty]}

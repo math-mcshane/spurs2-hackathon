@@ -114,22 +114,31 @@ export type PolicySelection = z.infer<typeof PolicySelectionSchema>;
 /**
  * Which brands a decision saw and how the policy treats each (sponsor dimension), for display. TARGET = the brand
  * the campaign promotes; OTHER_PARTNER = covered by an explicit partner rule; COMPETING_RESTRICTED = a restriction
- * rule names it; INCIDENTAL = only a rule covering every brand allows it; UNKNOWN = no rule describes it.
+ * rule applies to it; INCIDENTAL = only a rule covering every brand allows it; CLUB_PARTNER = the club's own partner
+ * (club partner list) that the rules neither name as a partner nor restrict by name — a reviewer confirms the
+ * contract; UNKNOWN = no rule describes it. `clubPartner` = what the club partner list says about it, if anything.
  */
 export const SponsorshipSchema = z.object({
   /** null = the campaign names no target sponsor (or the use is not a paid/partner post). */
   target: z
-    .object({ name: z.string(), label: z.string(), relationship: z.enum(["PARTNER", "UNKNOWN"]), ruleId: z.string().optional() })
+    .object({
+      name: z.string(),
+      label: z.string(),
+      relationship: z.enum(["PARTNER", "UNKNOWN"]),
+      ruleId: z.string().optional(),
+      clubPartner: z.string().optional(),
+    })
     .nullable(),
   brands: z.array(
     z.object({
       name: z.string(),
       label: z.string(),
-      role: z.enum(["TARGET", "OTHER_PARTNER", "COMPETING_RESTRICTED", "INCIDENTAL", "UNKNOWN"]),
+      role: z.enum(["TARGET", "OTHER_PARTNER", "COMPETING_RESTRICTED", "INCIDENTAL", "CLUB_PARTNER", "UNKNOWN"]),
       ruleId: z.string().optional(),
       certainty: z.enum(["SCOREPLAY_TAG", "AI_OBSERVATION", "REVIEWER"]),
       /** Seconds on the source asset where it was observed ("15–17 s"); empty for an untimed ScorePlay tag. */
       spans: z.array(z.string()),
+      clubPartner: z.string().optional(),
     }),
   ),
 });

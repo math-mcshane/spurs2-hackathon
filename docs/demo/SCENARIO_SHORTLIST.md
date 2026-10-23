@@ -114,17 +114,17 @@ Verdict codes per usage in order Editorial · Organic · Sponsored · Commercial
 9. The conflict is real; which name is right is unknown to us.
 10. Low.
 
-## S7 — Sleeve-sponsor activation blocked by the partner list
+## S7 — Sleeve-sponsor activation: the partner list is a contract question
 
 1. **Real moments:** `Goal Man United 9x16 (A) v1.mp4` (`130851423`) — Kraken on the sleeve 0:00–0:02 and 0:11–0:18 (stored run; audit run 0:00–0:02, 0:06–0:11); `Fans clap` 0:02.5–0:05 (both runs).
 2. **Goal:** "Activate our sleeve sponsor with fans in the UK" (sponsored).
 3. **Why:** celebrations put the sleeve on screen.
 4. **Commercial:** partner deliverable.
-5. **Issue:** the demo partner list is AIA + Nike; Kraken — and the Premier League sleeve patch (12–21 s) — count as other brands → Blocked. Another clip shows "EA SPORTS" on the sleeve (one run). The open question is the verified partner registry, not the footage.
-6. **Action:** explain; a person must confirm the real partner list (not editable in the product).
+5. **Issue:** the demo package's partner list is AIA + Nike, but Kraken is Tottenham's Official Crypto & Web3 and Sleeve Partner (club partner list, [club announcement](https://www.tottenhamhotspur.com/news/986615/tottenham-hotspur-partners-with-crypto-platform-kraken)) — never a third-party brand, so THFC-13's catch-all doesn't block it; the package doesn't describe it → Needs review (since 23 Oct). Another clip shows "EA SPORTS" on the sleeve (one run).
+6. **Action:** explain; a reviewer confirms the partner contract. No cut is proposed for Kraken.
 7. **Alternative:** crowd shots without kits (S10), which do not show the sleeve sponsor at all.
-8. **Expected:** GB·Instagram sponsored Blocked. PULSE's own sponsor run instead stops on a people issue in `Goal Slo Mo` (needs review) — the Kraken block appears only when this moment is chosen.
-9. Brand reads are fairly stable; partner status unknown.
+8. **Expected:** GB·Instagram sponsored Needs review (was Blocked before the club-partner fix). PULSE's own sponsor run also stops on a people issue in `Goal Slo Mo` (needs review).
+9. Brand reads are fairly stable; Kraken's club-partner status is on the club partner list, its contract terms are not.
 10. Medium.
 
 ## S8 — Archive "1–6" recommended for UK followers (risk finding)

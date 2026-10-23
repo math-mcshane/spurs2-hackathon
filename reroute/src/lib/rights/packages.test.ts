@@ -238,12 +238,13 @@ describe("policiesForEvaluation", () => {
     const social = (await policiesForEvaluation({ club: "tottenham" })).policies;
     const commercial = (await policiesForEvaluation({ club: "tottenham", packageId: "demo-tottenham-commercial" })).policies;
 
-    // Kraken sleeve in a sponsored GB post: not an official partner in the social package.
+    // Kraken sleeve in a sponsored GB post: a club partner the social package doesn't name (contract question), a
+    // named partner in the commercial package.
     const sponsoredGb = intent({ usage: "SPONSORED" });
     const a = decide(social, sponsoredGb);
     const b = decide(commercial, sponsoredGb);
-    expect(a.verdict).toBe("BLOCKED");
-    expect(a.reasons.find((r) => r.outcome === "DENY")?.ruleId).toBe("THFC-13-partner-exclusivity");
+    expect(a.verdict).toBe("NEEDS_REVIEW");
+    expect(a.reasons.filter((r) => r.outcome !== "PERMIT").map((r) => [r.ruleId, r.outcome])).toEqual([["club-partner:kraken", "MISSING"]]);
     expect(b.verdict).toBe("ALLOWED");
     expect(b.clearance).toBe("DEMO");
     expect(b.reasons.some((r) => r.ruleId === "THFC-C15-official-partners" && r.outcome === "PERMIT")).toBe(true);

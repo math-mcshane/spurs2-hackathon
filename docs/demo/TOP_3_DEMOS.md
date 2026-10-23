@@ -66,7 +66,7 @@ Clicks: **New campaign** → **Grow engagement** → **Find opportunities** → 
 |---|---|
 | Goal | Chip **Activate a sponsor** → "Activate our sleeve sponsor with fans in the UK". Plan: Sponsored · GB · 3 channels. |
 | Moment | 02 Goal Slo Mo 0:15–0:20. |
-| Under "Tottenham Social Media Usage — Demo" | BLOCKED 0/3: kraken branding 15–46 s (second analysis run) is not a listed partner; Richarlison / Porro (AI-named) not on the ScorePlay squad. |
+| Under "Tottenham Social Media Usage — Demo" | *(23 Oct, after the club-partner fix)* NEEDS_REVIEW 0/3, no longer BLOCKED: Kraken (15–46 s, second analysis run) is Tottenham's Official Crypto & Web3 and Sleeve Partner — not a third-party brand, so the catch-all THFC-13 doesn't apply; the package doesn't name it, so it is a contract question for a reviewer. Richarlison / Porro (AI-named) not on the ScorePlay squad. Not re-verified in the UI with this goal wording. |
 | Switch | **Change rules** → "Tottenham Commercial & Sponsor Usage — Demo" (Kraken = sleeve partner). Previous verdict shown as stale until re-checked. |
 | Re-check | NEEDS_REVIEW 0/3 — only the AI-named players remain. |
 | Recommended | SAFE_SECTION "Use 0:36.5–0:41.9 of the same clip" → ALLOWED 3/3 (demo). Trim rejected ("Removing every flagged part leaves no usable footage."). |

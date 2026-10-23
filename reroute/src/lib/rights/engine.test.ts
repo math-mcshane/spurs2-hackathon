@@ -364,10 +364,36 @@ describe("sponsor intent (target sponsor vs other brands on screen)", () => {
     expect(open(d)[0].explanation).not.toMatch(/Kraken/);
   });
 
-  it("no target named ⇒ the rules apply literally (Kraken on screen is a non-partner under THFC-13)", () => {
-    const d = decide(playerClip, sponsored, { observations: [kraken] });
-    expect(d.verdict).toBe("BLOCKED");
-    expect(d.sponsorship).toMatchObject({ target: null, brands: [{ label: "brand:kraken", role: "COMPETING_RESTRICTED" }] });
+  it("a club partner on screen (Kraken, the club's sleeve partner) is never a third-party brand: the catch-all THFC-13 doesn't block it — a contract question for a reviewer", () => {
+    for (const intent of [sponsored, promoting("AIA")]) {
+      const d = decide(playerClip, intent, { observations: [aia, kraken] });
+      expect(d.verdict).toBe("NEEDS_REVIEW");
+      expect(open(d).map((r) => [r.ruleId, r.outcome])).toEqual([["club-partner:kraken", "MISSING"]]);
+      expect(open(d)[0].explanation).toMatch(/^Kraken is a Tottenham Hotspur partner \(Official Crypto & Web3 Partner and Sleeve Partner\) .* not a third-party brand\. .* a reviewer must confirm\.$/);
+      expect(d.sponsorship!.brands).toContainEqual(expect.objectContaining({ name: "Kraken", role: "CLUB_PARTNER", spans: ["2–8 s"] }));
+      // A contract question: no cut or other clip is offered as its fix.
+      expect(blockerOf(d, intent).scope).toBe("CAMPAIGN");
+    }
+    // A non-partner in the same seconds is still denied, and the denial is about it alone.
+    const both = decide(playerClip, promoting("AIA"), { observations: [aia, kraken, dhl] });
+    expect(both.verdict).toBe("BLOCKED");
+    expect(open(both).find((r) => r.outcome === "DENY")!.explanation).toMatch(/DHL/);
+    expect(open(both).find((r) => r.outcome === "DENY")!.explanation).not.toMatch(/Kraken/);
+  });
+
+  it("a rule that names the club partner still restricts it (an applicable restriction is never overridden)", () => {
+    const named = PolicySchema.parse({
+      ...demoTottenham,
+      rules: [
+        ...demoTottenham.rules,
+        { id: "X-no-crypto", effect: "DENY", dimensions: ["sponsor"], match: { evidenceLabels: ["brand:kraken*"] }, intent: { usage: ["SPONSORED"] }, explanation: "No crypto branding in sponsored posts." },
+      ],
+    });
+    const edit: EditPlan = { id: "e", title: "t", derived: false, segments: [{ scoreplayMediaId: "goal", start: 0, end: 10 }] };
+    const r = evaluateEdit({ edit, assets: { goal: playerClip }, observations: { goal: [aia, kraken] }, analysis: { goal: ANALYSED }, intent: promoting("AIA"), now, policies: [named] });
+    expect(r.decision.verdict).toBe("BLOCKED");
+    expect(open(r.decision).map((x) => [x.ruleId, x.outcome])).toEqual([["X-no-crypto", "DENY"]]);
+    expect(r.decision.sponsorship!.brands).toContainEqual(expect.objectContaining({ label: "brand:kraken", role: "COMPETING_RESTRICTED", ruleId: "X-no-crypto" }));
   });
 
   it("the same target is a partner where the package names it (Kraken under demo-tottenham-commercial)", () => {

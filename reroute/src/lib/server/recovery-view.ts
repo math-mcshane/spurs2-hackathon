@@ -1,5 +1,5 @@
 import type { MediaRef, Reason } from "@/lib/contracts";
-import { isUnverifiedPerson, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
+import { CLUB_PARTNER_RULE_PREFIX, isUnverifiedPerson, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
 import type { PlannedOption, ProblemItem, RecheckSummary, RecoveryPlan } from "@/lib/rights/recovery";
 import { evidenceSource, recoveryOptionView, subjectName, unverifiedPeopleText } from "@/features/pulse/goal-view";
 import type { RecoveryView, SourcedLine, StoredRecoveryOption } from "@/features/pulse/types";
@@ -10,6 +10,8 @@ import type { RecoveryView, SourcedLine, StoredRecoveryOption } from "@/features
  * option with the engine's own independent re-check. Pure mapping — never changes an outcome.
  */
 
+const CLUB_PARTNER_SOURCE = "Club partner list + TwelveLabs video analysis";
+
 /** Where a reason's fact or rule comes from, for the user. */
 export function reasonSource(r: Reason, policyTitle: string): string {
   if (r.basis === "TECHNICAL_OBSERVATION") return "TwelveLabs video analysis";
@@ -17,12 +19,14 @@ export function reasonSource(r: Reason, policyTitle: string): string {
   if (r.basis === "POLICY_SELECTION") return "Policy selection";
   if (r.ruleId.startsWith("subject:")) return "ScorePlay squad list + TwelveLabs video analysis";
   if (r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX)) return `Your goal's target sponsor · ${policyTitle}`;
+  if (r.ruleId.startsWith(CLUB_PARTNER_RULE_PREFIX)) return CLUB_PARTNER_SOURCE;
   return `${policyTitle} · rule ${r.ruleId}`;
 }
 
 export function problemLine(p: ProblemItem, policyTitle: string): SourcedLine {
   const sources = [...new Set(p.evidence.map(evidenceSource))];
-  const source = sources.length ? sources.join(" + ") : p.scope === "CAMPAIGN" ? "Your campaign plan" : `${policyTitle} · ${p.ruleIds.join(", ")}`;
+  const clubPartner = p.ruleIds.every((id) => id.startsWith(CLUB_PARTNER_RULE_PREFIX));
+  const source = sources.length ? sources.join(" + ") : clubPartner ? CLUB_PARTNER_SOURCE : p.scope === "CAMPAIGN" ? "Your campaign plan" : `${policyTitle} · ${p.ruleIds.join(", ")}`;
   return { text: p.text, source, ...(p.at ? { at: p.at } : {}) };
 }
 

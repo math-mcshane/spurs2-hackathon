@@ -14,7 +14,10 @@
  * unproven ScorePlay↔TwelveLabs link is MEDIA_IDENTITY.
  * Sponsors: a brand on screen is never a conflict just for being detected — only the configured rules decide. A
  * target sponsor (`intent.targetSponsor`, paid/partner posts only) that a partner rule names is permitted like any
- * partner; one the rules don't describe is MISSING ("a reviewer must confirm"), never DENY and never PERMIT.
+ * partner; one the rules don't describe is MISSING ("a reviewer must confirm"), never DENY and never PERMIT. A CLUB
+ * partner (`club-partners.ts`: the club's own partner list, a fact about the club, not a rule) is never a "third-party
+ * brand": a catch-all restriction ("brand:*" except the listed partners) doesn't apply to it; only a rule that names
+ * it does. Neither named as a partner nor restricted by name, it is a contract question (MISSING), never PERMIT.
  * Verdict: any DENY → BLOCKED, else any MISSING → NEEDS_REVIEW, else ALLOWED.
  */
 import {
@@ -37,6 +40,7 @@ import {
 } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { sameClub } from "./club";
+import { clubPartnerOf, clubPartnerRole } from "./club-partners";
 import type { Policy, Rule } from "./policy";
 import { BUNDLED_POLICIES } from "./registry";
 import { applicabilityFailures, noPolicyReasons, selectPolicy } from "./select";
@@ -134,6 +138,8 @@ interface Target {
   label: string;
   relationship: "PARTNER" | "UNKNOWN";
   ruleId?: string;
+  /** What the club partner list says about it, when the rules don't describe it ("a Tottenham Hotspur partner (…)"). */
+  clubPartner?: string;
 }
 
 interface SegmentContext {
@@ -240,6 +246,12 @@ const PARTNER_USAGES: Partial<Record<PublishIntent["usage"], true>> = { SPONSORE
 /** "brand:*" covers every brand: it allows incidental branding, it never describes a relationship with one. */
 const everyBrand = (pattern: string) => normalizeLabel(pattern.replace(/\*$/, "")) === "brand:";
 
+/** The club's own partner a brand label names (club partner list of the policy's club), if any. */
+const clubPartner = (policy: Policy, label: string) => clubPartnerOf(policy.applicability.club, normalizeLabel(label));
+
+/** A pattern list names this brand itself, not only through "brand:*". */
+const namesBrand = (patterns: readonly string[], label: string) => patterns.some((p) => !everyBrand(p) && matchesPattern(label, p));
+
 /** A brand label is the target's ("brand:aia" / "brand:aia-group" for "AIA"). */
 function isTarget(t: Target, label: string): boolean {
   const l = normalizeLabel(label);
@@ -258,7 +270,9 @@ function targetOf(intent: PublishIntent, policy: Policy): Target | undefined {
       (!r.intent?.usage || r.intent.usage.includes(intent.usage)) &&
       (r.covers ?? []).some((p) => !everyBrand(p) && matchesPattern(label, p)),
   );
-  return rule ? { name, label, relationship: "PARTNER", ruleId: rule.id } : { name, label, relationship: "UNKNOWN" };
+  if (rule) return { name, label, relationship: "PARTNER", ruleId: rule.id };
+  const partner = clubPartner(policy, label);
+  return { name, label, relationship: "UNKNOWN", ...(partner ? { clubPartner: clubPartnerRole(partner) } : {}) };
 }
 
 /** AI-named person ScorePlay identity data can't confirm (unverified identification, not a missing licence). */
@@ -266,6 +280,12 @@ export const isUnverifiedPerson = (r: Pick<Reason, "ruleId" | "basis">) => r.rul
 
 /** Reason id of the target-sponsor check ("target-sponsor:kraken"): about the planned use, not the footage. */
 export const TARGET_SPONSOR_RULE_PREFIX = "target-sponsor:";
+
+/**
+ * Reason id of a club partner on screen that the rules don't describe ("club-partner:kraken"): a contract question
+ * for a reviewer, not a restriction in the footage — no cut or other clip is proposed to "fix" it.
+ */
+export const CLUB_PARTNER_RULE_PREFIX = "club-partner:";
 
 // ---------- Rule applicability ----------
 
@@ -305,12 +325,15 @@ function checkRule(rule: Rule, ctx: SegmentContext): RuleCheck {
     const except = match.evidenceLabelsExcept ?? [];
     // The target sponsor the rules don't describe is a question for a reviewer, never this rule's conflict.
     const undescribed = rule.dimensions.includes("sponsor") && ctx.target?.relationship === "UNKNOWN" ? ctx.target : undefined;
+    // A club partner is not a third-party brand: a catch-all brand restriction applies to it only if it names it.
+    const catchAll = rule.effect === "DENY" && rule.dimensions.includes("sponsor");
     triggering = evidence.filter(
       (ev) =>
         ev.label !== undefined &&
         match.evidenceLabels!.some((p) => matchesPattern(ev.label!, p)) &&
         !except.some((p) => matchesPattern(ev.label!, p)) &&
-        !(undescribed && isTarget(undescribed, ev.label)),
+        !(undescribed && isTarget(undescribed, ev.label)) &&
+        !(catchAll && clubPartner(ctx.policy, ev.label) && !namesBrand(match.evidenceLabels!, ev.label)),
     );
     const gap = analysisGap(analysis, asset);
     if (triggering.length > 0) parts.push("YES");
@@ -432,6 +455,21 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
     // The undescribed target sponsor has its own reason (evaluateDimension): one question, asked once.
     if (dim === "sponsor" && ctx.target?.relationship === "UNKNOWN" && isTarget(ctx.target, s.label)) continue;
     const aiOnly = !s.tagged && s.evidence.length > 0 && s.evidence.every((e) => e.source === "TWELVELABS");
+    const partner = dim === "sponsor" ? clubPartner(ctx.policy, s.label) : undefined;
+    if (partner) {
+      out.push(
+        reason(
+          ctx,
+          `${CLUB_PARTNER_RULE_PREFIX}${s.label.slice("brand:".length)}`,
+          dim,
+          "MISSING",
+          "LEGAL_ENTITLEMENT",
+          `${partner.name} is ${clubPartnerRole(partner)} — on screen here (${aiOnly ? "AI observation" : "ScorePlay tag"}), not a third-party brand. ${ctx.policy.title} doesn't name ${partner.name} among its partners for ${post} (illustrative rules), so whether it may appear is a contract question, not a conflict — a reviewer must confirm.`,
+          s.evidence,
+        ),
+      );
+      continue;
+    }
     // Never asserts what isn't known: an unconfirmed identification is a question for a reviewer, not a verdict on
     // the person's rights; a brand no rule mentions is uncovered, not "forbidden".
     const [basis, text]: [ReasonBasis, string] =
@@ -493,6 +531,7 @@ function targetReasons(ctx: SegmentContext, reasons: Reason[]): Reason[] {
     return [...reasons, reason(ctx, id, "sponsor", "PERMIT", "LEGAL_ENTITLEMENT", `${t.name}, the partner this post promotes, is an official partner under ${t.ruleId} (illustrative rules).`)];
   }
   const post = ctx.intent.usage === "COMMERCIAL" ? "this sales post" : "this sponsored post";
+  const known = t.clubPartner ? ` — ${t.clubPartner} per the club partner list —` : ",";
   return [
     ...reasons.filter((r) => r.outcome !== "PERMIT"),
     reason(
@@ -501,7 +540,7 @@ function targetReasons(ctx: SegmentContext, reasons: Reason[]): Reason[] {
       "sponsor",
       "MISSING",
       "LEGAL_ENTITLEMENT",
-      `This post promotes ${t.name}, but ${ctx.policy.title} doesn't describe a relationship with ${t.name} (illustrative rules) — a reviewer must confirm it before ${post}.`,
+      `This post promotes ${t.name}${known} but ${ctx.policy.title} doesn't describe a relationship with ${t.name} (illustrative rules) — a reviewer must confirm it before ${post}.`,
     ),
   ];
 }
@@ -658,15 +697,26 @@ function sponsorshipOf(ctx: SegmentContext, checks: RuleCheck[]): Sponsorship | 
   const rules = checks.filter((c) => c.rule.dimensions.includes("sponsor") && applies(c)).map((c) => c.rule);
   const tenth = (x: number) => Math.round(x * 10) / 10;
   return {
-    target: target ? { name: target.name, label: target.label, relationship: target.relationship, ...(target.ruleId ? { ruleId: target.ruleId } : {}) } : null,
+    target: target
+      ? {
+          name: target.name,
+          label: target.label,
+          relationship: target.relationship,
+          ...(target.ruleId ? { ruleId: target.ruleId } : {}),
+          ...(target.clubPartner ? { clubPartner: target.clubPartner } : {}),
+        }
+      : null,
     brands: ctx.brands.map((s) => {
       const partner = rules.find((r) => r.effect === "PERMIT" && (r.covers ?? []).some((p) => !everyBrand(p) && matchesPattern(s.label, p)));
-      const restricted = rules.find(
+      const restrictions = rules.filter(
         (r) =>
           r.effect === "DENY" &&
           (r.match.evidenceLabels ?? []).some((p) => matchesPattern(s.label, p)) &&
           !(r.match.evidenceLabelsExcept ?? []).some((p) => matchesPattern(s.label, p)),
       );
+      const club = clubPartner(ctx.policy, s.label);
+      // A club partner is restricted only by a rule that names it (see `checkRule`), never by a catch-all.
+      const restricted = club ? restrictions.find((r) => namesBrand(r.match.evidenceLabels ?? [], s.label)) : restrictions[0];
       const incidental = rules.find((r) => r.effect === "PERMIT" && (r.covers ?? []).some(everyBrand));
       const [role, rule] =
         target && isTarget(target, s.label)
@@ -677,14 +727,25 @@ function sponsorshipOf(ctx: SegmentContext, checks: RuleCheck[]): Sponsorship | 
               ? (["COMPETING_RESTRICTED", restricted] as const)
               : incidental
                 ? (["INCIDENTAL", incidental] as const)
-                : (["UNKNOWN", undefined] as const);
+                : club
+                  ? (["CLUB_PARTNER", undefined] as const)
+                  : (["UNKNOWN", undefined] as const);
       const certainty = s.evidence.some((e) => e.source === "HUMAN")
         ? "REVIEWER"
         : s.tagged || s.evidence.some((e) => e.source === "SCOREPLAY")
           ? "SCOREPLAY_TAG"
           : "AI_OBSERVATION";
       const spans = [...new Set(s.evidence.filter((e) => e.start !== undefined).map((e) => `${tenth(e.start!)}–${tenth(e.end ?? e.start!)} s`))];
-      return { name: role === "TARGET" && target ? target.name : s.display, label: s.label, role, ...(rule ? { ruleId: rule.id } : {}), certainty, spans };
+      const name = role === "TARGET" && target ? target.name : role === "CLUB_PARTNER" && club ? club.name : s.display;
+      return {
+        name,
+        label: s.label,
+        role,
+        ...(rule ? { ruleId: rule.id } : {}),
+        certainty,
+        spans,
+        ...(role === "CLUB_PARTNER" && club ? { clubPartner: clubPartnerRole(club) } : {}),
+      };
     }),
   };
 }

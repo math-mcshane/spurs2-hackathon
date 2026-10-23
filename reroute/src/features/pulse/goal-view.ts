@@ -1,5 +1,5 @@
 import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type Evidence, type PublishIntent, type Reason, type RightsReceipt, type Sponsorship } from "@/lib/contracts";
-import { isUnverifiedPerson, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
+import { CLUB_PARTNER_RULE_PREFIX, isUnverifiedPerson, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
 import { EDL_EXECUTION_LABEL, type Edl } from "@/lib/rights/recovery/edl";
 import { analysisRunLabel } from "@/lib/twelvelabs/runs";
 import { withPreview } from "./moment-ranking";
@@ -192,6 +192,7 @@ function sponsorLabels(r: Partial<Pick<Reason, "ruleId">> & Pick<Reason, "dimens
   if (r.dimension.toLowerCase() !== "sponsor" || !sponsorship || !r.ruleId) return undefined;
   const id = r.ruleId;
   if (id.startsWith("subject:")) return new Set([id.slice("subject:".length)]);
+  if (id.startsWith(CLUB_PARTNER_RULE_PREFIX)) return new Set([`brand:${id.slice(CLUB_PARTNER_RULE_PREFIX.length)}`]);
   const brands = id.startsWith(TARGET_SPONSOR_RULE_PREFIX)
     ? sponsorship.brands.filter((b) => b.role === "TARGET")
     : sponsorship.brands.filter((b) => b.ruleId === id && b.role === "COMPETING_RESTRICTED");

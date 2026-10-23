@@ -17,28 +17,17 @@
  */
 import type { Asset, Clearance, EditDecision, EditPlan, Evidence, PublishIntent, Reason, Segment, Verdict } from "@/lib/contracts";
 import { classifyBlocker, reasonScope } from "../blocker";
-import { evaluateEdit, isUnverifiedPerson, matchesPattern, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX, worstVerdict, type AnalysisStatus } from "../engine";
+import { CLUB_PARTNER_RULE_PREFIX, evaluateEdit, isUnverifiedPerson, matchesPattern, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX, worstVerdict, type AnalysisStatus } from "../engine";
+import { clubPartnerOf } from "../club-partners";
 import type { Policy } from "../policy";
 import { buildEdl, edlToEditPlan, mergeIntervals, type Edl, type Interval, type Removal } from "./edl";
+import { DEFAULT_LIMITS, type RecoveryLimits } from "./limits";
 
 export const RECOVERY_KINDS = ["TRIM", "SAFE_SECTION", "REPLACE", "ADAPT_CAMPAIGN", "CHANGE_USAGE", "REQUEST_CLEARANCE"] as const;
 export type RecoveryKind = (typeof RECOVERY_KINDS)[number];
 
 /** RESOLVES_DEMO = re-check ALLOWED (all bundled/uploaded policies are demo: never legal clearance). */
 export type RecoveryOutcome = "RESOLVES_DEMO" | "NEEDS_REVIEW" | "STILL_BLOCKED" | "NOT_VIABLE" | "NEXT_STEP";
-
-export interface RecoveryLimits {
-  /** Shortest cut worth posting (seconds). */
-  minPostSec: number;
-  /** A trim must keep at least this share of the selected moment. */
-  minRetainedRatio: number;
-  /** Kept pieces shorter than this are dropped as flashes. */
-  minPieceSec: number;
-  /** Safety margin added on both sides of AI-observed boundaries (their timestamps are coarse). */
-  boundaryMarginSec: number;
-}
-
-export const DEFAULT_LIMITS: RecoveryLimits = { minPostSec: 3, minRetainedRatio: 0.4, minPieceSec: 1, boundaryMarginSec: 0.5 };
 
 export interface RecoveryEvalContext {
   assets: Record<string, Asset>;
@@ -407,10 +396,20 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
     unique(where.campaign.flatMap((c) => (c.reason.dimension === dimension ? c.intents.map(pick) : []))).filter((v) => failsEverywhere(dimension, v, pick));
   const unlicensedPlatforms = unlicensedIn("platform", (i) => i.platform).map((p) => CHANNEL_NAME[p] ?? p);
   const unlicensed = [...unlicensedIn("territory", (i) => i.territory.toUpperCase()), ...unlicensedPlatforms];
-  // Whether the plan's target sponsor is a partner is a question for a reviewer, not a missing licence.
-  const isTargetQuestion = (r: Reason) => r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX);
-  const licensing = where.campaign.filter((c) => !isTargetQuestion(c.reason));
-  const target = where.campaign.some((c) => isTargetQuestion(c.reason)) ? intents.find((i) => i.targetSponsor)?.targetSponsor : undefined;
+  // Whether the plan's target sponsor is a partner — or a club partner on screen may appear — is a question for a
+  // reviewer, not a missing licence and not a restriction a cut or another clip should "fix".
+  const isReviewerQuestion = (r: Reason) => r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX) || r.ruleId.startsWith(CLUB_PARTNER_RULE_PREFIX);
+  const licensing = where.campaign.filter((c) => !isReviewerQuestion(c.reason));
+  const target = where.campaign.some((c) => c.reason.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX)) ? intents.find((i) => i.targetSponsor)?.targetSponsor : undefined;
+  const club = intents.find((i) => i.club)?.club ?? "";
+  const clubPartners = unique(
+    where.campaign
+      .filter((c) => c.reason.ruleId.startsWith(CLUB_PARTNER_RULE_PREFIX))
+      .map(({ reason: r }) => {
+        const slug = r.ruleId.slice(CLUB_PARTNER_RULE_PREFIX.length);
+        return `${clubPartnerOf(club, `brand:${slug}`)?.name ?? slug} (${span({ start: r.start ?? source.range.start, end: r.end ?? source.range.end })})`;
+      }),
+  );
   const inFootage = [
     ...where.localized.map((p) => `${whatIsThere(p)} (${span(p)})`),
     ...(where.pervasive.length ? ["a restriction on the whole clip"] : []),
@@ -419,10 +418,13 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
     ...(unlicensed.length ? [`${unlicensed.join(", ")} ${unlicensed.length > 1 ? "aren't" : "isn't"} licensed`] : licensing.length ? ["the planned use isn't licensed"] : []),
     ...(target ? [`these rules don't describe a partnership with ${target} — a reviewer must confirm it`] : []),
   ];
+  const toConfirm = clubPartners.length
+    ? `To confirm: ${clubPartners.join(", ")} — club partner${clubPartners.length > 1 ? "s" : ""} these rules don't list; a contract question, not a conflict`
+    : "";
   const headline =
     current.verdict === "ALLOWED"
       ? "Nothing to fix: every planned use is allowed under the demo policy."
-      : [inFootage.length ? `In the footage: ${inFootage.join("; ")}` : "", inPlan.length ? `In the plan: ${inPlan.join("; ")}` : ""].filter(Boolean).join(" · ");
+      : [inFootage.length ? `In the footage: ${inFootage.join("; ")}` : "", inPlan.length ? `In the plan: ${inPlan.join("; ")}` : "", toConfirm].filter(Boolean).join(" · ");
 
   // No licensed market or channel in the plan at all: no edit, replacement or change of use can pass — a reviewer
   // cannot grant a licence. Only the honest next step is offered.

@@ -6,7 +6,7 @@
  * A campaign publishes one edit under several intents; the blocker aggregates all of them.
  */
 import type { Blocker, Decision, PublishIntent, Reason, Usage } from "@/lib/contracts";
-import { PAST_PUBLISH_RULE_ID, TARGET_SPONSOR_RULE_PREFIX } from "./engine";
+import { CLUB_PARTNER_RULE_PREFIX, PAST_PUBLISH_RULE_ID, TARGET_SPONSOR_RULE_PREFIX } from "./engine";
 import { ASSET_BOUND_MATCH_KEYS, type Policy, type Rule } from "./policy";
 import { BUNDLED_POLICIES } from "./registry";
 
@@ -38,6 +38,8 @@ export function reasonScope(r: Reason, policies: readonly Policy[] = BUNDLED_POL
   if (r.ruleId === "policy-term" || r.ruleId === PAST_PUBLISH_RULE_ID) return "CAMPAIGN";
   // Who the post promotes is part of the plan: no other clip or cut changes whether the rules describe that partner.
   if (r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX)) return "CAMPAIGN";
+  // A club partner on screen is a contract question, not a restriction to cut out or swap away.
+  if (r.ruleId.startsWith(CLUB_PARTNER_RULE_PREFIX)) return "CAMPAIGN";
   const rule = findRule(r.ruleId, policies);
   if (rule && isAssetBound(rule)) return "CLIP";
   return CLIP_DIMENSIONS[r.dimension] ? "CLIP" : "CAMPAIGN";
@@ -124,6 +126,7 @@ export function classifyBlocker(items: readonly IntentDecision[], policies: read
     const ruleIds = campaign.map((o) => o.reason.ruleId);
     if (ruleIds.includes(PAST_PUBLISH_RULE_ID)) suggestion.push("Pick a publish date in the future.");
     if (ruleIds.some((id) => id.startsWith(TARGET_SPONSOR_RULE_PREFIX))) suggestion.push("Ask the rights team to confirm the partnership, or name a partner these rules describe.");
+    if (ruleIds.some((id) => id.startsWith(CLUB_PARTNER_RULE_PREFIX))) suggestion.push("Ask the rights team to confirm the club's partner contracts allow that partner in this post.");
     if (ruleIds.includes("policy-term")) {
       const a = policy.applicability;
       suggestion.push(`Schedule the publication between ${a.validFrom.slice(0, 10)} and ${a.validUntil.slice(0, 10)}.`);

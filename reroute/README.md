@@ -45,8 +45,13 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    club's workspace default unless the run switched). ALLOWED / NEEDS_REVIEW / BLOCKED with reasons and evidence
    (ScorePlay facts, TwelveLabs observations from the product's Pegasus run and the recorded second run). A brand on
    screen is never a conflict by itself: the target sponsor a partner rule names is permitted, other brands get exactly
-   the configured rule (e.g. THFC-13 exclusivity), and a target the rules don't describe (Kraken under
-   `demo-tottenham-pl`) is NEEDS_REVIEW, never DENY/PERMIT. People named only by AI that ScorePlay tags can't confirm
+   the configured rule (e.g. THFC-13 exclusivity), and a target the rules don't describe is NEEDS_REVIEW, never
+   DENY/PERMIT. The **club partner** list (`lib/rights/club-partners.ts`: a fact about the club, separate from any rule
+   package — e.g. Kraken, Tottenham's Official Crypto & Web3 and Sleeve Partner) is distinct from the campaign's
+   **target sponsor**: a club partner is never a "third-party brand", so a catch-all restriction (`brand:*` except the
+   package's partners) doesn't block it — only a rule that names it does. A club partner the package neither names as
+   a partner nor restricts is a contract question (`club-partner:<brand>`, MISSING → NEEDS_REVIEW, CAMPAIGN scope: no
+   cut or replacement is proposed to remove it). People named only by AI that ScorePlay tags can't confirm
    are unverified identifications (MISSING, a reviewer verifies), never a rights verdict.
 5. **Recovery ("Find a way to use it")** — `lib/rights/recovery` localizes each restriction in time (every elementary
    interval between observation boundaries is evaluated for every use; ±0.5 s margin; minimum post 3 s or 40 %;

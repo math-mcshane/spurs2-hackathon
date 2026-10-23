@@ -2,6 +2,8 @@
 
 Flagship rehearsed end to end in Chromium on a fresh production build (`next start`, local Supabase) at 2026-10-23 ≈ 11:41–11:46 UTC, twice: moments 5.0 s / 7.6 s (cold), check rights < 1 s, Find a way 1.4 s, apply < 1 s, review + approve + writeback dry run < 4 s. S2 and S1 walked through in the same session (≈ 11:43–11:44 UTC). Screenshots: `docs/design/screenshots/recovery/flagship-0*.webp`, `global-0*.webp`, `merch-01-replacement-allowed.webp`.
 
+**Present from the local production build** (numbers below). On the Vercel preview the same flow shows one issue (DHL 15–17 s, from that database's cached analysis) and "Remove 0:14.5–0:17.5 · 7.7 s of 10.7 s" — read the screen, don't quote the local numbers there.
+
 ## Before the jury (5 min)
 
 1. Chrome, one window, zoom 100–110 %, `/` open on a **freshly started** server (production build or the preview). Header tag "Live club data · ScorePlay + TwelveLabs" visible.

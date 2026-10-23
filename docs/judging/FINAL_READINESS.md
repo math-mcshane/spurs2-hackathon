@@ -1,29 +1,30 @@
 # PULSE — final readiness
 
-State as of 2026-10-23 ≈ 05:00 UTC, branch `hackathon-integration` at `e2d0492` (+ docs). Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) — §1/§1a are my own API runs (04:25–04:36), §1b lists later runs with who ran them (*(mine)* vs *(reported)* by other agents). Not a prediction of scores.
+State as of 2026-10-23 ≈ 11:50 UTC, branch `hackathon-integration` at `66a2cd0`. Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) (§0 flagship, then earlier runs). Not a prediction of scores.
 
-Environments: local production build (`next start`), Vercel Preview https://spurs2-hackathon-2q50cxsxd-merlins-projects-2b20d832.vercel.app (commit 54acc68; public, no Deployment Protection; shared Supabase **without** the policy-packages migration), local dev `:3300` (restarted after serving stale wording at ≈ 04:52).
+Environments: local production build (`next start -p 3400`, recommended), Vercel Preview https://spurs2-hackathon-6z5ttmdsi-merlins-projects-2b20d832.vercel.app (`66a2cd0`; public; shared Supabase **without** the policy-packages migration; flagship there: one issue, "Remove 0:14.5–0:17.5", 7.7 s — see `../pitch/CONTINGENCY.md`), local dev `:3300` (development only).
 
 ## Status table
 
 | Capability | Status | Evidence / note |
 |---|---|---|
-| Goal → 3 real moments (ScorePlay + Marengo, SP↔TL mapping) | **Fully working** | API runs 0.8–4.0 s, origin LIVE (04:25–04:54); prod-build UI 3.96 s (≈ 04:41, reported); preview 3.84 s (≈ 04:58, reported) |
+| Flagship: goal names a player → ScorePlay player-tag filter → moment → BLOCKED → TRIM → ALLOWED | **Fully working** | Chromium on a fresh production build, twice (≈ 11:41 and ≈ 11:45 UTC): "Activate our sponsor with Solanke's late goal for UK fans" → "Searched only the 15 videos ScorePlay tags with Dominic Ayodele Solanke-Mitchell" → moment 02 *solanke late goal* 0:09–0:20 → Blocked 0/3 (DHL boards 15–17 s, second run; "Tonali" 19–23 s, AI-named) → ★ "Remove 2 flagged parts (0:14.5–0:17.5, 0:18.5–0:19.7)", 6.4 s of 10.7 s, edit plan not rendered → Allowed 3/3 (demo) → approved → writeback dry run (2 logs, review=APPROVED). Rank comes from TwelveLabs (#5 for the partner-on-kit query) × the club's own title naming the goal (×2), shown in "Why this moment". Moment 02, not 01. |
+| Goal → 3 real moments (ScorePlay + Marengo, SP↔TL mapping) | **Fully working** | API runs 0.8–4.0 s, origin LIVE (04:25–04:54); prod-build UI 5.0–7.6 s for the flagship (11:41–11:45) |
 | Rights check per channel × market | **Fully working** | S1 BLOCKED 0/3, S2 NEEDS_REVIEW 6/21, Tickets ALLOWED 3/3 |
 | Recovery: localization, trim attempt + rejection, REPLACE, SAFE_SECTION, CHANGE_USAGE, REQUEST_CLEARANCE | **Fully working** | S1 same options/outcomes at 04:25, 04:35, 04:54; v2 wording at 04:54 and on the preview |
 | Recovery: ADAPT_CAMPAIGN | **Fully working** | S2 6/21 → 6/6 |
 | Recovery: licence gap (Mexico) | **Fully working** (API); on-screen state **Untested** by me | 04:36: only "Request additional usage rights", `canSubmit` false |
-| Successful TRIM | **Fully working** on the desk | `/desk` UI ≈ 04:50 (reported): "Remove 0:14.5–0:17.5 … Result 6.0 s of 9.0 s · Edit plan — not rendered" → Apply cut → ALLOWED · DEMO; API 04:27 (mine). No Studio goal scenario has a successful trim. |
+| Successful TRIM | **Fully working** in the Studio (flagship) and on the desk | Studio flagship above; `/desk` 0:10–0:19 "Remove 0:14.5–0:17.5 … Result 6.0 s of 9.0 s" → ALLOWED · DEMO (≈ 04:50) |
 | Apply → new version + independent re-evaluation + before/after | **Fully working** | S1, S1-b, S2, Sponsor; preview S1 |
-| Policy Center presets + per-run switch | **Fully working** (local and preview) | Sponsor BLOCKED → stale → NEEDS_REVIEW → clean section ALLOWED |
-| Policy JSON upload (forced DEMO) / PDF refusal / workspace default | **Fully working locally**; **Blocked externally on the preview** (shared-Supabase migration needs approval) | upload 201, PDF 422, anon 403, S2 → 15/21 under uploaded package (≈ 04:47, reported); preview `uploadsAvailable: false` |
+| Policy Center presets + per-run switch | **Fully working** (local and preview) | Browser ≈ 11:43 UTC: S2 6/21 → switch to uploaded "Tottenham International Window — Demo" → "Needs a fresh check" → 15/21 |
+| Policy JSON upload (forced DEMO) / errors / reviewer auth / workspace default | **Fully working locally**; **Blocked externally on the preview** (shared-Supabase migration needs approval) | API ≈ 11:40 UTC on local Supabase: invalid JSON 400, schema error 400, duplicate 409, PDF 422, anon upload 403, anon select 403, reviewer select 200 → new runs use the selected default, cross-club select 400, restored to demo-tottenham-pl |
 | Human review + receipt | **Fully working** | receipt `84e91007…` APPROVED 04:26 (mine); prod-build UI "Approved by Demo presenter" (reported) |
 | Audit trail (hash chain) | **Fully working** | 2 events on the receipt, global chain (04:35) |
 | Reload restores state (`?run=`) | **Fully working** | API 04:26 |
 | ScorePlay writeback | **Simulated** (dry run) | "1 planned ScorePlay call · Live write refused" |
 | Edits (TRIM/SAFE_SECTION) | **Simulated** (edit plan, not rendered) | EDL `PLAN_NOT_RENDERED` |
 | Rule packages | **Simulated** (fictional DEMO) | never publishable |
-| CACHED fallback (`DEMO_REPLAY`) | **Fully working** for 8 Studio scenarios | re-recorded 04:40:23Z, replay verified, tag "Recorded data 23 Oct 2026" (reported) |
+| CACHED fallback (`DEMO_REPLAY`) | **Fully working** for 9 Studio scenarios incl. the flagship | re-recorded ≈ 11:39 UTC, 167 files, replay verified (flagship TRIM → ALLOWED) |
 | Fan-signal board | **Simulated**, off | flag off |
 | Sales attribution | **Blocked externally** (no data source) | KPI "not connected" |
 | Video previews | **Blocked externally** (playback rights) | off |
@@ -31,9 +32,9 @@ Environments: local production build (`next start`), Vercel Preview https://spur
 | NBA footage analysis | **Blocked externally** | 65 videos, no NBA TwelveLabs index (rechecked ≈ 04:05) |
 | Pegasus on > 60 min video | **Blocked externally** (API limit) | full match has no product-run observation |
 | ScorePlay photos in the Studio | **Fully working** (metadata only) | Discover step shows ≤ 3 real ScorePlay photos per goal, matched on captions / person tags / event / orientation, each rights-checked by the engine (S1 at ≈ 05:20 UTC: CK1_9648.JPG, CK3_4457.JPG, PC1_3663.JPG — NEEDS_REVIEW 0/3: "the photo was not analysed"). Not visually analysed; no image URL in any response; included in the CACHED recording (154 files, re-recorded ≈ 05:22 UTC). Inventory: `PHOTO_INVENTORY.md` |
-| Build / tests / types / lint | **Fully working** | `next build` passes; vitest 413 passed / 15 skipped (34 files); tsc + eslint clean (≈ 05:20 UTC) |
+| Build / tests / types / lint | **Fully working** | `next build` passes; vitest 418 passed / 15 skipped (35 files); tsc + eslint clean (≈ 11:47 UTC) |
 | Security review | **Fully working**, low items open | no critical/high; open low: anonymous library GET loads all stored packages (F7), in-memory per-instance rate limits on serverless, truncated Pegasus outputs not cached |
-| Full timed rehearsal of DEMO_SCRIPT (S1) | **Fully working** (automated browser run, production build, ≈ 05:25 UTC) | chip → moments 4.4 s (cold) → Use this moment → Check rights "Can’t be used as planned · 0 of 3" → Find a way 1.2 s (headline, "First, PULSE tried … Rejected", Slide 6 recommended 3/3) → Use revised plan 0.5 s ("Before: Blocked") → Send for human review → Approve → ScorePlay record "Live write refused"; 0 page errors. Photos row appears once the photo cache is warm (the first run of the day can skip it: 1.2 s budget) — pre-run S1 once. Second beat and close not rehearsed in the browser in this pass. |
+| Timed browser rehearsal | **Fully working** for flagship, S2 (+ rules switch), S1 (≈ 11:41–11:46 UTC, production build) | Human visual verification of the DHL board: **not done** (AI-observed, second Pegasus run only). |
 
 ## Per criterion
 

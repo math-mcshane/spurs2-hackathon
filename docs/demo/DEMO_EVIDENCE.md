@@ -4,6 +4,23 @@ What was checked, how, when, and with which data origin. All times UTC, **2026-1
 
 Every ALLOWED below is **"Allowed under a demo policy — DEMO POLICY — NOT VERIFIED LEGAL CLEARANCE"**. `publishable` was `false` on every run.
 
+## Flagship — Solanke's late goal (Studio, browser) — ≈ 11:38–11:46 UTC
+
+Fresh production build (`next start -p 3400`, commit `66a2cd0` code), local Supabase, live ScorePlay + TwelveLabs, previews off, writeback dry run. Driven in headless Chromium through the real UI; screenshots `docs/design/screenshots/recovery/flagship-0*.webp`.
+
+| Step | Observed |
+|---|---|
+| Goal | Chip "Sponsor a goal moment" → "Activate our sponsor with Solanke's late goal for UK fans" → Sponsored · United Kingdom · Instagram, Facebook, X |
+| Library | ScorePlay `GET /tag/search` "Solanke" → one player, Dominic Ayodele Solanke-Mitchell; `POST /media/search {any_players}` → 15 of 58 club videos. Header: "Searched only the 15 videos ScorePlay tags with Dominic Ayodele Solanke-Mitchell, the player your goal names." |
+| Moments (5.0 s; 7.6 s on the second run) | 01 Goal Slo Mo Man United 0:15–0:20 · **02 solanke late goal 0:09–0:20** (TwelveLabs #5 for "player celebrating a goal with the sponsor logo on his shirt clearly visible"; context ×2 "The club's ScorePlay title names what the goal asks for (solanke, late, goal)") · 03 Slide 1 - Goal 0:00–0:10. Without the title factor the late goal was pool #7 (verified by script before the change). |
+| Check rights | "Can’t be used as planned · 0 of 3 uses allowed" — DHL: "DHL logo visible on the LED advertising boards in the background during the player celebration. (15–17 s)" *TwelveLabs video analysis — second run (recorded 23 Oct 2026)*, rule THFC-13-partner-exclusivity; "Tonalí"/"Tonal" (both runs) "Player identified by name 'TONALI' and number 16 … (19–23 s)", not on the asset's ScorePlay tags, AI identification |
+| Find a way (1.4 s) | ★ TRIM "Remove 2 flagged parts (0:14.5–0:17.5, 0:18.5–0:19.7)" — kept 0:09.1–0:14.5 + 0:17.5–0:18.5, "Result 6.4 s of 10.7 s", "Edit plan — not rendered", independent re-check Allowed 3/3. Others: SAFE_SECTION 0:09.5–0:14.5 (allowed), CHANGE_USAGE (allowed, changes the goal), 3 replacements STILL_BLOCKED, REQUEST_CLEARANCE |
+| Use revised plan | Campaign version 3, "Allowed under the demo policy · 3 of 3 uses", Before Blocked 0/3 → After Allowed 3/3 |
+| Review | Receipt: Allowed · demo policy, demo-tottenham-pl v2026-10-23.1, segments 0:09.1–0:14.5 and 0:17.5–0:18.5 of ScorePlay 130851444; Approved by Demo presenter; Publishing locked |
+| Writeback | Dry run, 1 planned call `POST /video/logs`, 2 timecoded logs on 130851444; "Live write refused". Bug found and fixed in this pass: the dry-run text kept `review=PENDING` after approval; now re-planned on review → `review=APPROVED by Demo presenter` (verified on the rebuilt server) |
+
+Not done: no human has looked at 0:15–0:17 of 130851444; the DHL board is AI-observed (second run only).
+
 ## 0. How this pass was run
 
 - Driver: direct calls to `POST /api/pulse/goal` (header `origin: http://localhost:3300`; every action after `run` carries `{id, expectedVersion}`), the same endpoint the Studio calls. Timings are wall-clock per HTTP call measured by the driver (server + local network), **not** UI timings.

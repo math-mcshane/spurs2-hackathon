@@ -23,10 +23,17 @@ const HOOKS: Record<string, Partial<Record<Language, string>>> = {
   "to-camera": { en: "Up close.", es: "De cerca.", fr: "De près." },
 };
 
-export function audienceOf(run: Pick<GoalRun, "club" | "objective">): string {
+const REGION = new Intl.DisplayNames(["en"], { type: "region" });
+
+/** Who the campaign speaks to; a global goal narrowed by a recovery to licensed markets names those markets. */
+export function audienceOf(run: Pick<GoalRun, "club" | "objective" | "plan">, plan: Pick<GoalPlan, "territories"> = run.plan): string {
   const club = CLUBS[run.club].label;
   const o = run.objective;
-  return o.market ? `${club} supporters in ${o.market.label}` : o.scope === "GLOBAL" ? `${club} supporters worldwide` : `${club} supporters`;
+  if (o.market) return `${club} supporters in ${o.market.label}`;
+  if (o.scope === "GLOBAL" && plan.territories.length < run.plan.territories.length) {
+    return `${club} supporters in ${plan.territories.map((t) => REGION.of(t) ?? t).join(" and ")}`;
+  }
+  return o.scope === "GLOBAL" ? `${club} supporters worldwide` : `${club} supporters`;
 }
 
 /** Publication slot proposed for review: the next full hour + 1 h (same default as REROUTE's desk). */
@@ -93,7 +100,7 @@ export function buildGoalCampaign(input: {
     hooks: HOOKS[primary.intent] ?? {},
     fallbackHook: rec.headline,
     angle: `${rec.headline}: ${cut} in “${rec.candidate.title}”, as a vertical social cut for ${plan.channels.length} channels.`,
-    cohort: audienceOf(run),
+    cohort: audienceOf(run, plan),
     rationale: [rec.why.opportunity, rec.why.media],
     evidenceLabels: ["Ranking: objective × live TwelveLabs evidence — no fan-signal or market data used"],
     destination: organic ? undefined : input.destination,

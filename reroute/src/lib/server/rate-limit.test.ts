@@ -52,6 +52,8 @@ describe("rateLimitRuleFor", () => {
     ["POST", "/api/pulse/goal", "{not json", RATE_LIMITS.goalAction],
     ["POST", "/api/recover", {}, RATE_LIMITS.recovery],
     ["POST", "/api/pulse/goal", { action: "findRecovery", id: "g" }, RATE_LIMITS.recovery],
+    ["POST", "/api/pulse/preflight", { id: "g", key: "k" }, RATE_LIMITS.preflight],
+    ["GET", "/api/pulse/preflight", undefined, null],
     ["POST", "/api/decide", {}, RATE_LIMITS.rights],
     ["POST", "/api/access", {}, RATE_LIMITS.rights],
     ["POST", "/api/auth/session", {}, RATE_LIMITS.signIn],

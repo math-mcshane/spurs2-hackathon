@@ -12,16 +12,17 @@ const ORIENTATION: Record<PhotoSuggestion["orientation"], { word: string; Icon: 
 };
 
 /**
- * Discover, secondary row: club-library photos PULSE matched on ScorePlay captions and tags (not visually
- * analysed), each with REROUTE's verdict for the goal's planned uses. The ScorePlay thumbnail appears only when
- * the server sent one (signed-in reviewer, previews enabled); otherwise an orientation glyph. Video stays the hero.
+ * Opportunity Studio, photo opportunities: club-library photos PULSE matched on ScorePlay captions and tags (not
+ * visually analysed), each with REROUTE's verdict for the goal's planned uses. The ScorePlay thumbnail appears only
+ * when the server sent one (signed-in reviewer, previews enabled); otherwise an orientation glyph. Below the video
+ * opportunities they are a secondary row; `standalone` (no video moment for the goal) makes them the page's content.
  */
-export function PhotoSuggestions({ photos, note }: { photos: readonly PhotoSuggestion[]; note?: string }) {
+export function PhotoSuggestions({ photos, note, standalone = false }: { photos: readonly PhotoSuggestion[]; note?: string; standalone?: boolean }) {
   if (!photos.length && !note) return null;
   return (
-    <section aria-labelledby="photos-title" className="mt-14 border-t border-line pt-8">
+    <section aria-labelledby="photos-title" className={standalone ? "pt-2" : "mt-14 border-t border-line pt-8"}>
       <h2 id="photos-title">
-        <Eyebrow>Photos from the club library · ScorePlay metadata only</Eyebrow>
+        <Eyebrow>Photo opportunities · ScorePlay metadata only</Eyebrow>
       </h2>
       <p className="mt-2 max-w-2xl text-small text-ink-muted">
         Not visually analysed — PULSE matched these on ScorePlay captions and tags.
@@ -66,7 +67,10 @@ function Photo({ photo: p }: { photo: PhotoSuggestion }) {
       </div>
       {p.caption && <p className="text-small text-ink-soft">“{p.caption}”</p>}
       {p.people.length > 0 && <p className="text-meta text-ink-muted">Tagged in ScorePlay: {p.people.join(", ")}</p>}
-      <p className="text-meta text-ink-muted">{p.matchReason}</p>
+      <p className="text-meta text-ink-muted">
+        <span className="text-ink-soft">Why PULSE suggests it: </span>
+        {p.matchReason}
+      </p>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <StatusPill status={status} label={`${STATUS[status].label} · ${p.rights.allowedUses} of ${p.rights.totalUses} uses`} />
         <span className="tabular text-meta text-ink-muted">Open in ScorePlay · media {p.scoreplayMediaId}</span>

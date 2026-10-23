@@ -18,7 +18,7 @@ type Phase = { key: string; label: string; view: View; anchor?: string };
 /** The journey as the user lives it. Campaign, Compliance and Resolution share the campaign screen. */
 const PHASES: Phase[] = [
   { key: "goal", label: "Goal", view: "goal" },
-  { key: "media", label: "Media", view: "discover" },
+  { key: "media", label: "Opportunities", view: "discover" },
   { key: "campaign", label: "Campaign", view: "campaign" },
   { key: "compliance", label: "Compliance", view: "campaign", anchor: "lens-title" },
   { key: "resolution", label: "Resolution", view: "campaign", anchor: "resolution" },

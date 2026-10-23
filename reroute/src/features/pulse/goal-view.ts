@@ -202,7 +202,22 @@ export function plannedUsesLabel(intents: readonly Pick<PublishIntent, "platform
   return `${n === 1 ? "the planned use" : `all ${n} planned uses`} (${parts.join(" · ")})`;
 }
 
-const isDemo = (d: Pick<Decision, "policyFictional" | "clearance">) => d.policyFictional || d.clearance === "DEMO";
+export const isDemo = (d: Pick<Decision, "policyFictional" | "clearance">) => d.policyFictional || d.clearance === "DEMO";
+
+/** Plain-language topic of one REROUTE reason dimension (same wording as `rightsIssues`). */
+export const reasonTopic = (dimension: string) => TOPIC[dimension] ?? TOPIC[dimension.toLowerCase()] ?? dimension;
+
+/**
+ * Identity of the inputs a selection-time preflight of `rec` uses (server/preflight.ts): run, moment, rule package,
+ * usage, territories, channels and cut (the campaign's derived cut only for the moment the campaign uses). Pure and
+ * shared by the view and the endpoint, so a result is shown only while it still describes the card's inputs.
+ */
+export function preflightBasis(run: Pick<GoalRun, "id" | "policy" | "plan" | "campaign">, rec: Pick<Recommendation, "key">): string {
+  const plan = run.campaign?.plan ?? run.plan;
+  const policy = run.policy ? `${run.policy.packageId}@${run.policy.version}` : "club-default";
+  const cut = run.campaign?.key === rec.key && run.campaign.edl ? run.campaign.edl.id : "moment";
+  return [run.id, rec.key, policy, plan.usage, [...plan.territories].sort().join(","), [...plan.channels].sort().join(","), cut].join("|");
+}
 
 function channelRights(intent: PublishIntent, d: Decision): ChannelRights {
   return {
@@ -279,7 +294,11 @@ export function presentRights(run: GoalRun): RightsView {
 function recommendationView(run: GoalRun, rec: Recommendation, previews: ReadonlyMap<string, Preview>, unavailable: string): RecommendationView {
   const e = run.evaluations.findLast((x) => x.key === rec.key);
   const shown = withPreview(rec, previews.get(rec.key), unavailable);
-  return { ...shown, rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" } };
+  return {
+    ...shown,
+    rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" },
+    preflightBasis: preflightBasis(run, rec),
+  };
 }
 
 const PREVIEW_UNAVAILABLE = "No browser-playable stream is available for this video.";

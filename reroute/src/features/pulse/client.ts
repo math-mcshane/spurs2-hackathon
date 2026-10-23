@@ -9,13 +9,14 @@ import {
   HandoffResponseSchema,
   OpportunitiesResponseSchema,
   OpportunityResponseSchema,
+  OpportunityPreflightSchema,
   OpportunityViewSchema,
   type ActionRequest,
   type GoalAction,
   type ManualTrigger,
 } from "./types";
 
-async function call<S extends z.ZodType>(schema: S, path: string, body?: unknown): Promise<z.infer<S>> {
+async function call<S extends z.ZodType>(schema: S, path: string, body?: unknown, signal?: AbortSignal): Promise<z.infer<S>> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -23,6 +24,7 @@ async function call<S extends z.ZodType>(schema: S, path: string, body?: unknown
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
+      signal,
     });
   } catch {
     throw new ApiClientError("NETWORK", `Network error calling ${path}`, 0);
@@ -55,4 +57,7 @@ export const pulseApi = {
   business: () => call(BusinessMetricsSchema, "/api/pulse/business"),
   goal: (id?: string) => call(GoalResponseSchema, `/api/pulse/goal${id ? `?${new URLSearchParams({ id })}` : ""}`).then((r) => r.goal),
   goalAction: (body: GoalAction) => call(GoalActionResponseSchema, "/api/pulse/goal", body).then((r) => r.goal),
+  /** Selection-time REROUTE check of one recommended moment (read-only on the run). */
+  preflight: (id: string, key: string, signal?: AbortSignal) =>
+    call(z.object({ preflight: OpportunityPreflightSchema }), "/api/pulse/preflight", { id, key }, signal).then((r) => r.preflight),
 };

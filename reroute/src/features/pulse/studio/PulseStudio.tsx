@@ -12,15 +12,16 @@ import { describeError } from "@/lib/api-client";
 import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
 import { pulseApi } from "../client";
-import type { Club, GoalAction, GoalView } from "../types";
+import type { Club, GoalAction, GoalView, RecommendationView } from "../types";
 import { CampaignBrief, MediaStage } from "./CampaignStudio";
 import { ObjectiveBar, StepNav, VIEWS, type View } from "./Chrome";
 import { Diagnostics, deskHref } from "./Diagnostics";
 import { GoalComposer } from "./GoalComposer";
-import { MomentGallery } from "./MomentGallery";
+import { OpportunityStudio } from "./OpportunityStudio";
 import { Notice, type Stage } from "./parts";
 import { ReviewView } from "./Review";
 import { RightsLens, type LensBusy } from "./RightsLens";
+import { usePreflight } from "./use-preflight";
 
 type Busy = null | "load" | "run" | "draft" | "rights" | "recovery" | "policy" | "submit" | `select:${string}` | `apply:${string}`;
 
@@ -189,6 +190,44 @@ export function PulseStudio() {
     }
   }
 
+  /**
+   * Opens an opportunity card in the campaign step: select its moment (new campaign version) and, when its selection-time
+   * preflight produced a verdict, record the real check right away (same engine, persisted and audited). `explore`
+   * (restricted card) continues into the existing Recovery Engine ("Find a way to use it") and lands on Resolution.
+   * Each step runs on the version the previous one returned; nothing is reused from the preflight but the decision to proceed.
+   */
+  async function openOpportunity(rec: RecommendationView, explore: boolean) {
+    if (inflight.current || !goal) return;
+    inflight.current = true;
+    setFailure(null);
+    let g = goal;
+    const step = async (body: GoalAction, kind: Exclude<Busy, null>) => {
+      setBusy(kind);
+      g = await pulseApi.goalAction(body);
+      setGoal(g);
+    };
+    try {
+      const preflighted = preflight.get(rec)?.status === "done";
+      if (g.campaign?.key !== rec.key) await step({ action: "select", id: g.run.id, expectedVersion: g.version, key: rec.key }, `select:${rec.key}`);
+      go("campaign", g.run.id);
+      const checked = g.rights.current && g.rights.state !== "NOT_CHECKED";
+      if (!checked && (explore || preflighted)) await step({ action: "checkRights", id: g.run.id, expectedVersion: g.version }, "rights");
+      const restricted = g.rights.current && (g.rights.state === "BLOCKED" || g.rights.state === "NEEDS_REVIEW");
+      const planned = g.recovery?.forEvaluationId === g.rights.evaluationId;
+      if (explore && restricted && !planned) await step({ action: "findRecovery", id: g.run.id, expectedVersion: g.version }, "recovery");
+      if (explore && restricted) window.setTimeout(() => document.getElementById("resolution")?.scrollIntoView({ block: "start", behavior: "smooth" }), 150);
+    } catch (error) {
+      if (isConflict(error)) setConflict(true);
+      else {
+        setFailure({ error, retry: () => void openOpportunity(rec, explore) });
+        await pulseApi.goal(g.run.id).then((x) => x && setGoal(x), () => undefined);
+      }
+    } finally {
+      inflight.current = false;
+      setBusy(null);
+    }
+  }
+
   const refresh = () => goal && void pulseApi.goal(goal.run.id).then((g) => g && setGoal(g), (error) => setFailure({ error, retry: refresh }));
 
   function startOver() {
@@ -205,6 +244,8 @@ export function PulseStudio() {
   const v = goal?.version ?? 0;
   const reached = reachedViews(goal);
   const shown: View = goal && !reached[view] ? defaultView(goal) : view;
+  // Selection-time rights checks of the opportunity cards, only while the cards are on screen (cached per input basis).
+  const preflight = usePreflight(goal, { enabled: shown === "discover" && busy !== "run" && busy !== "load" });
   const locked = busy !== null;
   const progress = busy ? PROGRESS[busy.startsWith("apply:") ? "apply" : busy] : undefined;
   const lensBusy: LensBusy =
@@ -315,15 +356,13 @@ export function PulseStudio() {
             <ObjectiveBar goal={goal} onEdit={() => go("goal", id)} />
             <Swap id={shown} className={cn(CONTAINER, "flex-1 py-8 lg:py-10")}>
               {shown === "discover" && (
-                <MomentGallery
+                <OpportunityStudio
                   goal={goal}
+                  preflight={preflight}
                   busy={locked}
                   loadingKey={busy?.startsWith("select:") ? busy.slice(7) : null}
-                  onChoose={(rec) =>
-                    goal.campaign?.key === rec.key
-                      ? go("campaign", id)
-                      : void act({ action: "select", id, expectedVersion: v, key: rec.key }, `select:${rec.key}`)
-                  }
+                  onBuild={(rec) => void openOpportunity(rec, false)}
+                  onExplore={(rec) => void openOpportunity(rec, true)}
                   onSearchAgain={() => void act({ action: "run", goal: goal.run.objective.raw, club: goal.run.club }, "run")}
                   onEditGoal={() => go("goal", id)}
                 />

@@ -148,7 +148,7 @@ function currentCampaign(run: GoalRun): GoalCampaign {
   return run.campaign;
 }
 
-function momentOf(run: GoalRun, key: string): Recommendation {
+export function momentOf(run: GoalRun, key: string): Recommendation {
   const rec = allMoments(run).find((r) => r.key === key);
   if (!rec) throw new AppError("BAD_REQUEST", "That moment is not one of this goal's results");
   return rec;
@@ -203,7 +203,7 @@ async function newVersion(
 }
 
 /** The run's rule package (Policy Center): the one it was set to, else the club's default. */
-async function runPolicies(run: GoalRun, deps: GoalDeps): Promise<RunPolicies> {
+export async function runPolicies(run: GoalRun, deps: GoalDeps): Promise<RunPolicies> {
   return deps.policies(run.club, run.policy?.packageId);
 }
 
@@ -211,7 +211,7 @@ async function runPolicies(run: GoalRun, deps: GoalDeps): Promise<RunPolicies> {
  * Markets (or channels) of the campaign that no rule licenses, when NONE of them is licensed: nothing in the
  * footage can fix it and a reviewer cannot grant it. A partly licensed campaign is not a gap (keep the licensed part).
  */
-function licenceGapOf(perIntent: GoalEvaluation["perIntent"], policies: readonly Policy[]): GoalEvaluation["licenceGap"] {
+export function licenceGapOf(perIntent: GoalEvaluation["perIntent"], policies: readonly Policy[]): GoalEvaluation["licenceGap"] {
   const unlicensed = (dimension: "territory" | "platform", pick: (i: PublishIntent) => string) => {
     const all = [...new Set(perIntent.map((p) => pick(p.intent)))];
     const bad = all.filter((v) =>

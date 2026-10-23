@@ -18,6 +18,8 @@ export const RATE_LIMITS = {
   goalRun: { name: "pulse-goal-run", limit: 10, windowMs: MINUTE },
   goalAction: { name: "pulse-goal-action", limit: 60, windowMs: MINUTE },
   rights: { name: "rights", limit: 20, windowMs: MINUTE },
+  /** Opportunity Studio checks every recommended moment (3 per goal, again after a policy/plan change). */
+  preflight: { name: "pulse-preflight", limit: 30, windowMs: MINUTE },
   /** Recovery searches comparable footage and re-checks every candidate: the most expensive request. */
   recovery: { name: "recovery", limit: 10, windowMs: MINUTE },
   assetDetail: { name: "asset-detail", limit: 30, windowMs: MINUTE },
@@ -85,6 +87,7 @@ export async function rateLimitRuleFor(req: Request, pathname: string): Promise<
       const action = await goalAction(req);
       return action === "run" ? RATE_LIMITS.goalRun : action === "findRecovery" ? RATE_LIMITS.recovery : RATE_LIMITS.goalAction;
     }
+    if (path === "/api/pulse/preflight") return RATE_LIMITS.preflight;
     if (path === "/api/recover") return RATE_LIMITS.recovery;
     if (path === "/api/decide" || path === "/api/access") return RATE_LIMITS.rights;
     if (path === "/api/auth/session") return RATE_LIMITS.signIn;

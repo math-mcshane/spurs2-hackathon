@@ -1,8 +1,9 @@
 # PULSE — rights-aware sports media campaigns
 
-Spurs² Hackathon · Rights & Compliance. **From business goal to rights-aware campaign in seconds.**
-Goal → Discover → Create & clear → Review: one goal, three real moments, one campaign checked by PULSE's rights engine
-(REROUTE, this package) for every channel × territory.
+Spurs² Hackathon · Rights & Compliance. **From business objective to rights-aware campaign — and automatically to a
+better alternative when something cannot be used.** Goal → Media → Campaign → Compliance → Resolution → Review: one
+goal, three real moments, one campaign checked by PULSE's rights engine (REROUTE, this package) for every channel ×
+territory, and a Media Compliance Recovery Engine that finds and re-checks the best way to use it anyway.
 Architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Design: [`../docs/design/`](../docs/design/). Integration history: [`../INTEGRATION_LOG.md`](../INTEGRATION_LOG.md).
 
 ## Quick start
@@ -28,7 +29,10 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    videos; hits are linked back to ScorePlay assets by `MediaResolver` (filename + duration, unique both ways) with exact
    timestamps; `moment-ranking.ts` picks the top three distinct assets. Video previews are off unless
    `MEDIA_PREVIEW_ENABLED=true` (then only for a signed-in reviewer, resolved per request, never stored or downloaded);
-   while off, no footage URL appears in any API response.
+   while off, no footage URL appears in any API response. Below the moments, up to three **ScorePlay photos** of the
+   same club are suggested from metadata only (captions, person tags, event, orientation — never visually analysed,
+   no image URL in any response), each with the rights engine's verdict for the planned uses (typically NEEDS_REVIEW
+   for sales/sponsored posts: who and which brands appear can't be confirmed without analysis).
 3. **Campaign** — localized Instagram / Facebook / X copy (e.g. es-MX for Mexico), cut, CTA, intents for every
    channel × territory. Each edit is a new campaign version. The CTA links only to a configured
    `PULSE_COMMERCE_DESTINATIONS` entry (e.g. `tottenham:tickets:*=https://…`) or a producer link on the club's site.
@@ -36,14 +40,18 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    The KPI has no value: it reads "Sales attribution not connected." (jersey / merch / tickets / subscriptions),
    "Engagement measurement not connected." (engagement / followers), "Sponsor delivery tracking not connected."
    (sponsor goals) or "Business results not connected." (no product named).
-4. **Rights check** — REROUTE `decideCampaign` selects the policy per asset + intent and evaluates every use.
-   ALLOWED / NEEDS_REVIEW / BLOCKED with reasons and evidence (ScorePlay facts, TwelveLabs observations).
-5. **Recovery** — a CLIP blocker offers "Find another way": alternatives that are each re-checked. A CAMPAIGN blocker
-   offers a one-click remedy when a licensed subset exists ("Limit to licensed territories: GB, US") → new version →
-   re-check. When none of the campaign's territories, or none of its channels, is licensed (e.g. "Sell more Spurs
-   jerseys in Mexico": "No licensed path in Mexico (MX)") there is no remedy and the campaign cannot be submitted:
-   the verdict stays NEEDS_REVIEW and `submitForReview` is refused with "No licence covers Mexico (MX) — request a
-   licence before review." PULSE never re-targets the goal to other countries.
+4. **Rights check** — REROUTE `decideCampaign` evaluates every use under the run's rule package (Policy Center; the
+   club's workspace default unless the run switched). ALLOWED / NEEDS_REVIEW / BLOCKED with reasons and evidence
+   (ScorePlay facts, TwelveLabs observations from the product's Pegasus run and the recorded second run).
+5. **Recovery ("Find a way to use it")** — `lib/rights/recovery` localizes each restriction in time (every elementary
+   interval between observation boundaries is evaluated for every use; ±0.5 s margin; minimum post 3 s or 40 %;
+   pieces < 1 s dropped) and proposes TRIM (edit decision list, "Edit plan — not rendered"), SAFE_SECTION, REPLACE
+   (Marengo moments mapped to ScorePlay), ADAPT_CAMPAIGN (licensed subset, e.g. "Limit to licensed markets: GB, US"),
+   CHANGE_USAGE (flagged as changing the goal) and REQUEST_CLEARANCE. Every option is re-evaluated by the same engine;
+   NOT_VIABLE / NEXT_STEP options are never applicable. Applying one writes a new campaign version and re-evaluates it
+   from scratch (before/after). A licence gap (no licensed market or channel, e.g. "Sell more Spurs jerseys in
+   Mexico") offers only "Request additional usage rights" and the campaign cannot be submitted; PULSE never re-targets
+   the goal to other countries. Switching the rule package (`setPolicy`) marks the verdict stale until re-checked.
 6. **Review** — submit → a named reviewer signs in (Reviewer id + personal passcode) → approve/reject → receipt with
    every use, the reviewer's configured name and a hash-chained audit trail.
 7. **Writeback** — ScorePlay writeback plan (dry run by default).
@@ -56,10 +64,13 @@ stays false. Unknown never becomes ALLOWED; an AI observation is evidence about 
 | Route | What |
 |---|---|
 | `/` | Studio (the product journey above) |
-| `/desk` | Advanced rights desk: asset search, segment decisions, resolver, receipts (previews only with `MEDIA_PREVIEW_ENABLED=true` + reviewer sign-in) |
+| `/desk` | Advanced rights desk: asset search (competition + club prefilled from ScorePlay), segment decisions, **recovery panel** (Find a way to use it → Apply cut / Use this clip / Apply to intent, via `/api/recover`), receipts (previews only with `MEDIA_PREVIEW_ENABLED=true` + reviewer sign-in) |
+| `/policies` | Policy Center: preset and uploaded rule packages (all DEMO), package detail, JSON upload + workspace default (signed-in reviewer) |
 | `/pulse/board`, `/pulse/opportunity/[id]` | Fan-signal board with **SIMULATED** signals; 404 unless `PULSE_BOARD_ENABLED=true` |
-| `/api/pulse/goal` | Studio actions: `run`, `select`, `draft`, `checkRights`, `findAlternatives`, `useAlternative`, `applyRemedy`, `submitForReview`; `GET ?id=`. All but `run` need `expectedVersion` |
-| `/api/{decide,resolve,access,assets,policies}` | REROUTE engine |
+| `/api/pulse/goal` | Studio actions: `run`, `select`, `draft`, `checkRights`, `findRecovery`, `applyRecovery`, `setPolicy`, `submitForReview`; `GET ?id=`. All but `run` need `expectedVersion` |
+| `/api/recover` | Read-only recovery plan for any clip + cut + uses (`{ edit (1 segment), intents (1..21), packageId? }` → `{ recovery, media, notes, policy }`); nothing persisted; 10/min per IP |
+| `/api/policies` | `GET` library + defaults; `POST` JSON upload (reviewer, ≤ 200 KB, forced DEMO, sha256 + uploader; PDF/DOCX/TXT/CSV → 422); `/select` workspace default; `/sample`; `/[id]` |
+| `/api/{decide,access,assets}` | REROUTE engine |
 | `/api/{receipts,observations,auth/session}` | Receipts, reviews, HUMAN observations, reviewer session |
 | `/api/writeback` | `GET ?receiptId=` preview, `POST` plan/apply (reviewer-only) |
 | `/api/render` | FFmpeg derivative; disabled unless `MEDIA_PROCESSING_APPROVED=true` (not available on Vercel) |
@@ -79,8 +90,9 @@ stays false. Unknown never becomes ALLOWED; an AI observation is evidence about 
 pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/live-walkthrough.ts
 pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts spurs
 pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts "celebration"
-# Record demo replay (needs local Supabase). A = UK merch, B = global engagement (MU game), C = Mexico jerseys
-pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A B C]
+# Record demo replay (needs local Supabase): A merch, B global engagement, C Mexico, D tickets, E sponsor,
+# F jerseys UK, G UK followers, H Spurs France (not indexed) — incl. recovery searches
+pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A … H]
 ```
 
 **Demo replay:** `record-demo-cache.ts` records real, read-only TwelveLabs + ScorePlay responses into `demo-cache/`
@@ -96,7 +108,9 @@ index in another TwelveLabs account; falls back to `TWELVELABS_API_KEY`).
 
 Migrations in `supabase/migrations/` (apply in filename order): `…190000_reroute_store` (receipts, reviews,
 observations), `…200000_reroute_workflow` (goal runs, campaigns + versions, evaluations, alternatives, append-only
-hash-chained events, writeback attempts, observation cache), `…210000_reroute_campaign_receipt_version`.
+hash-chained events, writeback attempts, observation cache), `…210000_reroute_campaign_receipt_version`,
+`20261023000000_reroute_policy_packages` (uploaded rule packages + per-club workspace default; without it uploads and
+the workspace default answer `NOT_CONFIGURED`, presets still work). No new environment variables.
 All tables are `reroute_*`, RLS on, no `anon`/`authenticated` grants; access is server-only with the secret key.
 Only ids, timestamps, decisions and evidence text are stored — never media or preview URLs.
 

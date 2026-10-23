@@ -34,13 +34,16 @@ A second, independent Pegasus run (recorded 2026-10-23, 54 videos / 444 observat
 
 **EDL.** A trim or section is an edit decision list: kept/removed source intervals with reasons and rule ids, and their output timeline. `execution: PLAN_NOT_RENDERED` — the UI says "Edit plan — not rendered". The engine evaluates what the cut would contain (the kept source intervals), not a file.
 
-Measured (local, live APIs, 2026-10-23 04:25–04:27 UTC): check rights 0.17–0.37 s; find a way 0.22–1.56 s (includes Marengo replacement search); apply + re-check 0.19–0.34 s.
+**Two surfaces, one engine.** The Studio runs it inside the goal flow (`findRecovery` / `applyRecovery`, persisted and audited). The rights desk (`/desk`) calls the read-only `POST /api/recover` for any clip + cut + uses and re-decides the applied cut segment by segment — e.g. *solanke late goal* 0:10–0:19, DHL board 15–17 s → "Remove 0:14.5–0:17.5 … Result 6.0 s of 9.0 s" → both kept segments ALLOWED · DEMO (UI ≈ 04:50 UTC, reported by another agent).
+
+Measured (local, live APIs, 2026-10-23 04:25–04:54 UTC): check rights 0.17–0.37 s; find a way 0.22–1.56 s (includes Marengo replacement search); apply + re-check 0.19–0.34 s. Production-build UI (≈ 04:41, reported): moments 3.96 s, check 0.5 s, find 1.28 s.
 
 ## 5. Policy packages (`lib/rights/packages.ts`, `/policies`)
 
 - Presets: "Tottenham Social Media Usage — Demo", "Tottenham Commercial & Sponsor Usage — Demo", "Spurs Media Usage — Demo". All fictional.
-- JSON upload (signed-in reviewer only, ≤ 200 KB): validated, stored with sha256 and uploader, **forced to DEMO** whatever it declares. PDF/DOCX/TXT/CSV refused (422) — no contract extraction is claimed.
+- JSON upload (signed-in reviewer only, byte-capped read, ≤ 200 KB; id/version charset and text caps): validated, stored with sha256 and uploader (uploader identity visible to reviewers only), **forced to DEMO** whatever it declares — label "Uploaded rules — unverified, demo only". PDF/DOCX/TXT/CSV refused (422) — no contract extraction is claimed. Verified ≈ 04:47 UTC (reported): upload 201, PDF 422, anonymous 403; S2 under the uploaded "Tottenham International Window — Demo" goes from 6/21 to 15/21.
 - One workspace default per club; a run may switch package (`setPolicy`), which marks the current verdict stale until re-checked.
+- Storage needs migration `20261023000000_reroute_policy_packages`: applied locally, **not** on the shared Supabase used by the preview (needs approval) — there uploads and the workspace default answer NOT_CONFIGURED (`uploadsAvailable: false`) while presets and per-run switching work.
 
 ## 6. Persistence and audit
 
@@ -52,10 +55,11 @@ Measured (local, live APIs, 2026-10-23 04:25–04:27 UTC): check rights 0.17–0
 ## 7. Security
 
 - Secrets server-only; no footage URLs in API payloads while previews are off.
-- Reviewer actions need a named reviewer session (HttpOnly HMAC-signed cookie; personal passcodes stored as hashes; sign-in delay + lockout); same-origin check on every mutation; per-IP rate limits on expensive routes (in-memory, per instance).
-- Input limits (segments, intents, query length), generic 500s, upstream bodies only in server logs.
+- Reviewer actions need a named reviewer session (HttpOnly HMAC-signed cookie; personal passcodes stored as hashes; sign-in delay + lockout); same-origin check on every mutation; per-IP rate limits on expensive routes, incl. **recovery 10/min** (`/api/recover`, `findRecovery`) — in-memory, per instance.
+- Input limits (segments, intents, bounded request strings, query length), generic 500s, upstream bodies only in server logs; TwelveLabs clients keyed by resolved config; `.vercelignore` excludes local passcode files.
 - Fail-safe defaults: unknown → NEEDS_REVIEW, demo → never publishable, writeback dry-run, media processing and upload off.
+- Security review (another agent, 2026-10-23): no critical/high findings. Open low items: anonymous library GET loads all stored packages; in-memory rate limits are best-effort on serverless; Pegasus outputs truncated at `finish_reason=length` are not cached.
 
 ## 8. Tests
 
-`src/lib/rights/recovery/recovery.test.ts` (20 tests) covers localization, margins, minimums, licence gaps and re-evaluation. Full suite at 2026-10-23 04:35 UTC: **405 passed · 15 skipped**. Other agents were still editing; re-run `cd reroute && pnpm exec vitest run` before citing a number on stage.
+`src/lib/rights/recovery/recovery.test.ts` (20 tests) covers localization, margins, minimums, licence gaps and re-evaluation. Latest full run (≈ 04:50 UTC, reported): vitest 33 files — **406 passed · 15 skipped**; `tsc` and `eslint` clean; `next build` passes. Re-run after the code freeze before citing a number on stage.

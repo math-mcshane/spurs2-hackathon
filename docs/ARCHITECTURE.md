@@ -42,7 +42,7 @@ Every action after `run` carries `{ id, expectedVersion }` (stale → CONFLICT).
 | `setPolicy {packageId}` | evaluate this run against another package of the same club; the current verdict becomes stale (`rights.current = false`) until the next `checkRights` |
 | `submitForReview` | receipt for ALLOWED or NEEDS_REVIEW on the current version; refused for BLOCKED and for licence gaps |
 
-Human review is `POST /api/receipts/[id]/review` (reviewer session). Desk equivalent of `findRecovery`: `POST /api/recover` (read-only, nothing persisted; the desk re-decides via `/api/decide`).
+Human review is `POST /api/receipts/[id]/review` (reviewer session). Desk equivalent of `findRecovery`: `POST /api/recover` (read-only, nothing persisted). The desk recovery panel offers **Apply cut** (TRIM/SAFE_SECTION as segments), **Use this clip** (REPLACE) and **Apply to intent** (ADAPT_CAMPAIGN/CHANGE_USAGE), then re-decides via `/api/decide` and records receipts via `/api/receipts`. Example verified in the UI (≈ 04:50 UTC, reported): solanke late goal 0:10–0:19 → "Remove 0:14.5–0:17.5" → both kept segments ALLOWED · DEMO.
 
 ## Recovery Engine (`lib/rights/recovery`)
 
@@ -63,7 +63,7 @@ Pure and deterministic; the server wrapper (`lib/server/recovery.ts`) only loads
 | Contracts / errors | `lib/contracts.ts`, `lib/errors.ts`, `lib/api-client.ts` |
 | Studio UI (`/`) | `features/pulse/studio/*`: PulseStudio (Goal → Media → Campaign → Compliance → Resolution → Review, `?run=&step=`), GoalComposer, MomentGallery, MomentPreview, CampaignStudio, RightsLens, **ComplianceEditor** (range track, "What PULSE tried first", suggested correction, other ways, Use revised plan), **PolicyPicker** (Change rules), Review (approval + receipt + writeback), Chrome, Diagnostics. Design system: `components/pulse/*`, `app/globals.css` |
 | Policy Center (`/policies`) | `app/policies/page.tsx`, `features/policies/{PolicyCenter,PackageDetail,UploadPanel,api}.tsx/ts`; API `app/api/policies/{route,[id],select,sample}` |
-| Rights desk (`/desk`) | `components/reroute/*` (shared `writeback-plan`, `reviewer`); `app/api/{decide,recover}` |
+| Rights desk (`/desk`) | `components/reroute/*` (shared `writeback-plan`, `reviewer`, recovery panel; competition + publishing club prefilled from ScorePlay facts); `app/api/{decide,recover}` |
 | Goal service | `features/pulse/server/goal-service.ts` (run/select/draft/checkRights/findRecovery/applyRecovery/setRunPolicy/submitForReview), `app/api/pulse/goal/route.ts`, `features/pulse/{objective-parser,goal-intents,goal-campaign,campaign-builder,goal-view,moment-ranking}.ts` |
 | Recovery | `lib/rights/recovery/{plan,edl,index}.ts`, `lib/server/{recovery,recovery-view}.ts` |
 | Rights | `lib/rights/{engine,select,policy,registry,packages,blocker,club}.ts`, `lib/rights/policies/demo-{tottenham-pl,tottenham-commercial,spurs-fr-sponsored}.json`, sample upload `tottenham-international-window.sample.json`; `lib/server/{context,decide,access}.ts` |
@@ -87,9 +87,9 @@ Pure and deterministic; the server wrapper (`lib/server/recovery.ts`) only loads
 | `reroute_events` | append-only, hash-chained audit trail (incl. `RECOVERY_PLANNED`) |
 | `reroute_writeback_attempts` | planned/applied ScorePlay actions and mode |
 | `reroute_observations`, `reroute_observation_cache` | HUMAN observations; cached Pegasus product-run output |
-| `reroute_policy_packages`, `reroute_policy_selection` | uploaded JSON packages (forced DEMO, sha256 + uploader) and each club's workspace default |
+| `reroute_policy_packages`, `reroute_policy_selection` | uploaded JSON packages (forced DEMO, sha256 + uploader) and each club's workspace default — migration `20261023000000_reroute_policy_packages`, applied locally, **not** on the shared Supabase (needs approval; there uploads/default answer NOT_CONFIGURED, presets still work) |
 
-Stored: ids, timestamps, decisions, evidence text. Never media files or preview URLs. Demo replay recordings (`reroute/demo-cache/`) and the second Pegasus run (`lib/twelvelabs/recorded/`) live in the repo.
+Stored: ids, timestamps, decisions, evidence text. Never media files or preview URLs. Demo replay recordings (`reroute/demo-cache/`, re-recorded 2026-10-23T04:40:23Z for 8 Studio scenarios A–H incl. recovery searches) and the second Pegasus run (`lib/twelvelabs/recorded/`) live in the repo.
 
 ## Real vs simulated
 
@@ -107,5 +107,5 @@ Known gaps: Pegasus analysis is refused for videos over 60 min (the 6,335 s full
 - Secrets server-only (ScorePlay, TwelveLabs, Supabase secret key); nothing `NEXT_PUBLIC_` except an optional URL fallback.
 - Reviewer actions (review, writeback, HUMAN observations, policy upload / workspace default, render, desk previews) need the reviewer session: HttpOnly HMAC-signed cookie, same-origin check on mutations, sign-in delay + per-IP lockout (per instance), named reviewers with personal passcodes (only hashes configured).
 - Rules: unknown never becomes ALLOWED; AI observation is evidence, never a licence; a player's club is asserted only from ScorePlay identity; uploads are always DEMO; reviews are final.
-- Request limits (≤ 20 segments, ≤ 21 intents, query ≤ 500 chars), rate limit on rights routes (`src/proxy.ts`), generic 500s, upstream bodies only in server logs; no footage URLs in API payloads while previews are off.
+- Request limits (≤ 20 segments, ≤ 21 intents, bounded request strings, query ≤ 500 chars), per-IP rate limits (`src/proxy.ts`, `lib/server/rate-limit.ts`; recovery 10/min on `/api/recover` and `findRecovery`; in-memory per instance), generic 500s, upstream bodies only in server logs; no footage URLs in API payloads while previews are off; uploader identity returned to signed-in reviewers only.
 - External effects off by default: `SCOREPLAY_WRITEBACK_MODE=dry-run`, `MEDIA_PROCESSING_APPROVED=false`, `SCOREPLAY_UPLOAD_APPROVED=false`; a verdict tag is written only for an APPROVED review under a non-fictional policy.

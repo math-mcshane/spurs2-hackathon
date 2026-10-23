@@ -9,7 +9,7 @@ Because the decision doesn't need the file, and rendering protected footage need
 No. Every package in the app is fictional and every verdict says "Demo policy — not verified legal clearance". `canPublish()` requires an approved review under a non-fictional policy, so `publishable` is false even after approval, and the writeback refuses live writes.
 
 **3. What if TwelveLabs misidentifies a player or a brand?**
-AI output is evidence, not a fact about identity or a licence. A player's club is asserted only from the ScorePlay squad: an AI-named player who isn't on it ("Richarlison", "Porro" in the sponsor clip) becomes *unknown* → NEEDS_REVIEW, not a guess. Low-confidence observations (< 0.6) can't block on their own. Every observation is shown with its timecode and source so a reviewer can check it. No human has verified the demo observations — we say so.
+AI output is evidence, not a fact about identity or a licence. A player's club is asserted only from the ScorePlay squad: an AI-named or number-only player who isn't matched to it ("Player #18" in the merch clip, "Richarlison", "Porro" in the sponsor clip) becomes *unknown*, and the finding says so: "Can't be matched to the club's registered squad in ScorePlay, so image rights can't be confirmed (AI identification — a reviewer must confirm)." Low-confidence observations (< 0.6) can't block on their own. Every observation is shown with its timecode and source run so a reviewer can check it. No human has verified the demo observations — we say so.
 
 **4. Your two analysis runs disagree. Which one wins?**
 Neither: the engine uses the union. In *Fans clap* the crest is 9–11 s in the product run and 9–14.5 s in the second run; the restriction is localized to 9–14.5 s, which is why the trim leaves only 1 s and is rejected. Disagreement makes PULSE more cautious, never less. Both runs are labelled in the evidence.
@@ -24,7 +24,7 @@ Blurring a partner-exclusivity conflict is a creative and contractual decision (
 Rights checks on already analysed clips use stored observations and don't call TwelveLabs. If an upstream fails and a recording of the same request exists, the app serves it and the header tag switches to "Recorded data <date>". Otherwise it shows an unavailable state — it never invents moments or evidence. Missing analysis is never treated as "clean": it is NEEDS_REVIEW.
 
 **8. How do we know your policies are authentic?**
-They aren't — they're fictional demo packages written to exercise real rule types (licensed territories, partner exclusivity, image rights, platform rules). Uploaded packages are forced to DEMO, stored with a sha256 and the uploader's name. A real deployment would have the club's rights team author or approve the package and mark it verified outside the app; until then nothing is publishable.
+They aren't — they're fictional demo packages written to exercise real rule types (licensed territories, partner exclusivity, image rights, platform rules). Uploaded packages are forced to DEMO and labelled "Uploaded rules — unverified, demo only", stored with a sha256 and the uploader (visible to reviewers only). A real deployment would have the club's rights team author or approve the package and mark it verified outside the app; until then nothing is publishable.
 
 **9. Can you read our PDF contracts?**
 Not in this build, and we don't pretend to. PDF/DOCX uploads are refused with "Contract (PDF) extraction is not supported in this build." Today rules come in as structured JSON. Extraction would be a drafting aid at best; a human would still approve the resulting package.
@@ -51,10 +51,17 @@ Workshop with the rights team → encode licensed territories, channels, partner
 Every option is re-checked by the same deterministic engine and labelled with its verdict, including the ones it rejects. Options that change the goal are marked "Changes the goal". A licence gap produces no executable option and locks review. A human still approves.
 
 **17. Why did the merch flow pick Slide 6 over the clean section of the same clip?**
-The clean section 0:23.5–0:30.4 is allowed, but search never matched it to the goal — the option says "check it fits the story". Slide 6 was found by the goal's own search (#2) and is allowed, so it is recommended. The choice stays with the user.
+Both are allowed. Slide 6 was found by the goal's own search at #2; the clean section 0:23.5–0:30.4 matched the same search only at #9 ("Video search also matched this section to … (#9)"), so it ranks below the better-matched replacement. The choice stays with the user — and choosing the section shows the edit plan ("Edit plan — not rendered").
 
 **18. How is this different from a MAM?**
 A MAM stores and tags. PULSE starts from a business goal, decides every planned use against rules, and when the answer is no, finds and verifies the best path to the same goal. It sits on top of ScorePlay and writes decisions back to it.
 
 **19. What happens when the rules change?**
 Switch package (Policy Center or "Change rules"): the current verdict is marked out of date until re-checked. In the sponsor demo the same clip goes from Blocked (social package) to Needs review (commercial package) to Allowed after the engine finds a clean section.
+
+**20. You rejected a cut in the merch demo. Does cutting ever work?**
+Yes — when enough footage survives. On the rights desk, *solanke late goal* 0:10–0:19 for a sponsored post is blocked by a DHL board at 15–17 s (seen by the second analysis run). PULSE proposes "Remove 0:14.5–0:17.5": 6.0 of 9.0 s remain, one jump cut, and both kept pieces are re-decided ALLOWED under the demo rules. In the merch clip only 1.0 of 7.8 s would remain, below the minimum, so the cut is rejected.
+
+**21. Is your deployment public? What can someone do with it?**
+The Vercel preview is public by decision (no Deployment Protection). It exposes no footage (previews off, no media URLs in API payloads), writes nothing to ScorePlay (dry run), and every reviewer action needs a named reviewer session. Expensive routes are rate-limited per IP (recovery 10/min) — best-effort on serverless; production would add a firewall rule. Policy uploads are unavailable there until the shared database migration is approved.
+

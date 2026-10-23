@@ -926,6 +926,36 @@ export const GoalCampaignSchema = CampaignDraftSchema.extend({
 });
 export type GoalCampaign = z.infer<typeof GoalCampaignSchema>;
 
+/**
+ * A club-library PHOTO that fits the goal, chosen from ScorePlay METADATA ONLY (caption, person tags, event,
+ * orientation): photos are not visually analysed. Carries no URL or thumbnail field — photos are protected media.
+ * `rights` is the REROUTE engine's verdict for the run's planned uses (every channel × territory).
+ */
+export const PhotoSuggestionSchema = z.object({
+  scoreplayMediaId: z.string(),
+  filename: z.string(),
+  /** ScorePlay `description`, truncated to 160 characters. */
+  caption: z.string().max(160).optional(),
+  /** ScorePlay person tags (full names), not confirmed in the image. */
+  people: z.array(z.string()),
+  /** ScorePlay event folder, e.g. "Manchester United vs Tottenham Hotspur - Week 6 · Match". */
+  event: z.string().optional(),
+  orientation: z.enum(["PORTRAIT", "LANDSCAPE", "SQUARE", "UNKNOWN"]),
+  /** Why PULSE suggests it, in plain language (metadata signals only). */
+  matchReason: z.string(),
+  rights: z.object({
+    verdict: VerdictSchema,
+    clearance: ClearanceSchema,
+    allowedUses: z.number().int().nonnegative(),
+    totalUses: z.number().int().nonnegative(),
+    /** A fictional demo policy produced (part of) the verdict. */
+    demoPolicy: z.boolean(),
+    /** REROUTE's explanation of the first non-PERMIT reason of the worst use, verbatim. */
+    reason: z.string().optional(),
+  }),
+});
+export type PhotoSuggestion = z.infer<typeof PhotoSuggestionSchema>;
+
 /** Where a run's upstream data came from (`RunProvenance` of lib/media/provenance): LIVE, demo recording or both. */
 export const RunProvenanceSchema = z.object({ origin: z.enum(["LIVE", "CACHED", "MIXED"]), recordedAt: z.string().optional() });
 export type RunProvenance = z.infer<typeof RunProvenanceSchema>;
@@ -969,6 +999,10 @@ export const GoalRunSchema = z.object({
   applied: z.array(AppliedRecoverySchema).default([]),
   /** The rule package the run is evaluated against (Policy Center); absent = the club's default package. */
   policy: PolicyContextSchema.optional(),
+  /** Club-library photos suggested for the goal (ScorePlay metadata only), each with its REROUTE verdict; absent on older runs. */
+  photos: z.array(PhotoSuggestionSchema).optional(),
+  /** Why no photo is suggested when the photo library could not be read (absent otherwise). */
+  photosNote: z.string().optional(),
   review: z.object({ receiptId: z.string(), submittedAt: iso, campaignVersion: z.number().int().positive(), evaluationId: z.string() }).optional(),
   /** Merged provenance of every upstream read made by this run's actions; absent until one made a read. */
   dataOrigin: RunProvenanceSchema.optional(),
@@ -1070,6 +1104,10 @@ export const GoalViewSchema = z.object({
     selectedKey: true,
   }),
   recommendations: z.array(RecommendationViewSchema),
+  /** Up to three club-library photos for the goal: ScorePlay metadata only, not visually analysed; no URL fields. */
+  photos: z.array(PhotoSuggestionSchema),
+  /** Why no photo is suggested, when the photo library could not be read. */
+  photosNote: z.string().optional(),
   selected: RecommendationViewSchema.optional(),
   campaign: GoalCampaignSchema.extend({ checklist: z.array(ChecklistItemSchema) }).optional(),
   rights: RightsViewSchema,

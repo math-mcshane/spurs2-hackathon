@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
 import type { GoalView, RecommendationView } from "../types";
 import { MomentPreview, recommendationSource, segmentLabel } from "./MomentPreview";
+import { PhotoSuggestions } from "./PhotoSuggestions";
 import { Eyebrow, Notice, StatusPill, displayTitle, rightsStatus } from "./parts";
 
 type Props = {
@@ -85,6 +86,8 @@ export function MomentGallery({ goal, busy, loadingKey, onChoose, onSearchAgain,
           ))}
         </div>
       </div>
+
+      <PhotoSuggestions photos={goal.photos} note={goal.photosNote} />
     </section>
   );
 }

@@ -1,6 +1,6 @@
 # PULSE — Top 3 demos (recovery engine)
 
-**Re-verified:** 2026-10-23 04:25–04:27 UTC on `hackathon-integration`, local dev server `:3300`, local Supabase, live ScorePlay + TwelveLabs, previews off, writeback dry-run. Exact outputs and timings: [`DEMO_EVIDENCE.md`](DEMO_EVIDENCE.md) §1.
+**Re-verified:** 2026-10-23 04:25–04:54 UTC on `hackathon-integration` (API on local `:3300`, live ScorePlay + TwelveLabs, previews off, writeback dry-run), plus a production-build Studio walkthrough of S1 (≈ 04:41), the desk trim in the UI (≈ 04:50) and S1 on the Vercel preview (≈ 04:58) — the last three reported by other agents. Exact outputs, timings and who ran what: [`DEMO_EVIDENCE.md`](DEMO_EVIDENCE.md) §1–§1b.
 **Every verdict is under a fictional DEMO policy** — the app says "Demo policy — not verified legal clearance" on every result. Nothing is publishable.
 
 Promise on screen: *From business objective to rights-aware campaign — and automatically to a better alternative when something cannot be used.*
@@ -11,6 +11,7 @@ Promise on screen: *From business objective to rights-aware campaign — and aut
 | **2. Global engagement — fix the plan, not the clip** | The engine recognises a campaign-level restriction: changing footage would not help, so it shrinks the plan to licensed markets | Goal Slo Mo Man United 9x16 (A) v1 (130851421) 0:00–0:14.8 | NEEDS_REVIEW 6/21 → ALLOWED 6/6 |
 | **3a. Sponsor — the rules change, the answer changes** | Policy Center: same clip, two demo packages; switching marks the verdict stale; re-check; the engine finds a clean section | Goal Slo Mo 0:14.8–0:20.2 → same clip 0:36.5–0:41.9 | BLOCKED 0/3 → (package switch) NEEDS_REVIEW 0/3 → ALLOWED 3/3 |
 | **3b. Mexico — the honest no** (alternative close) | A licence gap is never "fixed" with other footage; submission stays locked | Goal Slo Mo 0:14.8–0:20.2 | BLOCKED 0/3, no footage option generated, only next step "Request additional usage rights" |
+| **Beat 2 alt. — Desk: a cut that works** (20 s, alternative to Demo 2) | The same engine *succeeds* with a trim when enough footage is left; edit plan, then re-decision | solanke late goal.mp4 (130851444) 0:10–0:19 → kept 0:10.0–0:14.5 + 0:17.5–0:19.0 | BLOCKED → ALLOWED · DEMO (both kept segments) |
 
 Control case worth one sentence: **Sell tickets** → Slide 18 and Slide 6 are ALLOWED 3/3 straight away. PULSE does not manufacture problems.
 
@@ -25,7 +26,7 @@ Control case worth one sentence: **Sell tickets** → Slide 18 and Slide 6 are A
 | Problem | **Check rights** → BLOCKED 0/3. "Find a way to use it" → two located problems: Player #18 at 0:06.9–0:07.0 (TwelveLabs; shirt number only, not mappable to the ScorePlay squad) and Manchester United crest on the hoarding 0:09.0–0:14.5 (TwelveLabs product run + second run; demo rule THFC-13 partner exclusivity). |
 | What PULSE tried first | TRIM "Remove 2 flagged parts (0:06.9–0:07.5, 0:08.5–0:14.7)" → **Rejected:** "it would leave 1.0 s of 7.8 s — below the 3.1 s minimum for this post." |
 | Recommended | REPLACE "Use Slide 6 - Away End Singing Pre-KO.mov 0:01.1–0:08.9" — independent re-check ALLOWED 3/3 (demo). |
-| Other ways | Limbs Man United 0:02.9–0:10.7 ALLOWED 3/3 · same clip 0:23.5–0:30.4 ALLOWED 3/3 (flagged: search did not match this section to the goal) · Slide 19 NEEDS_REVIEW 0/3 (#16 not on squad) · organic post ALLOWED 3/3 (changes the goal) · ask the rights team (next step). |
+| Other ways | Limbs Man United 0:02.9–0:10.7 ALLOWED 3/3 · same clip 0:23.5–0:30.4 ALLOWED 3/3 ("Video search also matched this section to 'players applauding the travelling fans after the match' (#9)", ranked below the better-matched Slide 6) · Slide 19 NEEDS_REVIEW 0/3 (#16 not on squad) · organic post ALLOWED 3/3 (changes the goal) · ask the rights team (next step). Search ranks of Limbs/Slide 19 moved between runs (#3/#4 at 04:25, #4/#6 at 04:54) — pick by name. |
 | After apply | New campaign version, independent re-evaluation ALLOWED / DEMO 3/3; Before/After BLOCKED 0/3 → ALLOWED 3/3. |
 | Review | Send for human review → receipt → reviewer approves → "Publishing locked" (demo) → ScorePlay record → Preview writeback (dry run) → one planned `POST /video/logs`, "Live write refused." |
 
@@ -41,7 +42,7 @@ Control case worth one sentence: **Sell tickets** → Slide 18 and Slide 6 are A
 
 Variant with a visible **edit plan** (S1-b, verified 04:25:53–04:26:04): choose the same-clip section instead of Slide 6 → campaign origin EDIT, "Edit plan — not rendered" → approve → writeback plan on media 130851320, 23.5–30.44 s.
 
-**Risks:** moment ranking can shift if the index changes (the cards carry filename + timecode — pick by name). The crest interval is the union of two AI runs (9–11 s vs 9–14.5 s); say so if asked. **Fallback:** pre-run tab via `?run=` link, `DEMO_REPLAY=true`, screenshots in `docs/design/screenshots/recovery/` (see `docs/pitch/CONTINGENCY.md`).
+**Risks:** moment ranking can shift if the index changes (the cards carry filename + timecode — pick by name). The crest interval is the union of two AI runs (9–11 s vs 9–14.5 s); say so if asked. Rehearse on a fresh server (production build or the preview) — a long-running dev server served stale wording after a `next build` (§1b). **Fallback:** pre-run tab via `?run=` link, `DEMO_REPLAY=true` (re-recorded 04:40 UTC for 8 scenarios incl. recovery searches), screenshots in `docs/design/screenshots/recovery/` (see `docs/pitch/CONTINGENCY.md`).
 
 ---
 
@@ -76,9 +77,17 @@ Chip **Open a new market** → "Sell more Spurs jerseys in Mexico" → Use this 
 
 ---
 
-## Engine-verified, not a Studio flow: a trim that succeeds
+## Beat 2 alternative — Desk: a cut that works (verified in the UI ≈ 04:50 UTC, reported by DeskRecovery)
 
-`POST /api/recover` (desk engine, read-only) on solanke late goal.mp4 (130851444) 0:10–0:19, Sponsored · GB: DHL board 0:15–0:17 (second run only) → TRIM "Remove 0:14.5–0:17.5" keeps 6.0 s of 9.0 s → ALLOWED 3/3 (demo), verified 04:27:13 UTC. The `/desk` UI for it was not verified in this pass — cite it as "the engine also produces successful trims", not as a live click path, unless re-checked on the desk.
+| | |
+|---|---|
+| Setup | `/desk` → search **solanke late goal** → select *solanke late goal.mp4* (ScorePlay 130851444; competition and publishing club prefilled from ScorePlay) → cut **0:10–0:19** → usage **SPONSORED**, territory GB, platform Instagram. Pre-stage everything up to here. |
+| Problem | "BLOCKED · policy demo-tottenham-pl · v2026-10-23.1 · clearance NONE"; "DENY THFC-13 … 0:15.0–0:17.0, DHL (crest/kit or boards), 15–17 s" — source: TwelveLabs **second run** only. |
+| Click 1 | **Find a way to use it** → recommended "Remove 0:14.5–0:17.5 · Allowed · demo policy · 1 of 1 · Kept 0:10.0–0:14.5, 0:17.5–0:19.0 · Result 6.0 s of 9.0 s · Edit plan — not rendered". |
+| Click 2 | **Apply cut** → the desk re-decides each kept segment: **ALLOWED · DEMO** for both. |
+| Say | "Here the cut works: 6 of 9 seconds survive, one jump cut, and the result is checked again — as an edit plan; nothing is rendered." |
+| Evidence | API 04:27:13 UTC (`POST /api/recover`, 3 channels: trim ★ ALLOWED 3/3, "Keeps 6.0 s of 9.0 s (67%) with 1 jump cut"); screenshots `docs/design/screenshots/recovery/desk-desktop-recovery-panel.webp`, `desk-desktop-options.webp`, `desk-desktop-after-apply-cut.webp` (+ mobile). |
+| Risk | Not re-run by me in the UI; rehearse once. Desk previews stay off. |
 
 ## What the jury must hear
 

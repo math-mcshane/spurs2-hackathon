@@ -151,7 +151,8 @@ const canBlock = (ev: Evidence) => ev.source !== "TWELVELABS" || (ev.confidence 
 
 const entityOf = (ev: Evidence) => ev.observation.split(":")[0]?.trim() || ev.label!;
 
-function analysisGap(analysis: AnalysisStatus): Unknown | undefined {
+function analysisGap(analysis: AnalysisStatus, asset: Pick<Asset, "kind">): Unknown | undefined {
+  const media = asset.kind === "image" ? "the photo" : "the video";
   switch (analysis.status) {
     case "AVAILABLE":
       return undefined;
@@ -161,9 +162,9 @@ function analysisGap(analysis: AnalysisStatus): Unknown | undefined {
         what: `this ScorePlay clip could not be matched to exactly one analysed video (${analysis.detail}), so no video analysis can be attached to it`,
       };
     case "NOT_CONFIGURED":
-      return { basis: "TECHNICAL_OBSERVATION", what: `the video was not analysed (video analysis is not configured: ${analysis.detail})` };
+      return { basis: "TECHNICAL_OBSERVATION", what: `${media} was not analysed (${asset.kind === "image" ? "" : "video analysis is not configured: "}${analysis.detail})` };
     case "FAILED":
-      return { basis: "TECHNICAL_OBSERVATION", what: `the video was not analysed (analysis failed: ${analysis.detail})` };
+      return { basis: "TECHNICAL_OBSERVATION", what: `${media} was not analysed (analysis failed: ${analysis.detail})` };
   }
 }
 
@@ -241,7 +242,7 @@ function checkRule(rule: Rule, ctx: SegmentContext): RuleCheck {
     triggering = evidence.filter(
       (ev) => ev.label !== undefined && match.evidenceLabels!.some((p) => matchesPattern(ev.label!, p)) && !except.some((p) => matchesPattern(ev.label!, p)),
     );
-    const gap = analysisGap(analysis);
+    const gap = analysisGap(analysis, asset);
     if (triggering.length > 0) parts.push("YES");
     else if (!gap) parts.push("NO");
     else {
@@ -336,7 +337,7 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
   }
   const out: Reason[] = [];
   const usage = ctx.intent.usage;
-  const gap = analysisGap(ctx.analysis);
+  const gap = analysisGap(ctx.analysis, ctx.asset);
   if (gap) {
     out.push(
       reason(

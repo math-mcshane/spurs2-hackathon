@@ -1,6 +1,6 @@
 # PULSE — score maximization (internal)
 
-Official rubric, 100 points. This is an **internal readiness view**, not a prediction of judges' scores. Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) (API re-verification 2026-10-23 04:25–04:36 UTC, local `:3300`, live ScorePlay + TwelveLabs). Click paths: [`../pitch/DEMO_SCRIPT.md`](../pitch/DEMO_SCRIPT.md).
+Official rubric, 100 points. This is an **internal readiness view**, not a prediction of judges' scores. Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) (my API re-verification 2026-10-23 04:25–04:54 UTC on local `:3300`, live ScorePlay + TwelveLabs; plus production-build UI ≈ 04:41, Policy Center ≈ 04:47, desk ≈ 04:50 and preview ≈ 04:58 reported by other agents, §1b). Status per capability: [`FINAL_READINESS.md`](FINAL_READINESS.md). Click paths: [`../pitch/DEMO_SCRIPT.md`](../pitch/DEMO_SCRIPT.md).
 
 Confidence scale for "works in the demo": **High** = re-verified end-to-end today on the API and the UI path is unchanged in code; **Med** = verified on the API but the UI or environment changed after, or a dependency is live/external; **Low** = not verified today.
 
@@ -29,7 +29,7 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 2. Open **Preview writeback** on stage — it is the only moment ScorePlay is visibly the system of record.
 3. Mention the second Pegasus run explicitly when the crest shows 9–14.5 s (shows depth of TwelveLabs use).
 
-**Confidence:** High for search/mapping/evidence/writeback plan (all re-verified 04:25–04:36). Med for timing (live APIs; `run` took 0.8–2.1 s today).
+**Confidence:** High for search/mapping/evidence/writeback plan (re-verified 04:25–04:54 by API; S1 prod-build UI ≈ 04:41 and preview ≈ 04:58 reported). Med for timing (live APIs; `run` 0.8–4.0 s today).
 
 ## 2. Practicality (25)
 
@@ -38,12 +38,12 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 | Feature | Why practical |
 |---|---|
 | Goal-first input with chips | A social/commercial user types a business goal, not keywords |
-| Recovery engine | Turns "blocked" into a usable option: replacement (S1), licensed subset (S2), clean section (Sponsor), honest licence gap (Mexico) |
+| Recovery engine | Turns "blocked" into a usable option: replacement (S1), licensed subset (S2), clean section (Sponsor), a cut that works (desk), honest licence gap (Mexico) |
 | Clean pass | Tickets: ALLOWED 3/3 directly — no manufactured friction |
 | Policy Center | Different rule packages per commercial context; switch per run; JSON upload (DEMO) |
 | Human review + audit | Named reviewer, receipt, hash-chained events |
 
-**Evidence judges can see:** the S1 beat (blocked → trim rejected → replacement → re-check → review); S2 "Limit to licensed markets: GB, US" 6/21 → 6/6; Sponsor "Change rules" → "Needs a fresh check" → re-check → clean section; Mexico "No licensed path … PULSE won't move the campaign elsewhere".
+**Evidence judges can see:** the S1 beat (blocked → trim rejected → replacement → re-check → review); S2 "Limit to licensed markets: GB, US" 6/21 → 6/6; desk trim "Remove 0:14.5–0:17.5 … 6.0 s of 9.0 s" → ALLOWED · DEMO; Sponsor "Change rules" → "Needs a fresh check" → re-check → clean section; Mexico — only "Request additional usage rights".
 
 **Weaknesses:** all rule packages are fictional; edits are plans, not rendered; no PDF contract intake; no privacy rule for private persons/minors in crowd shots; sales attribution not connected; single club indexed.
 
@@ -54,7 +54,7 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 2. Show the Tickets clean pass in one sentence — proves PULSE doesn't block by default.
 3. Have the onboarding answer ready (JURY_QA #15) — practicality questions will target "where do the rules come from".
 
-**Confidence:** High for S1/S2/Sponsor/Tickets flows (API re-verified 04:36). Med for the Mexico close (engine output changed at ≈ 04:30; UI state not re-checked).
+**Confidence:** High for S1/S2/Sponsor/Tickets (API re-verified, S1 also in the prod-build UI) and the desk trim (UI ≈ 04:50, reported). Med for the Mexico close (engine output changed at ≈ 04:30; screen not re-checked by me). JSON upload works locally but not on the preview (migration not on shared Supabase).
 
 ## 3. Technical execution (20)
 
@@ -68,20 +68,20 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 | EDL | kept/removed intervals with reasons and output timeline, `PLAN_NOT_RENDERED` |
 | Persistence | versioned runs (optimistic concurrency), immutable campaign versions, evaluations, recovery plans, receipts, global hash-chained events; reload restores state |
 | Security | named reviewer sessions, same-origin, rate limits, no footage URLs, writeback dry-run |
-| Tests | 405 passed / 15 skipped (04:35 UTC), recovery suite 20 |
+| Tests | 406 passed / 15 skipped, tsc + eslint clean, `next build` passes (≈ 04:50, reported); recovery suite 20 |
 
 **Evidence judges can see:** "What PULSE tried first — Rejected: it would leave 1.0 s of 7.8 s — below the 3.1 s minimum"; Before/After; **Compare** on the same-clip section → "Edit plan — not rendered"; evaluation chain in Identifiers and audit trail; reload of a `?run=` URL.
 
-**Weaknesses:** rate limits are in-memory per instance; recovery flow under `DEMO_REPLAY` not re-verified; the codebase was still changing during the final hours (5 transient test failures and a compile error observed at 04:27–04:28, resolved by 04:35).
+**Weaknesses:** rate limits are in-memory per instance; the codebase changed during the final hours (transient test failures and a compile error at 04:27–04:28; a dev server served stale wording after a `next build` at ≈ 04:52 — fixed by restart).
 
-**Missing proof:** a successful trim in the Studio (the only successful trim verified is via `POST /api/recover` on *solanke late goal* — desk UI not verified).
+**Missing proof:** a successful trim inside a Studio goal flow (the successful trim is on the desk — verified in the UI ≈ 04:50, reported).
 
 **Highest-impact actions:**
 1. Freeze code before rehearsal; re-run the full suite and cite that exact number.
-2. If the desk trim lands, verify it once and add it as a 10-second "and when a cut works…" beat; otherwise mention it only as engine-verified.
+2. Use the desk trim as the 20-second second beat when the jury is technical ("the cut that was rejected in S1 wins here") — DEMO_SCRIPT §2:05 option B.
 3. Keep TECHNICAL.md open for the Q&A.
 
-**Confidence:** High for engine behaviour (deterministic, tests green at 04:35). Med for stability on stage (code still moving at time of writing).
+**Confidence:** High for engine behaviour (deterministic, 406 tests green, build passes). Med for stage stability until the code is frozen and the demo runs on a fresh server.
 
 ## 4. Originality (15)
 
@@ -102,7 +102,7 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 
 **Highest-impact actions:** say the differentiation line verbatim ("Other tools identify what you can't publish. PULSE finds the best way to achieve your goal anyway") right after the trim rejection.
 
-**Confidence:** High (S1 rejection text identical at 04:25 and 04:35).
+**Confidence:** High (S1 rejection text identical at 04:25, 04:35 and 04:54).
 
 ## 5. Presentation (15)
 
@@ -112,17 +112,17 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 |---|---|
 | 3-min script | `docs/pitch/DEMO_SCRIPT.md` |
 | 1-min backup | `docs/pitch/BACKUP_1MIN.md` |
-| Q&A | `docs/pitch/JURY_QA.md` (19 questions) |
+| Q&A | `docs/pitch/JURY_QA.md` (21 questions) |
 | Disclosure | `docs/pitch/EVIDENCE.md` |
 | Fallbacks | `docs/pitch/CONTINGENCY.md` + screenshots in `docs/design/screenshots/recovery/` |
 
-**Weaknesses:** no full UI rehearsal recorded after the last editor polish; the S1 beat has many points of interest — risk of running over 3 minutes; screenshots may predate final labels.
+**Weaknesses:** no full timed UI rehearsal yet; the S1 beat has many points of interest — risk of running over 3 minutes; screenshots may predate final labels.
 
 **Missing proof:** a timed rehearsal on the presenting machine.
 
 **Highest-impact actions:**
-1. One timed rehearsal with the exact script; cut the optional "Other ways" glance if over 2:05 at the end of S1.
-2. Pre-run tabs for S2, Sponsor and Mexico.
+1. One timed rehearsal with the exact script on a fresh server (prod build or preview); cut the optional "Other ways" glance if over 2:05 at the end of S1.
+2. Pre-run tabs for S2, Sponsor, Mexico and the desk beat.
 3. Say the four disclaimers naturally: demo rules, dry run, not rendered, recorded when the tag says so.
 
 **Confidence:** Med — content is ready; rehearsal not yet done.
@@ -131,8 +131,8 @@ Confidence scale for "works in the demo": **High** = re-verified end-to-end toda
 
 ## Top 5 actions overall (ordered by impact per minute)
 
-1. **Code freeze + one timed UI rehearsal** of DEMO_SCRIPT on the presenting machine; fix any label drift in the script.
-2. **Pre-run tabs** (S1 at Resolution, S2, Sponsor, Mexico) and sign the reviewer in before the jury.
-3. **Re-check the Mexico screen** after the engine change (only "Request additional usage rights" now).
-4. **Re-run the test suite** after the freeze and use that number.
-5. **Verify `DEMO_REPLAY=true` with the recovery flow** once (operator restart), or rely on pre-run tabs + screenshots.
+1. **Code freeze + one timed UI rehearsal** of DEMO_SCRIPT on a fresh server (prod build `next start` or the preview); never `next build` while `next dev` serves the demo.
+2. **Pre-run tabs** (S1 at Resolution, S2, Sponsor, Mexico, desk solanke) and sign the reviewer in before the jury.
+3. **Look at the Mexico screen once** after the engine change (only "Request additional usage rights" now).
+4. **Re-run the test suite** after the freeze and use that number (406 / 15 skipped at ≈ 04:50).
+5. **Keep the CACHED fallback ready**: `pnpm exec next build && DEMO_REPLAY=true pnpm exec next start -p 3401` (8 recorded scenarios, re-recorded 04:40 UTC) plus the screenshots.

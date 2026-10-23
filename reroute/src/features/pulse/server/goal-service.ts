@@ -36,6 +36,7 @@ import type {
 } from "../types";
 import { RecoveryOptionSchema } from "../types";
 import { searchGoal, type GoalSearch } from "./goal-search";
+import { suggestPhotos, type PhotoInput, type PhotoResult } from "./photo-suggestions";
 
 /**
  * The product flow: goal → three real moments → campaign proposal → REROUTE evaluation of every
@@ -61,6 +62,8 @@ export type GoalDeps = {
   preview(ref: MediaRef, club: Club): Promise<Preview | undefined>;
   /** The caller's right to footage-derived URLs (previews AND thumbnails); anything but ALLOWED strips them all. */
   media: MediaAccess;
+  /** Club-library photos for the goal (ScorePlay metadata only, REROUTE-checked); omitted = no photo suggestions. Never rejects. */
+  photos?(input: PhotoInput): Promise<PhotoResult>;
   now(): Date;
 };
 
@@ -74,6 +77,7 @@ const defaultDeps: GoalDeps = {
   },
   resolveMedia: (id, club) => getMediaResolver(club).forScoreplay(id),
   preview: (ref, club) => previewFor(ref, { club }),
+  photos: (input) => suggestPhotos(input),
   media: "DISABLED",
   now: () => new Date(),
 };
@@ -287,7 +291,16 @@ export async function runGoal(goal: string, club: Club, deps: GoalDeps = default
     );
   }
   const match = parseMatch(goal);
-  const [{ value: found, provenance }, { context: policy }] = await Promise.all([trackProvenance(() => deps.search({ club, objective, match })), deps.policies(club)]);
+  const plan = goalPlan(objective, club);
+  const searching = trackProvenance(() => deps.search({ club, objective, match }));
+  const policing = deps.policies(club);
+  // Photos are listed while the video search runs, ranked once its moments are known, checked under the run's package.
+  const suggest = deps.photos;
+  const photoing =
+    suggest &&
+    trackProvenance(() => suggest({ club, objective, plan, moments: searching.then((s) => s.value.pool.slice(0, 3)), policies: policing.then((p) => p.policies) }));
+  const [{ value: found, provenance }, { context: policy }, photos] = await Promise.all([searching, policing, photoing]);
+  const dataOrigin = mergeProvenance(provenance, photos?.provenance);
   const run: GoalRun = {
     id: `goal-${randomUUID()}`,
     schemaVersion: 2,
@@ -295,15 +308,17 @@ export async function runGoal(goal: string, club: Club, deps: GoalDeps = default
     submittedAt: submittedAt.toISOString(),
     resultsAt: deps.now().toISOString(),
     objective,
-    plan: goalPlan(objective, club),
+    plan,
     match,
     ...found,
+    ...(photos ? { attempts: [...found.attempts, photos.value.attempt], photos: photos.value.photos } : {}),
+    ...(photos?.value.note ? { photosNote: photos.value.note } : {}),
     adopted: [],
     evaluations: [],
     recoveries: [],
     applied: [],
     ...(policy ? { policy } : {}),
-    ...(provenance ? { dataOrigin: provenance } : {}),
+    ...(dataOrigin ? { dataOrigin } : {}),
   };
   await goalRuns.create(run);
   await events.append({

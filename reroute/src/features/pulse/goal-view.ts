@@ -463,6 +463,8 @@ export function buildGoalView(
       selectedKey: run.selectedKey,
     },
     recommendations: pool.slice(0, 3).map(view),
+    photos: run.photos ?? [],
+    ...(run.photosNote ? { photosNote: run.photosNote } : {}),
     selected: selectedRec && view(selectedRec),
     campaign,
     rights,

@@ -23,7 +23,7 @@ Every ALLOWED below is **"Allowed under a demo policy — DEMO POLICY — NOT VE
 | MX | "Sell more Spurs jerseys in Mexico" (**Open a new market**) | Goal Slo Mo (130851421) 0:14.8–0:20.2 | Commercial · MX · 3 channels | **BLOCKED 0/3** | 04:26: every option NOT_VIABLE + REQUEST_CLEARANCE · **04:36 (current engine): only REQUEST_CLEARANCE "Request additional usage rights"** — see §1a | submission refused (HTTP 400 at 04:26; `canSubmit` false at 04:36) |
 | T | "Sell tickets for the next home game" (**Sell tickets**) | Slide 18 (130851438) 0:00–0:06.9; Slide 6 (130851415) 0:00–0:10.1 | Commercial · GB · 3 channels | **ALLOWED (demo) 3/3** both | none needed | — |
 | SP | "Activate our sleeve sponsor with fans in the UK" (**Activate a sponsor**) | Goal Slo Mo (130851421) 0:14.8–0:20.2 | Sponsored · GB · 3 channels | **BLOCKED 0/3** (Social package) → package switch → **NEEDS_REVIEW 0/3** | ★ SAFE_SECTION same clip 0:36.5–0:41.9 | **ALLOWED (demo) 3/3** |
-| D | Desk engine `POST /api/recover`: solanke late goal.mp4 (130851444) 0:10–0:19 | — | Sponsored · GB · 3 channels | **0/3** (DHL board 0:15–0:17) | ★ TRIM "Remove 0:14.5–0:17.5" keeps 6.0 s → ALLOWED (demo) 3/3 | read-only API; desk UI not verified in this pass |
+| D | Desk: solanke late goal.mp4 (130851444) 0:10–0:19 | — | Sponsored · GB · Instagram (desk) / 3 channels (API) | **BLOCKED** (DHL board 0:15–0:17, second run) | ★ TRIM "Remove 0:14.5–0:17.5" keeps 6.0 s → ALLOWED (demo) | API 04:27:13; **desk UI verified ≈ 04:50 by DeskRecovery** (§1b) |
 
 ### §1a — Re-check after an engine change (04:35–04:36 UTC)
 
@@ -36,6 +36,26 @@ Between 04:27 and 04:35 another agent changed `lib/rights/recovery/plan.ts` (lic
 | S2 | 04:36:02 | NEEDS_REVIEW (0.21 s / 0.25 s) | headline "In the plan: FR, ES, DE, IN, NG aren't licensed"; ★ "Limit to licensed markets: GB, US" ALLOWED 6/6; request_clearance-2 now titled "Request additional usage rights" | wording only |
 | SP | 04:36:10–13 | BLOCKED → setPolicy (`current: false`) → NEEDS_REVIEW 0/3 → ★ SAFE_SECTION 0:36.5–0:41.9 → **ALLOWED / DEMO** | headline "In the footage: Richarlison and Porro (0:15.0–0:20.2)"; same options/outcomes | wording only |
 | T | 04:36:13 | Slide 18 **ALLOWED / DEMO 3/3** | — | no |
+
+### §1b — Later verifications (04:40–04:58 UTC)
+
+Items marked *(reported)* were run by other agents and relayed by the coordinator; I did not repeat them. Items marked *(mine)* I ran myself.
+
+| UTC | Who | What | Observed |
+|---|---|---|---|
+| ≈ 04:40 | *(reported)* recorder | `demo-cache/` re-recorded **2026-10-23T04:40:23Z** for 8 scenarios (A merch, B global, C Mexico, D tickets, E sponsor, F jerseys UK, G UK followers, H Spurs France not indexed), 108 files, recovery searches included | replay verified in a fresh process; secret scan clean; with `DEMO_REPLAY=true` on a production server the Studio header reads **"Recorded data 23 Oct 2026"** |
+| ≈ 04:41 | *(reported)* production build walkthrough (Chromium, `next build` + `next start`) | S1 end to end | moments 3.96 s · Check rights 0.5 s · Find a way 1.28 s · apply + re-check · submit · Approve "Approved by Demo presenter" · "Publishing locked … never publishable, even after approval" · writeback "1 planned ScorePlay call · Live write refused", `POST /video/logs` media 130851415, 1.133–8.933 · no page errors |
+| ≈ 04:47 | *(reported)* Policy Center via API | sample JSON upload | **201**, sourceType `UPLOADED_JSON`, label "Uploaded rules — unverified, demo only"; PDF → **422** with the no-extraction message; anonymous upload → **403**; anonymous GET hides uploader identity |
+| ≈ 04:47 | *(reported)* S2 with an uploaded package | social package 6/21 → switch run to "Tottenham International Window — Demo" (uploaded sample) → verdict stale → Check again | **15/21** allowed (IN, NG still unlicensed) |
+| ≈ 04:50 | *(reported)* DeskRecovery, `/desk` UI | search "solanke late goal" → select (130851444; competition + club prefilled from ScorePlay) → cut 0:10–0:19 → usage SPONSORED (GB, Instagram) | "BLOCKED · policy demo-tottenham-pl · v2026-10-23.1 · clearance NONE", "DENY THFC-13 … 0:15.0–0:17.0, DHL (crest/kit or boards), 15–17 s" (TwelveLabs second run) → **Find a way to use it** → recommended "Remove 0:14.5–0:17.5 · Allowed · demo policy · 1 of 1 · Kept 0:10.0–0:14.5, 0:17.5–0:19.0 · Result 6.0 s of 9.0 s · Edit plan — not rendered" → **Apply cut** → desk re-decided **ALLOWED · DEMO** for both kept segments. Screenshots `docs/design/screenshots/recovery/desk-*.webp` |
+| 04:52:32 | *(mine)* `:3300` API, S1 | run 4.03 s, check 0.30 s, find 0.83 s | BLOCKED; same 7 options and outcomes; ★ replace-3 Slide 6; trim rejected with the same text. **Wording was the pre-v2 text** (headline "Can't be used as planned · 0 of 3 uses allowed"; safe section "search did not match this section to the goal") although the code on disk has the v2 wording — the long-running dev server (started 02:33 UTC) served a stale compile. Verdicts unaffected; rehearse wording on the preview or a production build. |
+| 04:52:37 | *(mine)* `:3300` API, Sponsor (Commercial & Sponsor package) | run 0.79 s, check 0.21 s, find 0.77 s | NEEDS_REVIEW 0/3 → ★ SAFE_SECTION 0:36.5–0:41.9 ALLOWED 3/3; replace-4 NEEDS_REVIEW; replace-3/5 STILL_BLOCKED; trim NOT_VIABLE (same stale wording note) |
+| 04:54:02 | *(mine)* `:3300` after the coordinator restarted the dev server | S1: run 1.15 s, check 0.18 s, find 0.93 s, apply 0.21 s | BLOCKED → **v2 wording**: headline "In the footage: Player #18 (0:06.9–0:07.0); the Manchester United logo (0:09.0–0:14.5)"; "Player #18 at 0:06.9–0:07.0 — Can't be matched to the club's registered squad in ScorePlay, so image rights can't be confirmed (AI identification — a reviewer must confirm)."; options: ★ replace-3 Slide 6 (search #2) ALLOWED 3/3 · replace-4 Limbs (now #4) 3/3 · safe_section-2 0:23.5–0:30.4 3/3 "Video search also matched this section to 'players applauding the travelling fans after the match' (#9)." · replace-5 Slide 19 (now #6) NEEDS_REVIEW · change_usage-6 3/3 · trim-1 NOT_VIABLE (same text) · request_clearance-7. Apply ★ → **ALLOWED / DEMO**. |
+| ≈ 04:58 | *(reported)* Vercel Preview (Ready; public, no Deployment Protection) | S1 via API | run 3.84 s (LIVE), BLOCKED, findRecovery 1.67 s, headline "In the footage: Player #18 (0:06.9–0:07.0); the Manchester United logo (0:09.0–0:14.5)", ★ REPLACE → apply → ALLOWED/DEMO, before BLOCKED → after ALLOWED. Preview uses the shared Supabase **without** the policy-packages migration: `/api/policies` lists the 3 presets with `uploadsAvailable: false` (no uploads/workspace default there; per-run preset switching works). Production untouched. |
+
+**Planner v2 wording** (in code, `6ee2a07`; seen on the preview — *(reported)*): problem lines like "Player #18 at 0:06.9–0:07.0 — Can't be matched to the club's registered squad in ScorePlay, so image rights can't be confirmed (AI identification — a reviewer must confirm)."; S1 clean section 0:23.5–0:30.4 "Video search also matched this section to 'players applauding the travelling fans after the match' (#9)", ranked below the better-matched Slide 6 replacement; Sponsor clean section 0:36.5–0:41.9 "Video search also matched this section to 'players celebrating a goal together' (#2)"; Mexico offers only "Request additional usage rights".
+
+**Photos:** `docs/demo/PHOTO_INVENTORY.md` — 605 photos (418 Tottenham, 187 San Antonio Spurs), 468 with person tags, 44 sponsor-tagged (all SAS), usage/custom terms empty on all, not analysed by TwelveLabs; documented candidates only, not used in the Studio.
 
 ### S1 — Merch: the cut is tried first, rejected, then a replacement (run `goal-126f6106-71e2-4925-a1c1-8e9bdcfc5bbc`)
 
@@ -150,8 +170,9 @@ The engine loads **every** analysis run for an asset: the product's own Pegasus 
 
 ## 4. Tests
 
-- **04:35:46 UTC:** `cd reroute && pnpm exec vitest run` → **405 passed · 15 skipped (420)**, 32 files passed, 1 skipped. `src/lib/rights/recovery/recovery.test.ts`: **20 passed**.
-- Earlier, 04:27 UTC (mid-refactor by another agent): 5 failed · 382 passed · 15 skipped (402) in `resolver.test.ts` / `preview.test.ts` (removed `/api/resolve`). Superseded by the run above. Other agents were still editing — re-run once more before the presentation and cite that number.
+- **Latest (reported by the coordinator, ≈ 04:50 UTC, after `e2d0492`):** vitest 33 files — **406 passed / 15 skipped**; `tsc` clean; `eslint` clean; `next build` passes. Cite this (or a fresher run), not the lines below.
+- 04:35:46 UTC *(mine)*: 405 passed · 15 skipped (420), 32 files; `src/lib/rights/recovery/recovery.test.ts` **20 passed**.
+- 04:27 UTC *(mine, mid-refactor by another agent)*: 5 failed · 382 passed · 15 skipped in `resolver.test.ts` / `preview.test.ts` (removed `/api/resolve`). Superseded.
 
 At ≈ 04:28 UTC the dev server briefly failed to compile (in-flight `plan.ts` edit); all §1 flows were recorded before that and §1a after it.
 

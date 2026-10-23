@@ -101,6 +101,26 @@ long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is i
 - The contracts were first written to the main checkout (`../hackathon-repo`) instead of this worktree; reverted there
   and re-applied here before any commit.
 - Docs drift (`PULSE_ENABLED`, `REROUTE_POLICY_ID`, deleted diagnostics script, `.data/pulse.json`) fixed in README / `.env.example`.
+- 2026-10-23 ≈ 04:52 UTC: the long-running `next dev` on `:3300` (started 02:33 UTC) served the pre-v2 planner wording
+  although the code on disk was v2 — most likely because `next build` ran in the same project while dev was serving.
+  Verdicts were unaffected; the coordinator restarted the server (v2 wording confirmed at 04:54 UTC). Rule: never run `next build` while `next dev`
+  serves the demo; after any build, restart dev; rehearse on a fresh server (`next start` on a production build, or the preview).
+
+### 2026-10-23 night work (recovery engine, Policy Center, hardening)
+
+| Commit | What changed |
+|---|---|
+| `18a856d` | Media Compliance Recovery Engine (`lib/rights/recovery`: EDL with `PLAN_NOT_RENDERED`, localization by elementary-interval evaluation, TRIM / SAFE_SECTION / REPLACE / ADAPT_CAMPAIGN / CHANGE_USAGE / REQUEST_CLEARANCE, each independently re-evaluated). Goal flow cutover to `findRecovery` / `applyRecovery` / `setPolicy` (old `findAlternatives` / `useAlternative` / `applyRemedy` removed); derived cuts as campaign versions (origin `EDIT`). Policy Center (presets + uploaded JSON forced to DEMO, `/api/policies`, `/policies`, PolicyPicker) + migration `20261023000000_reroute_policy_packages`. Second recorded Pegasus run fused into evidence (`analysisRun`). Studio Compliance Editor, six-phase journey. |
+| `6ee2a07` | Recovery engine v2: early licence gap (only "Request additional usage rights", no trims/replacements searched), plain-language problems/headline, SAFE_SECTION tied to the goal by same-asset search hits, AI-identified-people wording. `POST /api/recover` (read-only) + desk recovery panel (Apply cut / Use this clip / Apply to intent); `/api/resolve` and `resolve()` removed. Judging + pitch docs, demo evidence, photo inventory. |
+| `e2d0492` | Security hardening: recovery rate limit 10/min (`/api/recover`, `findRecovery`); TwelveLabs clients keyed by resolved config; bounded request strings; policy id/version charset + text caps; byte-capped upload read; uploader identity only for signed-in reviewers; `.vercelignore` excludes local passcode files and docs. `demo-cache/` re-recorded (2026-10-23T04:40:23Z) for 8 scenarios A–H incl. recovery searches; desk competition + publishing club prefilled from ScorePlay. |
+
+- **Migrations:** `20261023000000_reroute_policy_packages` (tables `reroute_policy_packages`, `reroute_policy_selection`) applied to **local Docker Supabase only**. It is **not applied to the shared Supabase project** — that needs explicit user approval. Without it, policy uploads and the per-club workspace default answer `NOT_CONFIGURED`; bundled presets and the per-run package switch still work.
+- **Checks (reported by the coordinator, 2026-10-23 ≈ 04:50 UTC):** vitest 33 files — 406 passed / 15 skipped; `tsc` clean; `eslint` clean; `next build` passes. Security review: no critical/high findings; remaining low: anonymous library GET loads all stored packages (F7), in-memory per-instance rate limits on serverless, Pegasus outputs truncated with `finish_reason=length` are not cached.
+- **Verified flows:** see `docs/demo/DEMO_EVIDENCE.md` (API, 04:25–04:36 UTC; Studio production walkthrough ≈ 04:41; desk trim ≈ 04:50; Policy Center ≈ 04:47).
+- **Preview (Ready, verified ≈ 04:58 UTC):** https://spurs2-hackathon-rxkituveo-merlins-projects-2b20d832.vercel.app —
+  public (no Deployment Protection), same Preview env; uses the shared Supabase **without** the policy-packages migration,
+  so `/api/policies` reports `uploadsAvailable: false` (presets + per-run switching work). S1 verified there via API
+  (LIVE, BLOCKED → ★ REPLACE → ALLOWED/DEMO). Production untouched.
 
 ## Safe merge to main
 
@@ -108,8 +128,9 @@ long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is i
    `main` directly, never force-push; the branch has no upstream on purpose).
 2. Rebase-free: if `main` moved, merge `main` into the branch and rerun checks (`pnpm test`, `pnpm typecheck`, `pnpm lint`,
    `LIVE_SMOKE=1 pnpm exec vitest run`, `next build`).
-3. Migrations: apply in filename order (190000 → 200000 → 210000); already applied on the shared project — verify with
-   the migration history before re-running; never edit an applied migration, add a new one instead.
+3. Migrations: apply in filename order (190000 → 200000 → 210000 → `20261023000000_reroute_policy_packages`); the first
+   three are already applied on the shared project, the policy-packages migration is **not** (needs approval) — verify
+   with the migration history before re-running; never edit an applied migration, add a new one instead.
 4. Env checklist (Production + Preview): `SCOREPLAY_API_KEY`, `TWELVELABS_API_KEY`, `TWELVELABS_INDEX_ID`,
    `PULSE_TWELVELABS_INDEX_ID_TOTTENHAM`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `REROUTE_REVIEWERS` (hashes only, from
    `scripts/reviewer-credentials.ts`; passcodes only in the gitignored `reroute/.reviewers.local.txt`, handed out individually),

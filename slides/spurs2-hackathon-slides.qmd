@@ -47,16 +47,24 @@ Objectif : rendre le problème immédiatement reconnaissable par Tottenham et Sa
 
 ::: steps
 [[1]{.i} Intent]{.step}
-[[2]{.i} Rights]{.step}
-[[3]{.i} Review]{.step}
+[[2]{.i} Checking]{.step}
+[[3]{.i} Review/Edit]{.step}
 :::
 
 [Powered by ScorePlay + TwelveLabs]{.powered}
 
 ::: notes
-Integration · 25 pts.
-Workflow en trois étapes : Intent → Rights & Compliance → Human Review.
-ScorePlay apporte les vrais médias et métadonnées ; TwelveLabs retrouve et analyse les moments vidéo.
+Meet PULSE. It takes a club from a business goal to a plan a person has
+approved, in three steps.
+
+First, intent. You tell PULSE what you want to achieve, in one sentence.
+TwelveLabs finds the right moments in the club's videos, and ScorePlay tells
+us exactly which assets they are.
+
+Second, rights and compliance. Every use, on every channel and in every market, is checked against the club's own rules. Each one comes back allowed, needs review, or blocked, and always with the reason.
+
+Third, review. The final decision is always made by a person. A reviewer
+approves the plan and gets a receipt of everything that was checked.
 :::
 
 
@@ -85,9 +93,16 @@ ScorePlay apporte les vrais médias et métadonnées ; TwelveLabs retrouve et an
 [Uses allowed · Solanke late goal, sponsored post · Instagram, Facebook, X · UK · illustrative rules, not legal clearance]{.fineprint}
 
 ::: notes
-Novelty · 15 pts.
-Le moteur ne se contente pas de bloquer un contenu : il trouve une correction, vérifie indépendamment le nouveau plan et laisse la décision finale à un humain.
-Le 0/3 → 3/3 vaut uniquement sous la politique illustrative du scénario Solanke.
+Most tools stop once they've found a problem. PULSE finds a way forward.
+
+In this example, before PULSE, none of the planned uses were allowed. Instead
+of stopping there, PULSE found a fix and checked it again against the same
+rules.
+
+After, every use was allowed. Same goal, same partner, and now ready to go.
+
+The rules here are illustrative, and a person still signs off before anything
+is published.
 :::
 
 
@@ -189,7 +204,7 @@ Goal → moments → rights → a way forward → human sign-off, on live ScoreP
 ::: {.h .next}
 [Pilot · 90 days]{.when}
 
-One club, one partner campaign. The club's own rules replace the demo rules; ScorePlay write-back switched on.
+The club's own rules replace the demo rules, including territorial rights. Use Jockey to construct content.
 :::
 
 ::: {.h .then}

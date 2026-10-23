@@ -8,7 +8,7 @@ author:
     affiliations: "![Right On Bracket](images/logos/right-on-bracket.png){.affil-logo}"
   - name: Maurice Thomas
     affiliations: "![Library Labs](images/logos/library-labs.png){.affil-logo}"
-  - name: Raj
+  - name: Raj Padmanabhan
     affiliations: "![Salesforce](images/logos/salesforce.svg){.affil-logo}"
 format:
   revealjs:

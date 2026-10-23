@@ -1,22 +1,24 @@
 # spurs2-hackathon
 2026 Spurs² Hackathon Repo
 
+This app is currently available [here](https://spurs2-hackathon.vercel.app/). Login with `presenter` and `cmkb-zsyr-rvky-ygrg-4vp9-tgu6`. It's connected to ScorePlay and TwelveLabs; access to these services will be shut off at an unknown future time, presumably in a matter of days or weeks.
+
 Go [here](https://docs.google.com/document/d/1252f8tKb08k262a8YEZ1vZVYKVKMjpQ52LskIH25cCE/edit?usp=sharing) for private Google Doc.
 
 
-# REROUTE — Team Workflow
+# PULSE — Team Workflow
 
 **Spurs² Hackathon · Rights & Compliance · October 22–23, 2026**  
 **Tagline:** *Intent in. Publishable path out.*
 
 ## 1. What we're building
 
-**REROUTE is a rights-aware creative resolution engine for sports media.**
+**PULSE is a rights-aware creative resolution engine for sports media.**
 
 Most rights tools answer: **“Can we publish this?”**  
-REROUTE goes further: **“If we can't publish this version, what's the closest version we *can* prepare for approval?”**
+PULSE goes further: **“If we can't publish this version, what's the closest version we *can* prepare for approval?”**
 
-Given a video edit and a publishing target, REROUTE:
+Given a video edit and a publishing target, PULSE:
 1. Checks known rights restrictions against the target.
 2. Pinpoints problematic segments and explains why.
 3. Searches the media library for visually/semantically similar alternatives.
@@ -56,7 +58,7 @@ flowchart TD
 | **3. Check rights** | `ALLOWED`, `BLOCKED`, or `NEEDS_REVIEW` | Applies deterministic JSON policies to authoritative rights facts + video observations |
 | **4. Inspect failure** | Red interval on timeline, rule ID, evidence/timecode | Shows which segment/rule/fact caused the result |
 | **5. Click “Find a compliant path”** | Candidate alternatives with previews | Searches semantically similar segments with TwelveLabs; maps results back to ScorePlay |
-| **6. REROUTE** | Original vs. proposed edit | Rejects unauthorized/unknown candidates, ranks eligible ones, replaces minimum footage, renders MP4 |
+| **6. PULSE** | Original vs. proposed edit | Rejects unauthorized/unknown candidates, ranks eligible ones, replaces minimum footage, renders MP4 |
 | **7. Review** | New video, passed constraints, missing facts, sources | Re-evaluates the *entire* generated edit; flags anything unresolved |
 | **8. Save the decision** | Downloadable Rights Receipt | Records intent, policy versions, evidence, replacement provenance, final status; writes to ScorePlay if access allows |
 
@@ -76,20 +78,20 @@ A **fictional demo policy** says that a specific competing brand mark is not per
 
 **Live demo sequence:**
 
-1. Open the 15-second edit in REROUTE.
+1. Open the 15-second edit in PULSE.
 2. Change the target from **Organic** to **Sponsored**. The status changes, and `00:04–00:09` is highlighted.
 3. Open the evidence drawer: show the observed brand mark, source timecode, and matching **DEMO** rule.
 4. Click **Find a compliant path**.
 5. TwelveLabs finds similar dunk footage among available indexed clips; ScorePlay supplies the corresponding assets.
 6. The rights engine checks every candidate against all required rights dimensions and selects an eligible alternative.
-7. REROUTE replaces those 5 seconds using FFmpeg and displays **before / after**.
+7. PULSE replaces those 5 seconds using FFmpeg and displays **before / after**.
 8. Re-check the new full edit, show the **Rights Receipt**, and submit for human approval / writeback.
 
 **The WOW:** Not just “this video is blocked,” but **“here is a near-identical edit assembled from footage that independently satisfies the supplied rights policies.”**
 
 ### Secondary example — Tottenham / NFL at Tottenham Hotspur Stadium
 
-A Tottenham venue-promotion video includes stadium footage and third-party NFL game footage. If the available rights records do not establish permission for the planned promotion, the NFL segment is `NEEDS_REVIEW`, **not** automatically allowed. REROUTE can search for separately cleared venue footage and propose an alternative cut. This demonstrates multiple rights holders, beyond sponsor detection.
+A Tottenham venue-promotion video includes stadium footage and third-party NFL game footage. If the available rights records do not establish permission for the planned promotion, the NFL segment is `NEEDS_REVIEW`, **not** automatically allowed. PULSE can search for separately cleared venue footage and propose an alternative cut. This demonstrates multiple rights holders, beyond sponsor detection.
 
 ## 4. Technology and responsibilities
 
@@ -158,15 +160,15 @@ If three people, combine **B + D**. Agree on shared TypeScript contracts for `Pu
 |---|---|---|
 | **0:00–0:30** | Show the Spurs edit and set a sponsored publishing target | Rights depend on **how and where** content is used |
 | **0:30–1:00** | Highlight the failing 5-second segment and open the evidence + demo rule | Every verdict is **explainable** |
-| **1:00–2:10** | Click **REROUTE** → retrieve, rights-filter, substitute, preview actual MP4 | Compliance can trigger a **creative solution** |
+| **1:00–2:10** | Click **PULSE** → retrieve, rights-filter, substitute, preview actual MP4 | Compliance can trigger a **creative solution** |
 | **2:10–2:45** | Show the re-evaluated candidate and Rights Receipt / writeback | Decisions are **auditable and actionable** |
 | **2:45–3:00** | Close with the Tottenham multi-rights-holder use case | Same engine, **multiple clubs and sports** |
 
 ### The pitch
 
-> **“Sports teams don't have a content shortage. They have a usable-content problem. REROUTE turns a publishing intent into the closest rights-compliant creative option. When part of an edit fails, we find a semantically similar replacement, validate its rights independently, rebuild the media, and provide an audit trail. AI finds the options; the rights rules remain authoritative; the human approves.”**
+> **“Sports teams don't have a content shortage. They have a usable-content problem. PULSE turns a publishing intent into the closest rights-compliant creative option. When part of an edit fails, we find a semantically similar replacement, validate its rights independently, rebuild the media, and provide an audit trail. AI finds the options; the rights rules remain authoritative; the human approves.”**
 
-**Final line:** *“REROUTE turns compliance from a dead end into a creative path.”*
+**Final line:** *“PULSE turns compliance from a dead end into a creative path.”*
 
 ---
 

@@ -107,11 +107,11 @@ $selection-bg: $thfc-raised;
 }
 
 #title-slide > * {
-  max-width: 1040px;
+  max-width: 860px;
 }
 
 #title-slide .title {
-  font-size: 3.1em;
+  font-size: 2.6em;
   line-height: 0.95;
   margin: 0 0 0.25em 0;
   border: 0;
@@ -130,7 +130,7 @@ $selection-bg: $thfc-raised;
 #title-slide .quarto-title-authors {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.9em 1.4em;
+  gap: 0.9em 0.8em;
   margin: 0;
   padding-top: 1em;
   border-top: 2px solid var(--spurs-line);
@@ -143,6 +143,7 @@ $selection-bg: $thfc-raised;
 
 #title-slide .quarto-title-author-name {
   font-size: 0.62em;
+  white-space: nowrap;
   font-weight: 600;
   color: #FFFFFF;
   margin: 0;

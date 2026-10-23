@@ -1,9 +1,9 @@
 import { CLUBS } from "../clubs";
 import { goalIntents } from "../goal-intents";
-import { latestSeason, rankMoments, type LinkedVideo } from "../moment-ranking";
+import { goalTerms, latestSeason, rankMoments, type LinkedVideo } from "../moment-ranking";
 import type { Club, GoalRun, MatchFilter, ParsedObjective } from "../types";
 import { candidateMapping, defaultMediaDeps, linkDiscovered, mappingAttempt, openIndex, stageIssue, type MediaDeps } from "./media-lookup";
-import { ScorePlayDiscoveryError, discoverVideos, type DiscoveredVideo, type Discovery } from "./scoreplay-discovery";
+import { ScorePlayDiscoveryError, discoverVideos, resolveTags, searchMediaPages, type DiscoveredVideo, type Discovery, type ScorePlayHttp } from "./scoreplay-discovery";
 import { classifyTwelveLabsError, searchMoments } from "./twelvelabs-moments";
 
 /** Moments per question: one page; enough for agreement between questions to show. */
@@ -17,7 +17,7 @@ export function defaultGoalDeps(club: Club): GoalSearchDeps {
   return defaultMediaDeps(club);
 }
 
-export type GoalSearch = Pick<GoalRun, "intents" | "library" | "search" | "attempts" | "pool" | "matchFilter">;
+export type GoalSearch = Pick<GoalRun, "intents" | "library" | "search" | "attempts" | "pool" | "matchFilter" | "playerFilter">;
 
 /** Names under which footage refers to a fixture's opponent (lower-case). */
 const OPPONENT_ALIASES: Record<string, string[]> = {
@@ -36,6 +36,37 @@ export function filterByMatch(videos: readonly DiscoveredVideo[], requested: str
   return kept.length
     ? { videos: kept, filter: { requested, status: "APPLIED", videos: kept.length } }
     : { videos: [...videos], filter: { requested, status: "NOT_FOUND", videos: videos.length } };
+}
+
+/** Capitalized words of the goal that could name a person ("Solanke's" → "Solanke"); club names are excluded. */
+function nameCandidates(goal: string, exclude: readonly string[]): string[] {
+  const skip = new Set(exclude.flatMap((e) => e.toLowerCase().split(/[^\p{L}]+/u)));
+  const words = goal.match(/\p{Lu}[\p{L}-]{3,}/gu) ?? [];
+  return [...new Set(words.map((w) => w.replace(/['’]s$/u, "")).filter((w, i) => !(i === 0 && goal.trimStart().startsWith(w)) && !skip.has(w.toLowerCase())))].slice(0, 3);
+}
+
+/**
+ * A player the goal names, resolved the way ScorePlay documents "find medias": `GET /tag/search` turns the name into
+ * a player id (whole-word match, e.g. "Solanke" → "Dominic Ayodele Solanke-Mitchell"), then `POST /media/search`
+ * with `any_players` lists the videos ScorePlay TAGS with that player. The goal's search is restricted to those
+ * videos. Nothing is inferred from footage; no, or more than one, matching player leaves the library unfiltered.
+ */
+export async function filterByPlayer(
+  http: ScorePlayHttp,
+  videos: readonly DiscoveredVideo[],
+  goal: string,
+  exclude: readonly string[],
+): Promise<{ videos: DiscoveredVideo[]; filter?: MatchFilter; query?: string }> {
+  const terms = nameCandidates(goal, exclude);
+  if (!terms.length) return { videos: [...videos] };
+  const resolved = await resolveTags(http, terms);
+  if (resolved.players.length !== 1) return { videos: [...videos] };
+  const player = resolved.players[0];
+  const tagged = await searchMediaPages(http, { any_players: [player.id], media_type: "video" }, { maxItems: 200 });
+  const ids = new Set(tagged.media.map((m) => String(m.ID)));
+  const kept = videos.filter((v) => ids.has(v.asset.id));
+  if (!kept.length) return { videos: [...videos] };
+  return { videos: kept, filter: { requested: player.name, status: "APPLIED", videos: kept.length }, query: terms.join(", ") };
 }
 
 /**
@@ -68,6 +99,7 @@ export async function searchGoal(
   }
   let videos = discovery.videos;
   let matchFilter: MatchFilter | undefined;
+  let playerFilter: MatchFilter | undefined;
   if (input.match) {
     ({ videos, filter: matchFilter } = filterByMatch(videos, input.match));
     attempts.push({
@@ -80,10 +112,21 @@ export async function searchGoal(
           : `no video names ${input.match}; searching the whole ${club.label} library`,
     });
   }
+  const before = videos.length;
+  try {
+    const player = await filterByPlayer(deps.scoreplay, videos, input.objective.raw, [club.label, ...terms, ...(input.match ? [input.match] : [])]);
+    if (player.filter) {
+      videos = player.videos;
+      playerFilter = player.filter;
+      attempts.push({ service: "ScorePlay", query: `player: ${player.query}`, outcome: "OK", detail: `${player.filter.videos} of ${before} video(s) tagged with ${player.filter.requested}` });
+    }
+  } catch (err) {
+    attempts.push({ service: "ScorePlay", query: "player tag", outcome: "ERROR", detail: err instanceof Error ? err.message : String(err) });
+  }
   const titles = videos.map((v) => v.asset.title);
   const library = { videos: videos.length, indexed: 0, latestSeason: latestSeason(titles) };
   if (videos.length === 0) {
-    return { intents, library, attempts, pool: [], matchFilter, search: { status: "NO_MATCHING_MOMENT", message: `No ScorePlay video is tagged ${terms.join(" or ")}.` } };
+    return { intents, library, attempts, pool: [], matchFilter, playerFilter, search: { status: "NO_MATCHING_MOMENT", message: `No ScorePlay video is tagged ${terms.join(" or ")}.` } };
   }
 
   try {
@@ -100,6 +143,7 @@ export async function searchGoal(
         attempts,
         pool: [],
         matchFilter,
+        playerFilter,
         search: ambiguous.length
           ? {
               status: "NOT_INDEXED",
@@ -137,10 +181,12 @@ export async function searchGoal(
     });
     if (results.length === 0) {
       const code = attempts.findLast((a) => a.outcome === "ERROR")?.code;
-      return { intents, library: indexed, attempts, pool: [], matchFilter, search: { status: "UNAVAILABLE", code, message: "Video intelligence is unavailable right now, so no moment can be proposed." } };
+      return { intents, library: indexed, attempts, pool: [], matchFilter, playerFilter, search: { status: "UNAVAILABLE", code, message: "Video intelligence is unavailable right now, so no moment can be proposed." } };
     }
 
-    const pool = rankMoments(results, byVideo, { objective: input.objective, match: input.match, latestSeason: library.latestSeason });
+    const o = input.objective;
+    const exclude = [club.label, ...terms, ...(input.match ? [input.match, ...(OPPONENT_ALIASES[input.match.toLowerCase()] ?? [])] : []), o.market?.matched ?? "", o.market?.label ?? "", o.product?.matched ?? ""];
+    const pool = rankMoments(results, byVideo, { objective: o, match: input.match, latestSeason: library.latestSeason, goalTerms: goalTerms(o.raw, exclude) });
     const moments = results.reduce((n, r) => n + r.moments.length, 0);
     return {
       intents,
@@ -148,6 +194,7 @@ export async function searchGoal(
       attempts,
       pool,
       matchFilter,
+      playerFilter,
       search: pool.length
         ? {
             status: "FOUND",
@@ -164,6 +211,7 @@ export async function searchGoal(
       attempts,
       pool: [],
       matchFilter,
+      playerFilter,
       search: {
         status: issue.code === "EMPTY_INDEX" ? "NOT_INDEXED" : "UNAVAILABLE",
         code: issue.code,

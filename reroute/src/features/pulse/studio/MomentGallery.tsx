@@ -71,7 +71,15 @@ export function MomentGallery({ goal, busy, loadingKey, onChoose, onSearchAgain,
             The strongest moments for this goal
           </h1>
         </div>
-        <p className="max-w-sm text-small text-ink-muted">Real footage from the club library, located to the second. Choose one to build the campaign.</p>
+        <p className="max-w-sm text-small text-ink-muted">
+          {goal.run.playerFilter ? (
+            <>
+              Searched only the {goal.run.playerFilter.videos} videos ScorePlay tags with <span className="text-ink">{goal.run.playerFilter.requested}</span>, the
+              player your goal names.{" "}
+            </>
+          ) : null}
+          Real footage from the club library, located to the second. Choose one to build the campaign.
+        </p>
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-12 lg:grid-cols-12">

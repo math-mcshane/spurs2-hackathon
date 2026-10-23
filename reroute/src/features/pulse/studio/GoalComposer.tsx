@@ -13,6 +13,7 @@ import { Eyebrow, StagedProgress, country, usageWord, type Stage } from "./parts
 /** Example objectives by business intent. Each fills the field with a full sentence the parser understands. */
 const EXAMPLES: Record<Club, { label: string; goal: string }[]> = {
   tottenham: [
+    { label: "Sponsor a goal moment", goal: "Activate our sponsor with Solanke's late goal for UK fans" },
     { label: "Sell merchandise", goal: "Promote Tottenham merchandise to UK supporters" },
     { label: "Sell tickets", goal: "Sell tickets for the next home game" },
     { label: "Activate a sponsor", goal: "Activate our sleeve sponsor with fans in the UK" },

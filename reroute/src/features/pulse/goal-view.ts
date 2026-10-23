@@ -456,6 +456,7 @@ export function buildGoalView(
       plan: run.plan,
       match: run.match,
       matchFilter: run.matchFilter,
+      playerFilter: run.playerFilter,
       intents: run.intents,
       library: run.library,
       search: run.search,

@@ -7,14 +7,16 @@ import { isEvidenceLinkable, type Asset, type DataOrigin, type MediaRef } from "
  *
  *   relevance  = Σ over intents the moment matched of weight × K / (K + rank − 1), ÷ Σ all weights
  *   readiness  = how close the asset is to a social-ready cut (from its duration and filename)
- *   context    = 0.6 when the goal names a match and the filename marks an earlier season, else 1
+ *   context    = 0.6 when the goal names a match and the filename marks an earlier season; × (1 + 0.5 × (n − 1))
+ *                when the club's own ScorePlay title names n ≥ 2 of the goal's distinctive words ("Solanke's late
+ *                goal" → "solanke late goal.mp4", ×2); else 1
  *   score      = (0.85 × relevance + 0.15 × readiness) × context
  *
  * A moment that several of the objective's questions independently found ranks higher: agreement
  * across queries is the evidence. Hackathon weights, shown to the user; not a sales predictor.
  */
 
-export const RANKING = { relevance: 0.85, readiness: 0.15, k: 5, earlierSeason: 0.6 } as const;
+export const RANKING = { relevance: 0.85, readiness: 0.15, k: 5, earlierSeason: 0.6, titleWord: 0.5 } as const;
 
 /** One hit as returned by the TwelveLabs adapter (`origin` CACHED when served from a recorded response). */
 export type RawMoment = { videoId: string; start: number; end: number; rank: number; thumbnailUrl?: string; origin?: DataOrigin };
@@ -31,6 +33,8 @@ export type RankingContext = {
   match?: string;
   /** Latest season marked in any library filename. */
   latestSeason?: string;
+  /** Distinctive words of the goal (no club, market, product or filler words), lower-case. */
+  goalTerms?: readonly string[];
 };
 
 /** "2020-21" from "…_20_21_…" or "…2026-27…"; only consecutive years count as a season. */
@@ -55,6 +59,25 @@ export function clock(sec: number): string {
 
 const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end && b.start < a.end;
 const contribution = (weight: number, rank: number) => (weight * RANKING.k) / (RANKING.k + rank - 1);
+
+/** Words common to every sports goal: never evidence that a title names what the goal asks for. */
+const FILLER = new Set(
+  "with from that this your their they them have more most into over about around after before during next last best big new club team fans fan supporters supporter followers people game games match matches season moment moments video videos post posts campaign campaigns activate drive grow promote maximize increase sell boost celebrate show share".split(" "),
+);
+
+/** Distinctive, ≥ 4-letter words of a goal, minus `exclude` (club names, the named fixture, parsed market/product words). */
+export function goalTerms(goal: string, exclude: readonly string[]): string[] {
+  const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const skip = new Set(exclude.flatMap((e) => fold(e).split(/[^\p{L}\p{N}]+/u)));
+  return [...new Set(fold(goal).replace(/['’]s\b/gu, "").split(/[^\p{L}\p{N}]+/u))].filter((w) => w.length >= 4 && !FILLER.has(w) && !skip.has(w));
+}
+
+/** Goal words the asset's ScorePlay title names (whole words). */
+function titleHits(title: string, terms: readonly string[] | undefined): string[] {
+  if (!terms?.length) return [];
+  const words = new Set(title.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().split(/[^\p{L}\p{N}]+/u));
+  return terms.filter((t) => words.has(t));
+}
 
 function readiness(asset: Asset): { value: number; note: string } {
   const d = asset.durationSec;
@@ -132,7 +155,9 @@ export function rankMoments(
     const ready = readiness(c.link.asset);
     const season = seasonOf(c.link.asset.title);
     const earlier = !!(ctx.match && season && ctx.latestSeason && season < ctx.latestSeason);
-    const contextFactor = earlier ? RANKING.earlierSeason : 1;
+    const named = titleHits(c.link.asset.title, ctx.goalTerms);
+    const titleFactor = named.length >= 2 ? 1 + RANKING.titleWord * (named.length - 1) : 1;
+    const contextFactor = (earlier ? RANKING.earlierSeason : 1) * titleFactor;
     const score = Math.round((RANKING.relevance * relevance + RANKING.readiness * ready.value) * contextFactor);
     const asset = c.link.asset;
     const span = `${clock(primary.start)}–${clock(primary.end)}`;
@@ -172,11 +197,16 @@ export function rankMoments(
         notes: {
           relevance: `Matched ${supporting.length} of ${results.length} questions for this goal (${evidence}).`,
           readiness: ready.note,
-          context: earlier
-            ? `Filename marks the ${season} season — an earlier meeting, not the match you named (×${RANKING.earlierSeason}).`
-            : season
-              ? `Filename marks the ${season} season.`
-              : "No season marked in the filename.",
+          context: [
+            earlier
+              ? `Filename marks the ${season} season — an earlier meeting, not the match you named (×${RANKING.earlierSeason}).`
+              : season
+                ? `Filename marks the ${season} season.`
+                : "No season marked in the filename.",
+            titleFactor > 1 ? `The club's ScorePlay title names what the goal asks for (${named.join(", ")}) (×${titleFactor}).` : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
         },
       },
       matches: supporting.map(({ intent, label, query, rank, start, end }) => ({ intent, label, query, rank, start, end })),

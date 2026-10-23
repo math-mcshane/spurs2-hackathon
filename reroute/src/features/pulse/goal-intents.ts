@@ -20,7 +20,8 @@ type IntentKey =
   | "near-miss"
   | "save"
   | "atmosphere"
-  | "to-camera";
+  | "to-camera"
+  | "partner-on-kit";
 
 const PHRASES: Record<IntentKey, { label: string; why: string; query: Record<Sport, string> }> = {
   kit: {
@@ -77,6 +78,14 @@ const PHRASES: Record<IntentKey, { label: string; why: string; query: Record<Spo
     why: "Direct-to-camera moments build a personal connection with the audience",
     query: { football: "player looking at the camera and smiling", basketball: "player looking at the camera and smiling" },
   },
+  "partner-on-kit": {
+    label: "Partner on the kit",
+    why: "A sponsor activation needs the partner on screen — a scorer's shirt is the club's most-seen sponsor surface (which brands are actually visible is checked in the rights step)",
+    query: {
+      football: "player celebrating a goal with the sponsor logo on his shirt clearly visible",
+      basketball: "player celebrating with the sponsor logo on his jersey clearly visible",
+    },
+  },
 };
 
 /** Intents and weights per objective product; `default` when the objective names no product. */
@@ -87,7 +96,7 @@ const PLAN: Record<Product | "default", [IntentKey, number][]> = {
   engagement: [["score", 1], ["near-miss", 0.8], ["save", 0.7], ["celebration", 0.6], ["atmosphere", 0.4]],
   followers: [["score", 1], ["celebration", 0.8], ["to-camera", 0.7], ["near-miss", 0.5]],
   subscriptions: [["score", 1], ["near-miss", 0.8], ["save", 0.7], ["celebration", 0.6]],
-  sponsor: [["celebration", 0.9], ["atmosphere", 0.8], ["player-fan-bond", 0.6]],
+  sponsor: [["partner-on-kit", 1], ["celebration", 0.9], ["atmosphere", 0.8], ["player-fan-bond", 0.6]],
   default: [["score", 1], ["celebration", 0.9], ["near-miss", 0.6], ["atmosphere", 0.5]],
 };
 

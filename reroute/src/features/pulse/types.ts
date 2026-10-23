@@ -971,6 +971,8 @@ export const GoalRunSchema = z.object({
   /** The fixture named in the goal, as written. */
   match: z.string().optional(),
   matchFilter: MatchFilterSchema.optional(),
+  /** The player the goal names, matched to a ScorePlay person tag; the search was restricted to their videos. */
+  playerFilter: MatchFilterSchema.optional(),
   intents: z.array(GoalIntentSchema),
   library: z.object({
     videos: z.number().int().nonnegative(),
@@ -1097,6 +1099,7 @@ export const GoalViewSchema = z.object({
     plan: true,
     match: true,
     matchFilter: true,
+    playerFilter: true,
     intents: true,
     library: true,
     search: true,

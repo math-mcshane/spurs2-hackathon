@@ -11,17 +11,16 @@ author:
     affiliations: Library Labs
   - name: Raj
     affiliations: Salesforce Consultant
-logo: images/UChicago_Shield_Crop.png
 format:
   revealjs:
-    theme: [default, knit-files/mcshane-scss-theme.scss]
+    theme: [default, knit-files/mcshane-scss-theme.scss, knit-files/spurs2-scss-theme.scss]
     slide-number: c/t
     width: 1920
     height: 1080
     code-block-height: 880px
     margin: 0.03
     number-sections: true
-    number-depth: 3
+    number-depth: 2
     # multiplex: true
     code-annotations: true
     # transition: fade

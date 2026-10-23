@@ -1,8 +1,11 @@
 ---
-title: "Team 5: Rights and Compliance"
-subtitle: "Pulse: Driving Partner Value within a Compliance Engine"
+title: "Pulse: Driving Partner Value within a Compliance Engine"
+subtitle: "Team 5 · Rights and Compliance"
 footer: "[🔗 Spurs$^2$ Hackathon](https://spurs2-hackathon.vercel.app/) | Pulse"
 date: "2026-10-23"
+title-slide-attributes:
+  data-background-image: images/spurs2-title-bg.svg
+  data-background-size: cover
 ---
 
 ```{r setup, echo = FALSE}
@@ -17,20 +20,70 @@ knitr::opts_chunk$set(
 ```
 
 
-### Overview
+### {.unnumbered .statement .center}
 
-:::: {.columns}
-::: {.column width="50%"}
+[[01]{.n} / The problem]{.kicker}
 
-1. ...
-2. ...
+[Sports clubs don't have a content shortage.]{.headline .dim}
 
+[They have a content usability problem.]{.headline}
+
+::: notes
+Practicality · 25 pts.
+Les clubs ont les images. Mais choisir le bon moment, vérifier les usages et préparer une campagne mobilise plusieurs outils et équipes.
+Objectif : rendre le problème immédiatement reconnaissable par Tottenham et San Antonio.
 :::
-::: {.column width="50%"}
 
 
+### {.unnumbered .statement .center}
+
+[[02]{.n} / The solution]{.kicker}
+
+[Meet PULSE.]{.headline}
+
+[From business intent to human-approved plan.]{.sub}
+
+::: steps
+[[1]{.i} Intent]{.step}
+[[2]{.i} Rights]{.step}
+[[3]{.i} Review]{.step}
 :::
-::::
+
+[Powered by ScorePlay + TwelveLabs]{.powered}
+
+::: notes
+Integration · 25 pts.
+Workflow en trois étapes : Intent → Rights & Compliance → Human Review.
+ScorePlay apporte les vrais médias et métadonnées ; TwelveLabs retrouve et analyse les moments vidéo.
+:::
 
 
+### {.unnumbered .statement .center}
 
+[[03]{.n} / Why it matters]{.kicker}
+
+[Don't just flag the problem.]{.headline .dim}
+
+[Find a way forward.]{.headline}
+
+::: score
+::: {.side .before}
+[0/3]{.figure}
+
+[Before]{.label}
+:::
+
+::: {.side .after}
+[3/3]{.figure}
+
+[After]{.label}
+:::
+:::
+
+[Uses allowed · Solanke late goal, sponsored post · Instagram, Facebook, X · UK · illustrative rules, not legal clearance]{.fineprint}
+
+::: notes
+Novelty · 15 pts.
+Le moteur ne se contente pas de bloquer un contenu : il trouve une correction, vérifie indépendamment le nouveau plan et laisse la décision finale à un humain.
+Le 0/3 → 3/3 vaut uniquement sous la politique illustrative du scénario Solanke.
+:::

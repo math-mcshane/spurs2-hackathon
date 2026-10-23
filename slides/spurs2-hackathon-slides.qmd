@@ -167,9 +167,15 @@ TwelveLabs videos are linked to ScorePlay assets by filename + duration (58/58 T
 
 ### {.unnumbered .statement .center}
 
+[Demo]{.headline}
+
+
+
+### {.unnumbered .statement .center}
+
 [[05]{.n} / Vision]{.kicker}
 
-[Clubs already own the content.]{.headline .dim}
+[Clubs already have access to the content.]{.headline .dim}
 
 [PULSE makes sure they can use it.]{.headline}
 
@@ -196,26 +202,10 @@ Every club on ScorePlay. Music, player-status, betting-partner and AI-image chec
 [One club. One partner. One pilot.]{.ask}
 
 ::: notes
-Closing: clubs already own the content; PULSE makes sure they can actually use it — and when they can't, it finds the way that works and shows exactly why.
+Closing: clubs already have access to the content; PULSE makes sure they can actually use it — and when they can't, it finds the way that works and shows exactly why.
 :::
 
-### {.unnumbered .statement .center}
 
-[Demo]{.headline}
-
-
-
-### {.unnumbered .statement .center}
-
-[Roadmap]{.headline}
-
-::: {.incremental}
-
-* Real compliance engine
-* Jockey
-* Access to more media
-
-:::
 
 
 

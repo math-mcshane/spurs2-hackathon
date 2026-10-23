@@ -2,7 +2,7 @@
 
 State as of 2026-10-23 ≈ 12:30 UTC, branch `hackathon-integration` at `2f3d299` (+ docs). Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) (first section = final flagship record). Not a prediction of scores.
 
-Environments: Vercel Preview https://spurs2-hackathon-inpdx7om5-merlins-projects-2b20d832.vercel.app (`e3c5a2b`; present from this; public; rotated reviewer credentials; shared Supabase **without** the policy-packages migration), fallback preview https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app (`2f3d299`), local production build (`next start -p 3400`; same evidence). Presentation cleanup (≈ 12:50 UTC): one "Illustrative rules ⓘ" indicator per screen carries the four limits (illustrative rules, machine-observed evidence, edit plans not rendered, dry-run writeback); verdicts read "Allowed under these rules".
+Environments: Vercel Preview https://spurs2-hackathon-o85fcxpxk-merlins-projects-2b20d832.vercel.app (`2152135`; present from this; public; rotated reviewer credentials; shared Supabase **without** the policy-packages migration — the bundled sample mapping stands in for stored uploads), fallback preview https://spurs2-hackathon-inpdx7om5-merlins-projects-2b20d832.vercel.app (`e3c5a2b`), local production build (`next start -p 3400`; same evidence). One "Illustrative rules ⓘ" / "Sample mapping ⓘ" indicator per screen carries the limits (illustrative rules, machine-observed evidence, edit plans not rendered, dry-run writeback).
 
 ## Status table
 

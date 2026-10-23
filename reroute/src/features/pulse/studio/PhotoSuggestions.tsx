@@ -49,7 +49,7 @@ function Photo({ photo: p }: { photo: PhotoSuggestion }) {
     <article aria-label={`Photo ${p.filename}`} className="flex min-w-0 flex-col gap-3">
       {p.thumbnailUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- authorized ScorePlay thumbnail (reviewer session only)
-        <img src={p.thumbnailUrl} alt={p.caption ?? p.filename} loading="lazy" className="aspect-[4/3] w-full rounded-lg bg-surface object-cover ring-1 ring-line ring-inset" />
+        <img src={p.thumbnailUrl} alt={p.caption ?? p.filename} loading="lazy" className="aspect-[4/3] w-full rounded-lg bg-surface object-cover object-top ring-1 ring-line ring-inset" />
       )}
       <div className="flex items-center gap-3">
         {!p.thumbnailUrl && (

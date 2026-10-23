@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
@@ -7,20 +8,21 @@ import type { Club } from "../types";
 
 const ORDER: Club[] = ["tottenham", "spurs"];
 
-/** A crest-like monogram from design tokens only (no club artwork): white kit for Tottenham, black and silver for San Antonio. */
-const CREST: Record<Club, { letters: string; className: string }> = {
-  tottenham: { letters: "TH", className: "bg-ink text-obsidian" },
-  spurs: { letters: "SA", className: "bg-obsidian text-ink ring-1 ring-line-strong ring-inset" },
+/**
+ * The clubs' own marks, unmodified (`public/clubs/`, sources in docs/design/DESIGN_SYSTEM.md): the Tottenham Hotspur
+ * cockerel from tottenhamhotspur.com in club navy on white, the San Antonio Spurs spur from the NBA's team CDN on black.
+ * Each sits on a fixed tile so it reads on every club theme. They name the selected workspace, nothing more.
+ */
+const LOGO: Record<Club, { src: string; width: number; height: number; tile: string; logo: string }> = {
+  tottenham: { src: "/clubs/tottenham-hotspur.svg", width: 1216, height: 3040, tile: "bg-white", logo: "h-[78%]" },
+  spurs: { src: "/clubs/san-antonio-spurs.png", width: 261, height: 320, tile: "bg-black ring-1 ring-[#c4ced4]/45 ring-inset", logo: "h-[74%]" },
 };
 
-export function ClubCrest({ club, className }: { club: Club; className?: string }) {
-  const c = CREST[club];
+export function ClubLogo({ club, className }: { club: Club; className?: string }) {
+  const l = LOGO[club];
   return (
-    <span
-      aria-hidden
-      className={cn("inline-flex size-6 shrink-0 items-center justify-center rounded-[6px_6px_10px_10px] font-mono text-[0.625rem] font-semibold tracking-tight", c.className, className)}
-    >
-      {c.letters}
+    <span aria-hidden className={cn("inline-flex size-8 shrink-0 items-center justify-center rounded-md", l.tile, className)}>
+      <Image src={l.src} alt="" width={l.width} height={l.height} unoptimized draggable={false} className={cn("w-auto object-contain", l.logo)} />
     </span>
   );
 }
@@ -43,15 +45,15 @@ export function ClubSwitcher({ club, disabled, onChange }: { club: Club; disable
       <SelectTrigger
         size="sm"
         aria-label={`Club: ${CLUBS[club].label}. Switch club`}
-        className="h-8 gap-2 border-line-strong bg-transparent pl-1 text-small text-ink hover:bg-surface dark:bg-transparent"
+        className="h-10 gap-2.5 border-line-strong bg-transparent py-1 pl-1 text-small font-medium text-ink hover:bg-surface data-[size=sm]:h-10 dark:bg-transparent"
       >
-        <ClubCrest club={club} />
+        <ClubLogo club={club} />
         <span className="hidden max-w-[11rem] truncate sm:inline">{CLUBS[club].label}</span>
       </SelectTrigger>
       <SelectContent align="end" alignItemWithTrigger={false} className="min-w-64 bg-surface-raised text-ink ring-line-strong">
         {ORDER.map((k) => (
           <SelectItem key={k} value={k} className="py-1.5 text-small">
-            <ClubCrest club={k} />
+            <ClubLogo club={k} />
             <span className="flex min-w-0 flex-col items-start gap-0.5">
               <span className="truncate">{CLUBS[k].label}</span>
               <span className="text-meta text-ink-muted">

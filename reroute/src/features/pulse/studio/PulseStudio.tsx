@@ -143,6 +143,12 @@ export function PulseStudio() {
   /** Synchronous lock: a second click before the disabled state renders must not send a second request. */
   const inflight = useRef(false);
 
+  // Club theme (globals.css `[data-club]`): also on <html> so portals (menus, dialogs, toasts), the page edges and an
+  // in-app visit to the Policy Center keep the selected club's colours. A direct load of another page stays neutral.
+  useEffect(() => {
+    document.documentElement.dataset.club = club;
+  }, [club]);
+
   const go = useCallback((next: View, run: string | null, mode: "push" | "replace" = "replace") => {
     setView(next);
     writeUrl(run, next, mode);
@@ -284,7 +290,7 @@ export function PulseStudio() {
   const openingKey = busy?.startsWith("select:") ? busy.slice(7) : null;
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div data-club={club} className="flex min-h-dvh flex-col bg-background text-foreground">
       <PulseHeader
         nav={goal ? <StepNav view={shown} reached={reached} onView={(next) => go(next, id ?? null)} /> : undefined}
         actions={

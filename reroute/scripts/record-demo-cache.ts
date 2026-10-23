@@ -5,9 +5,9 @@
  *   pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A B C]
  *   … scripts/record-demo-cache.ts --sanitize   # re-apply the current sanitizer to demo-cache/ offline, then verify
  *
- * Scenarios: A "Promote Tottenham merchandise to UK supporters", B "Maximize global engagement from the
- * Manchester United game", C "Sell more Spurs jerseys in Mexico" (club tottenham). Each is walked through
- * every moment: select → rights check → "Find another way" → first usable alternative or remedy → re-check.
+ * Scenarios = the Studio's brief library (club tottenham): A merchandise UK, B global engagement, C jerseys Mexico,
+ * D tickets, E sleeve-sponsor activation, F jerseys UK, G UK followers. Each is walked through every moment:
+ * select → rights check → "Find a way to use it" → the recommended option, if any → independent re-check.
  *
  * Read-only upstream (TwelveLabs list/search/analyze, ScorePlay GET + POST /media/search); goal runs are
  * written only to the LOCAL Supabase (refuses any other SUPABASE_URL). Records JSON metadata only: EVERY URL
@@ -29,6 +29,11 @@ const SCENARIOS: { name: string; goal: string; club: Club }[] = [
   { name: "A", goal: "Promote Tottenham merchandise to UK supporters", club: "tottenham" },
   { name: "B", goal: "Maximize global engagement from the Manchester United game", club: "tottenham" },
   { name: "C", goal: "Sell more Spurs jerseys in Mexico", club: "tottenham" },
+  { name: "D", goal: "Sell tickets for the next home game", club: "tottenham" },
+  { name: "E", goal: "Activate our sleeve sponsor with fans in the UK", club: "tottenham" },
+  { name: "F", goal: "Sell Tottenham jerseys to UK fans", club: "tottenham" },
+  { name: "G", goal: "Get more followers in the UK", club: "tottenham" },
+  { name: "H", goal: "Grow engagement with Spurs fans in France", club: "spurs" },
 ];
 
 /** What must never be in a committed fixture: any URL (protected footage links), storage locators, e-mails, or token-like material. */

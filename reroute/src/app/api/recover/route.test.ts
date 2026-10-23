@@ -184,8 +184,8 @@ describe("proxy: /api/recover", () => {
     expect((await proxy(request({ origin: "https://evil.example" }))).status).toBe(403);
   });
 
-  it("is rate-limited like the other rights routes: 20/min per IP", async () => {
-    for (let i = 0; i < 20; i++) expect(passed(await proxy(request()))).toBe(true);
+  it("is rate-limited as the most expensive route: 10/min per IP", async () => {
+    for (let i = 0; i < 10; i++) expect(passed(await proxy(request()))).toBe(true);
     const limited = await proxy(request());
     expect(limited.status).toBe(429);
     expect(await limited.json()).toMatchObject({ code: "RATE_LIMITED" });

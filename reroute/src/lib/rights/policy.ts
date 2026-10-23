@@ -61,7 +61,7 @@ const COVER_PATTERN = /^(person:|brand:|squad:own$)/i;
 
 export const RuleSchema = z
   .strictObject({
-    id: z.string().min(1),
+    id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, "Rule ids use letters, digits, '.', '_' or '-' (max 64)"),
     effect: z.enum(["PERMIT", "DENY"]),
     dimensions: z.array(DimensionSchema).min(1),
     match: RuleMatchSchema,
@@ -71,7 +71,7 @@ export const RuleSchema = z
     validFrom: Timestamp.optional(),
     validUntil: Timestamp.optional(),
     /** Human-readable; shown verbatim to producers and reviewers. */
-    explanation: z.string().min(1),
+    explanation: z.string().min(1).max(600),
   })
   .superRefine((rule, ctx) => {
     const grantsSubjects = rule.dimensions.some((d) => d === "people" || d === "sponsor");
@@ -117,11 +117,12 @@ export type Applicability = z.infer<typeof ApplicabilitySchema>;
 
 export const PolicySchema = z
   .strictObject({
-    id: z.string().min(1),
-    version: z.string().min(1),
-    title: z.string().min(1),
+    /** Letters, digits, '.', '_', '-' only: ids and versions are joined with '+' in combined decisions. */
+    id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/, "Policy ids use lowercase letters, digits, '.', '_' or '-' (max 64)"),
+    version: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/, "Versions use letters, digits, '.', '_' or '-' (max 32)"),
+    title: z.string().min(1).max(120),
     /** Where the rules come from (document, organizer dataset, or "fictional demo"). */
-    source: z.string().min(1),
+    source: z.string().min(1).max(2000),
     kind: PolicyKindSchema,
     disclaimer: z.string(),
     applicability: ApplicabilitySchema,

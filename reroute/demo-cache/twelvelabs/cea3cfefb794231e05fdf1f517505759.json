@@ -1,11 +1,11 @@
 {
-  "recordedAt": "2026-10-22T23:37:19.740Z",
+  "recordedAt": "2026-10-23T04:40:44.758Z",
   "source": "twelvelabs",
   "request": {
     "op": "search",
     "indexId": "6ad911d5500e82756f2eb468",
     "query": "close-up of a player's shirt with the crest visible",
-    "pageLimit": 49
+    "pageLimit": 48
   },
   "value": [
     {
@@ -295,12 +295,6 @@
       "start": 4268.166015625,
       "end": 4277.6328125,
       "rank": 48
-    },
-    {
-      "videoId": "6ad911e9500e82756f2eb4eb",
-      "start": 2856.4326171875,
-      "end": 2868.232421875,
-      "rank": 49
     }
   ]
 }

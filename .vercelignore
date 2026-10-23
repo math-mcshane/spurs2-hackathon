@@ -9,3 +9,6 @@
 **/.next/
 **/supabase/.temp/
 **/tsconfig.tsbuildinfo
+**/*.local.txt
+**/.reviewers*
+docs/

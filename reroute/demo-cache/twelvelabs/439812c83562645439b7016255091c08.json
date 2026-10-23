@@ -1,11 +1,11 @@
 {
-  "recordedAt": "2026-10-22T23:36:57.739Z",
+  "recordedAt": "2026-10-23T04:40:31.854Z",
   "source": "twelvelabs",
   "request": {
     "op": "search",
     "indexId": "6ad911d5500e82756f2eb468",
     "query": "a goal being scored",
-    "pageLimit": 49
+    "pageLimit": 48
   },
   "value": [
     {
@@ -295,12 +295,6 @@
       "start": 2738.76611328125,
       "end": 2750.765869140625,
       "rank": 48
-    },
-    {
-      "videoId": "6ad911e9500e82756f2eb4eb",
-      "start": 4450.89990234375,
-      "end": 4461.6328125,
-      "rank": 49
     }
   ]
 }

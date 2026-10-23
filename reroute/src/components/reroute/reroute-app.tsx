@@ -16,7 +16,9 @@ import {
 import { MEDIA_PREVIEW_DISABLED_NOTE, MEDIA_PREVIEW_REVIEWER_ONLY_NOTE } from "@/features/pulse/flags";
 import { segmentLabel } from "@/features/pulse/studio/MomentPreview";
 import { EDL_EXECUTION_LABEL } from "@/lib/rights/recovery/edl";
-import type { RecoveryOption } from "@/features/pulse/types";
+import type { Club, RecoveryOption } from "@/features/pulse/types";
+import { CLUBS } from "@/features/pulse/clubs";
+import { sameClub } from "@/lib/rights/club";
 import { api, isAbort, type AssetDetailResponse, type PoliciesResponse, type ReceiptView } from "@/lib/api-client";
 import { AppHeader } from "./app-header";
 import { AssetSearch } from "./asset-search";
@@ -45,6 +47,13 @@ function defaultEdit(asset: Asset): EditPlan {
     end: max === undefined ? end : Math.min(end, max),
   }));
   return { id: `edit-${asset.id}`, title: `${asset.title} · 15 s cut`, segments, derived: false };
+}
+
+/** The publishing club an asset belongs to, when exactly one known club is among its ScorePlay teams. */
+function assetClub(asset: Asset): Club | undefined {
+  const teams = asset.facts.teams ?? [];
+  const found = (Object.keys(CLUBS) as Club[]).filter((club) => teams.some((t) => sameClub(t, CLUBS[club].label)));
+  return found.length === 1 ? found[0] : undefined;
 }
 
 function editProblem(edit: EditPlan, maxSec?: number): string | null {
@@ -90,6 +99,8 @@ export function RerouteApp() {
   const recoverySeq = useRef(0);
   const [applied, setApplied] = useState<(AppliedRecovery & { undo: Snapshot }) | null>(null);
   const [receipt, setReceipt] = useState<ReceiptView | null>(null);
+  /** Selected asset whose full ScorePlay facts have not yet prefilled the intent. */
+  const prefillFor = useRef<string | null>(null);
   const { session, setSession } = useReviewerSession();
   const [signInOpen, setSignInOpen] = useState(false);
 
@@ -196,6 +207,11 @@ export function RerouteApp() {
       const res = await api.asset(id);
       setAssets((a) => ({ ...a, [id]: res.asset }));
       setDetails((d) => ({ ...d, [id]: { status: "done", res } }));
+      if (prefillFor.current === id) {
+        prefillFor.current = null;
+        const club = assetClub(res.asset);
+        setIntent((i) => ({ ...i, ...(club ? { club } : {}), competition: i.competition || (res.asset.facts.competition ?? "") }));
+      }
       return res.asset;
     } catch (err) {
       setDetails((d) => ({ ...d, [id]: { status: "error", error: err } }));
@@ -215,9 +231,15 @@ export function RerouteApp() {
     resetRecovery();
     setApplied(null);
     setReceipt(null);
+    // The intent follows the new asset's ScorePlay facts (editable). A search result may lack them; the asset
+    // detail fills what is still missing when it arrives.
+    const facts = detail?.asset ?? a;
+    const club = assetClub(facts);
+    prefillFor.current = detail ? null : a.id;
     setIntent((i) => ({
       ...i,
-      competition: a.facts.competition ?? "",
+      ...(club ? { club } : {}),
+      competition: facts.facts.competition ?? "",
       publishAt: i.publishAt || new Date(Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 3_600_000).toISOString(),
     }));
     if (detail) setDetails((d) => ({ ...d, [a.id]: { status: "done", res: detail } }));
@@ -229,6 +251,7 @@ export function RerouteApp() {
   }
 
   function patchIntent(patch: Partial<IntentDraft>) {
+    prefillFor.current = null; // the producer's own value wins over a late ScorePlay fact
     invalidate();
     resetRecovery();
     setApplied(null);

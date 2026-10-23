@@ -17,13 +17,13 @@ export const UsageSchema = z.enum(["EDITORIAL", "ORGANIC", "SPONSORED", "COMMERC
 export type Usage = z.infer<typeof UsageSchema>;
 
 export const PublishIntentSchema = z.object({
-  territory: z.string().min(2), // ISO-3166 alpha-2: FR / US / GB
-  platform: z.string().min(1), // instagram / facebook / x / tiktok / youtube
+  territory: z.string().min(2).max(8), // ISO-3166 alpha-2: FR / US / GB
+  platform: z.string().min(1).max(40), // instagram / facebook / x / tiktok / youtube
   usage: UsageSchema,
-  competition: z.string().min(1), // NBA / Premier League ...
+  competition: z.string().min(1).max(80), // NBA / Premier League ...
   publishAt: z.iso.datetime({ offset: true }),
   /** Publishing club (CLUBS key, e.g. "tottenham", "spurs"). Drives policy selection; never inferred from footage. */
-  club: z.string().optional(),
+  club: z.string().max(40).optional(),
 });
 export type PublishIntent = z.infer<typeof PublishIntentSchema>;
 
@@ -198,14 +198,14 @@ export const SegmentSchema = z.object({
   scoreplayMediaId: z.string(),
   start: z.number().nonnegative(),
   end: z.number().positive(),
-  label: z.string().optional(),
+  label: z.string().max(500).optional(),
 });
 export type Segment = z.infer<typeof SegmentSchema>;
 
 /** An output edit = ordered segments. Every constituent segment is checked independently. */
 export const EditPlanSchema = z.object({
-  id: z.string(),
-  title: z.string(),
+  id: z.string().max(300),
+  title: z.string().max(300),
   segments: z.array(SegmentSchema).min(1).max(20),
   /** True when REROUTE produced this plan (derivative ⇒ distinct asset needing its own decision). */
   derived: z.boolean(),

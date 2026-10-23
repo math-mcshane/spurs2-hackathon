@@ -169,10 +169,19 @@ describe("proxy rate limits (per IP, fixed window)", () => {
     expect((await proxy(select())).status).toBe(429);
   });
 
-  it.each(["/api/recover", "/api/decide", "/api/access"])("%s: 20/min", async (path) => {
+  it.each(["/api/decide", "/api/access"])("%s: 20/min", async (path) => {
     const make = () => request(path, { body: {}, ip: "203.0.113.9" });
     expect((await hit(20, make)).every(passed)).toBe(true);
     expect((await proxy(make())).status).toBe(429);
+  });
+
+  it("recovery (POST /api/recover and goal action findRecovery): 10/min, the most expensive request", async () => {
+    const desk = () => request("/api/recover", { body: {}, ip: "203.0.113.12" });
+    expect((await hit(10, desk)).every(passed)).toBe(true);
+    expect((await proxy(desk())).status).toBe(429);
+    const studio = () => request("/api/pulse/goal", { body: { action: "findRecovery" }, ip: "203.0.113.13" });
+    expect((await hit(10, studio)).every(passed)).toBe(true);
+    expect((await proxy(studio())).status).toBe(429);
   });
 
   it("GET /api/assets/[id] (triggers analysis): 30/min; the search list is not limited", async () => {

@@ -1,11 +1,11 @@
 {
-  "recordedAt": "2026-10-22T23:36:54.295Z",
+  "recordedAt": "2026-10-23T04:40:37.596Z",
   "source": "twelvelabs",
   "request": {
     "op": "search",
     "indexId": "6ad911d5500e82756f2eb468",
     "query": "players applauding the travelling fans after the match",
-    "pageLimit": 49
+    "pageLimit": 48
   },
   "value": [
     {
@@ -295,12 +295,6 @@
       "start": 0,
       "end": 5.198999881744385,
       "rank": 48
-    },
-    {
-      "videoId": "6ad911ef500e82756f2eb512",
-      "start": 0,
-      "end": 9.532999992370605,
-      "rank": 49
     }
   ]
 }

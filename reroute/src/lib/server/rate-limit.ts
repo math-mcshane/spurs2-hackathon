@@ -18,6 +18,8 @@ export const RATE_LIMITS = {
   goalRun: { name: "pulse-goal-run", limit: 10, windowMs: MINUTE },
   goalAction: { name: "pulse-goal-action", limit: 60, windowMs: MINUTE },
   rights: { name: "rights", limit: 20, windowMs: MINUTE },
+  /** Recovery searches comparable footage and re-checks every candidate: the most expensive request. */
+  recovery: { name: "recovery", limit: 10, windowMs: MINUTE },
   assetDetail: { name: "asset-detail", limit: 30, windowMs: MINUTE },
   signIn: { name: "sign-in", limit: 5, windowMs: MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
@@ -79,8 +81,12 @@ async function goalAction(req: Request): Promise<string | undefined> {
 export async function rateLimitRuleFor(req: Request, pathname: string): Promise<RateLimitRule | null> {
   const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
   if (req.method === "POST") {
-    if (path === "/api/pulse/goal") return (await goalAction(req)) === "run" ? RATE_LIMITS.goalRun : RATE_LIMITS.goalAction;
-    if (path === "/api/recover" || path === "/api/decide" || path === "/api/access") return RATE_LIMITS.rights;
+    if (path === "/api/pulse/goal") {
+      const action = await goalAction(req);
+      return action === "run" ? RATE_LIMITS.goalRun : action === "findRecovery" ? RATE_LIMITS.recovery : RATE_LIMITS.goalAction;
+    }
+    if (path === "/api/recover") return RATE_LIMITS.recovery;
+    if (path === "/api/decide" || path === "/api/access") return RATE_LIMITS.rights;
     if (path === "/api/auth/session") return RATE_LIMITS.signIn;
   }
   // GET /api/assets/[id] fetches the asset and triggers TwelveLabs analysis.

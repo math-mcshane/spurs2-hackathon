@@ -15,8 +15,10 @@ const EXAMPLES: Record<Club, { label: string; goal: string }[]> = {
   tottenham: [
     { label: "Sell merchandise", goal: "Promote Tottenham merchandise to UK supporters" },
     { label: "Sell tickets", goal: "Sell tickets for the next home game" },
-    { label: "Grow engagement", goal: "Maximize global engagement from the Manchester United game" },
     { label: "Activate a sponsor", goal: "Activate our sleeve sponsor with fans in the UK" },
+    { label: "Grow engagement", goal: "Maximize global engagement from the Manchester United game" },
+    { label: "Sell jerseys", goal: "Sell Tottenham jerseys to UK fans" },
+    { label: "Grow UK followers", goal: "Get more followers in the UK" },
     { label: "Open a new market", goal: "Sell more Spurs jerseys in Mexico" },
   ],
   spurs: [{ label: "Sell jerseys abroad", goal: "Sell Spurs jerseys in Mexico using the best moments from the Kings game" }],

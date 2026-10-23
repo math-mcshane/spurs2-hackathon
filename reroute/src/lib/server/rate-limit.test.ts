@@ -50,7 +50,7 @@ describe("rateLimitRuleFor", () => {
     ["POST", "/api/pulse/goal", { action: "run", goal: "x" }, RATE_LIMITS.goalRun],
     ["POST", "/api/pulse/goal/", { action: "select", id: "g" }, RATE_LIMITS.goalAction],
     ["POST", "/api/pulse/goal", "{not json", RATE_LIMITS.goalAction],
-    ["POST", "/api/resolve", {}, RATE_LIMITS.rights],
+    ["POST", "/api/recover", {}, RATE_LIMITS.rights],
     ["POST", "/api/decide", {}, RATE_LIMITS.rights],
     ["POST", "/api/access", {}, RATE_LIMITS.rights],
     ["POST", "/api/auth/session", {}, RATE_LIMITS.signIn],

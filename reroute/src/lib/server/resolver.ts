@@ -1,26 +1,16 @@
-import type { z } from "zod";
-import type { Asset, Candidate, EditDecision, EditPlan, PublishIntent, ResolveResponseSchema, SearchHit, Segment } from "@/lib/contracts";
+import type { Asset, Candidate, EditDecision, EditPlan, PublishIntent, SearchHit, Segment } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
-import { classifyBlocker, type Remedy } from "@/lib/rights";
-import { loadDecisionContext, type DecisionContext } from "./context";
+import type { DecisionContext } from "./context";
 import { combineDecisions, evaluateEditInContext, type DecideOptions } from "./decide";
 
-export interface ResolveInput {
-  edit: EditPlan;
-  intent: PublishIntent;
-  /** Every use of the campaign (default `[intent]`): the blocker aggregates them and candidates must pass all. */
-  intents?: PublishIntent[];
-  segmentIndex: number;
-  query?: string;
-  limit: number;
-}
-
-/** Contract response + `remedy`: the licensed subset of the requested uses (CAMPAIGN blockers only). */
-export type ResolveResult = z.infer<typeof ResolveResponseSchema> & { remedy?: Remedy };
+/**
+ * Replacement footage for the Media Compliance Recovery Engine (`./recovery.ts`): Marengo search for comparable
+ * moments, each candidate independently re-checked. Similarity is never permission.
+ */
 
 /** Marengo hits fetched per requested candidate: headroom for hits dropped by exclusion/duplicates/fit. */
 const OVERFETCH = 4;
-/** Each hit may trigger a ScorePlay load + video analysis: hard cap per resolve. */
+/** Each hit may trigger a ScorePlay load + video analysis: hard cap per search. */
 const MAX_HITS = 12;
 /** Renditions of the same clip differ by a few frames at most. */
 const DUPLICATE_DURATION_SEC = 0.5;
@@ -68,44 +58,16 @@ function probableDuplicate(a: Asset, b: Asset): boolean {
 }
 
 /**
- * "Find another way" for one segment. First classifies what blocks it:
- * - CAMPAIGN (territory/platform/usage/date/no policy): every clip would fail the same way → no candidates,
- *   a concrete `suggestion` for the intent instead.
- * - CLIP (people/brands/asset rules/analysis/identity): search comparable footage with Marengo. Each candidate
- *   is re-checked alone AND inside the full proposed edit, under the policy selected for ITS asset; only
- *   full-edit ALLOWED candidates are eligible. Similarity is never permission.
- * Works for BLOCKED and NEEDS_REVIEW segments. The original asset and its probable duplicates are excluded.
- */
-export async function resolve(input: ResolveInput, opts: DecideOptions = {}): Promise<ResolveResult> {
-  const { edit, segmentIndex, limit } = input;
-  const intents = input.intents?.length ? input.intents : [input.intent];
-  const target = edit.segments[segmentIndex];
-  if (!target) {
-    throw new AppError("BAD_REQUEST", `segmentIndex ${segmentIndex} out of range (edit has ${edit.segments.length})`);
-  }
-  const now = opts.now ?? new Date();
-  const evalOpts = { now, policies: opts.policies };
-  const ctx = await loadDecisionContext(edit, { deps: opts.deps, club: intents.find((i) => i.club)?.club });
-  const query = input.query?.trim() || target.label?.trim() || ctx.assets[target.scoreplayMediaId].title.trim();
-
-  const current = intents.map((intent) => ({ intent, decision: evaluateEditInContext(ctx, edit, intent, evalOpts).segments[segmentIndex].decision }));
-  const { blocker, remedy } = classifyBlocker(current, opts.policies);
-  if (blocker.scope !== "CLIP") return { query, blocker, candidates: [], ...(remedy ? { remedy } : {}) };
-
-  const ranked = await searchReplacements(ctx, { edit, segmentIndex, intents, query, limit }, evalOpts);
-  return { query, blocker, candidates: ranked, ...(ranked[0]?.eligible ? { best: ranked[0] } : {}) };
-}
-
-/**
  * Comparable footage for one segment of `edit` (Marengo search for `query`), each candidate re-checked alone and
  * inside the full proposed edit under every intent; eligible (full-edit ALLOWED) first, then search rank.
- * Candidate assets are loaded into `ctx`. The original asset and its probable duplicates are excluded.
+ * Candidate assets are loaded into `ctx`. The original asset and its probable duplicates are never candidates;
+ * hits inside the original asset are returned as `sourceHits` (relevance evidence for a clean section of it).
  */
 export async function searchReplacements(
   ctx: DecisionContext,
   input: { edit: EditPlan; segmentIndex: number; intents: readonly PublishIntent[]; query: string; limit: number },
   evalOpts: Pick<DecideOptions, "policies"> & { now: Date },
-): Promise<Candidate[]> {
+): Promise<{ candidates: Candidate[]; sourceHits: SearchHit[] }> {
   const { edit, segmentIndex, intents, query, limit } = input;
   const target = edit.segments[segmentIndex];
   const original = ctx.assets[target.scoreplayMediaId];
@@ -113,8 +75,9 @@ export async function searchReplacements(
   if ("status" in video) throw new AppError("NOT_CONFIGURED", `Marengo search unavailable: ${video.detail}`);
 
   const duration = target.end - target.start;
-  const hits = await video.search(query, { limit: Math.min(limit * OVERFETCH, MAX_HITS), excludeMediaIds: [original.id] });
-
+  const all = await video.search(query, { limit: Math.min(limit * OVERFETCH, MAX_HITS) });
+  const sourceHits = all.filter((h) => h.scoreplayMediaId === original.id);
+  const hits = all.filter((h) => h.scoreplayMediaId !== original.id);
   // Hits whose ScorePlay asset no longer exists can't be checked → dropped.
   const gone = new Set<string>();
   await Promise.all(
@@ -152,5 +115,5 @@ export async function searchReplacements(
   }
 
   candidates.sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.hit.rank - b.hit.rank);
-  return candidates.slice(0, limit);
+  return { candidates: candidates.slice(0, limit), sourceHits };
 }

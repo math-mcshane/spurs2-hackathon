@@ -45,31 +45,35 @@ export async function recover(input: RecoverInput, opts: DecideOptions = {}): Pr
   const ctx = await loadDecisionContext(sourceEdit, { deps: opts.deps, club: intents.find((i) => i.club)?.club });
   const evalCtx = { assets: ctx.assets, observations: ctx.observations, analysis: ctx.analysis, policies, now };
 
-  // Replacements only help when the footage itself is restricted for some use; a CAMPAIGN-only problem would
+  // Search only when it can help: the footage itself is restricted for some use, and the plan is not a licence gap
+  // (no clip can be licensed for a market the club has no rights in).
+  const first = planRecovery({ ctx: evalCtx, source, intents, idPrefix: input.idPrefix });
   const footageIssue = evaluateUses(evalCtx, sourceEdit, intents).some((u) =>
     u.decision.decision.reasons.some((r) => r.outcome !== "PERMIT" && reasonScope(r, policies) === "CLIP"),
   );
-  let replacements: ReplacementInput[] = [];
-  if (footageIssue && input.replacements > 0) {
-    const video = ctx.video();
-    if (!("status" in video)) {
-      const found = await searchReplacements(ctx, { edit: sourceEdit, segmentIndex: 0, intents, query: input.query, limit: input.replacements }, { now, policies });
-      replacements = found.map((c) => {
-        const segment = c.proposedEdit.segments[0];
-        const alone: EditPlan = { id: `${input.idPrefix}:replace:${segment.scoreplayMediaId}`, title: ctx.assets[segment.scoreplayMediaId].title, segments: [segment], derived: true };
-        return {
-          key: `${segment.scoreplayMediaId}@${segment.start}-${segment.end}`,
-          title: ctx.assets[segment.scoreplayMediaId].title,
-          segment,
-          query: input.query,
-          rank: c.hit.rank,
-          evaluations: evaluateUses(evalCtx, alone, intents),
-        };
-      });
-    } else ctx.notes.push(`Replacement search unavailable: ${video.detail}`);
+  if (!footageIssue || first.licenceGap || input.replacements <= 0) {
+    return { plan: first, media: ctx.mediaRefs([source.assetId]), notes: [...ctx.notes] };
   }
-
-  const plan = planRecovery({ ctx: evalCtx, source, intents, replacements, idPrefix: input.idPrefix });
+  const video = ctx.video();
+  if ("status" in video) {
+    ctx.notes.push(`Replacement search unavailable: ${video.detail}`);
+    return { plan: first, media: ctx.mediaRefs([source.assetId]), notes: [...ctx.notes] };
+  }
+  const found = await searchReplacements(ctx, { edit: sourceEdit, segmentIndex: 0, intents, query: input.query, limit: input.replacements }, { now, policies });
+  const replacements: ReplacementInput[] = found.candidates.map((c) => {
+    const segment = c.proposedEdit.segments[0];
+    const alone: EditPlan = { id: `${input.idPrefix}:replace:${segment.scoreplayMediaId}`, title: ctx.assets[segment.scoreplayMediaId].title, segments: [segment], derived: true };
+    return {
+      key: `${segment.scoreplayMediaId}@${segment.start}-${segment.end}`,
+      title: ctx.assets[segment.scoreplayMediaId].title,
+      segment,
+      query: input.query,
+      rank: c.hit.rank,
+      evaluations: evaluateUses(evalCtx, alone, intents),
+    };
+  });
+  const sourceHits = found.sourceHits.map((h) => ({ start: h.start, end: h.end, rank: h.rank, query: input.query }));
+  const plan = planRecovery({ ctx: evalCtx, source, intents, replacements, sourceHits, idPrefix: input.idPrefix });
   return {
     plan,
     media: ctx.mediaRefs([source.assetId, ...replacements.map((r) => r.segment.scoreplayMediaId)]),

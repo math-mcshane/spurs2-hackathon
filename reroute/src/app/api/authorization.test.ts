@@ -97,7 +97,7 @@ describe("proxy", () => {
     ["POST", "/api/receipts"],
     ["POST", "/api/receipts/r1/review"],
     ["POST", "/api/decide"],
-    ["POST", "/api/resolve"],
+    ["POST", "/api/recover"],
     ["POST", "/api/access"],
     ["POST", "/api/observations"],
     ["POST", "/api/writeback"],
@@ -169,7 +169,7 @@ describe("proxy rate limits (per IP, fixed window)", () => {
     expect((await proxy(select())).status).toBe(429);
   });
 
-  it.each(["/api/resolve", "/api/decide", "/api/access"])("%s: 20/min", async (path) => {
+  it.each(["/api/recover", "/api/decide", "/api/access"])("%s: 20/min", async (path) => {
     const make = () => request(path, { body: {}, ip: "203.0.113.9" });
     expect((await hit(20, make)).every(passed)).toBe(true);
     expect((await proxy(make())).status).toBe(429);

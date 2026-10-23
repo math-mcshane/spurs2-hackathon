@@ -502,6 +502,37 @@ function OptionRow({
   );
 }
 
+/**
+ * The edit PULSE tried before suggesting anything else, and why it was rejected. Calm and intentional: a
+ * correctly rejected cut is a decision, not an error.
+ */
+function TriedFirst({ option, chosen }: { option: RecoveryOption; chosen?: { start: number; end: number } }) {
+  const rc = option.recheck;
+  const verdict = option.notViableBecause
+    ? option.notViableBecause.replace(/^trim rejected:\s*/i, "")
+    : rc
+      ? `still restricted after the cut — ${rc.allowedUses} of ${rc.totalUses} uses allowed`
+      : "it doesn't clear the restriction";
+  return (
+    <section aria-label="What PULSE tried first" className="space-y-3 rounded-lg bg-obsidian/60 px-4 py-4 ring-1 ring-line ring-inset">
+      <p className="flex items-start gap-2 text-small text-ink-soft">
+        <ScissorsIcon className="mt-0.5 size-3.5 shrink-0 text-ink-muted" aria-hidden />
+        <span>
+          First, PULSE tried cutting the flagged footage
+          <span className="block text-meta text-ink-muted">{option.title}</span>
+        </span>
+      </p>
+      <p className="flex items-start gap-2 text-small text-ink">
+        <ArrowRightIcon className="mt-0.5 size-3.5 shrink-0 text-ink-muted" aria-hidden />
+        <span>
+          <span className="font-medium">Rejected:</span> {verdict}
+        </span>
+      </p>
+      {option.timeline && <EditPlanView timeline={option.timeline} chosen={chosen} compact />}
+    </section>
+  );
+}
+
 // ---------- The editor ----------
 
 type EditorProps = {
@@ -531,7 +562,9 @@ export function ComplianceEditor({ goal, recovery, disabled, applyingId, applyPr
   const recommended = options.find((o) => o.id === recovery.recommendedId && o.applicable) ?? options.find((o) => o.recommended && o.applicable);
   const [chosenId, setChosenId] = useState(() => recommended?.id ?? options.find((o) => o.applicable)?.id);
   const featured = options.find((o) => o.id === chosenId && o.applicable);
-  const rest = options.filter((o) => o !== featured);
+  /** The cut PULSE tried first and rejected: told once, as the reason the suggestion is something else. */
+  const tried = recommended?.kind === "TRIM" ? undefined : options.find((o) => o.kind === "TRIM" && (o.outcome === "NOT_VIABLE" || o.outcome === "STILL_BLOCKED"));
+  const rest = options.filter((o) => o !== featured && o !== tried);
   const media = goal.campaign?.media;
   /** The campaign's selected range (a SAFE_SECTION timeline spans its own section, not the original). */
   const span = media ? { start: media.startSeconds, end: media.endSeconds } : options.find((o) => o.kind === "TRIM" && o.timeline)?.timeline?.original;
@@ -593,6 +626,8 @@ export function ComplianceEditor({ goal, recovery, disabled, applyingId, applyPr
           </ol>
         )}
       </section>
+
+      {tried && <TriedFirst option={tried} chosen={span} />}
 
       {/* Suggested correction */}
       <section aria-labelledby={`${uid}-fix`} aria-busy={applyingId !== null} className="space-y-4 border-t border-line pt-6">

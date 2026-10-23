@@ -13,16 +13,16 @@ import {
   EvidenceSchema,
   MediaRefSchema,
   RenderResponseSchema,
-  ResolveResponseSchema,
   RightsReceiptSchema,
-  UsageSchema,
   WritebackResponseSchema,
   type AccessActionSchema,
+  type RecoverRequestSchema,
   type ApiError,
   type EditPlan,
   type Evidence,
   type PublishIntent,
 } from "@/lib/contracts";
+import { PolicyContextSchema, RecoveryViewSchema } from "@/features/pulse/types";
 
 export class ApiClientError extends Error {
   constructor(
@@ -81,13 +81,14 @@ const RenderViewSchema = RenderResponseSchema.extend({ receipt: ReceiptViewSchem
 
 const ObservationResponseSchema = z.object({ evidence: EvidenceSchema });
 
-/** POST /api/resolve: the contract response + `remedy`, the licensed subset of the requested uses (CAMPAIGN blockers only). */
-export const ResolveViewSchema = ResolveResponseSchema.extend({
-  remedy: z
-    .object({ territories: z.array(z.string()).optional(), platforms: z.array(z.string()).optional(), usage: UsageSchema.optional() })
-    .optional(),
+/** POST /api/recover: the recovery plan (read-only, nothing stored) and the rule package it used. */
+export const RecoverResponseSchema = z.object({
+  recovery: RecoveryViewSchema,
+  media: z.array(MediaRefSchema),
+  notes: z.array(z.string()),
+  policy: PolicyContextSchema.nullable(),
 });
-export type ResolveView = z.infer<typeof ResolveViewSchema>;
+export type RecoverResponse = z.infer<typeof RecoverResponseSchema>;
 
 async function request<S extends z.ZodType>(
   schema: S,
@@ -135,8 +136,8 @@ export const api = {
     }),
   decide: (body: { edit: EditPlan; intent: PublishIntent }, o?: Sig) =>
     request(DecideResponseSchema, "/api/decide", { method: "POST", body, ...o }),
-  resolve: (body: { edit: EditPlan; intent: PublishIntent; segmentIndex: number; query?: string; limit?: number }) =>
-    request(ResolveViewSchema, "/api/resolve", { method: "POST", body }),
+  recover: (body: z.input<typeof RecoverRequestSchema>, o?: Sig) =>
+    request(RecoverResponseSchema, "/api/recover", { method: "POST", body, ...o }),
   access: (body: { edit: EditPlan; intent: PublishIntent; action: z.infer<typeof AccessActionSchema> }, o?: Sig) =>
     request(AccessResponseSchema, "/api/access", { method: "POST", body, ...o }),
   createReceipt: (body: { edit: EditPlan; intent: PublishIntent }) =>

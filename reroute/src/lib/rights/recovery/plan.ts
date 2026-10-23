@@ -16,8 +16,7 @@
  * disappears only if the engine says so when it re-evaluates the kept footage.
  */
 import type { Asset, Clearance, EditDecision, EditPlan, Evidence, PublishIntent, Reason, Segment, Verdict } from "@/lib/contracts";
-import { reasonScope } from "../blocker";
-import { classifyBlocker } from "../blocker";
+import { classifyBlocker, reasonScope } from "../blocker";
 import { evaluateEdit, matchesPattern, normalizeLabel, worstVerdict, type AnalysisStatus } from "../engine";
 import type { Policy } from "../policy";
 import { buildEdl, edlToEditPlan, mergeIntervals, type Edl, type Interval, type Removal } from "./edl";
@@ -86,6 +85,8 @@ export interface PlannedOption {
   campaignChange?: { territories?: string[]; dropped?: string[]; platforms?: string[]; usage?: PublishIntent["usage"] };
   /** Why the footage still fits the goal (SAFE_SECTION / REPLACE). */
   relevance?: string;
+  /** SAFE_SECTION: how the section is tied to the goal (overlap with the chosen moment, or a search hit's rank). */
+  tie?: { overlapsMoment: boolean; searchRank?: number };
 }
 
 export interface ProblemItem {
@@ -104,6 +105,8 @@ export interface RecoveryPlan {
   headline: string;
   problems: ProblemItem[];
   current: RecheckSummary;
+  /** No planned market (or channel) is licensed: no edit, replacement or change of use can pass. */
+  licenceGap: boolean;
   options: PlannedOption[];
   recommendedId?: string;
   noPathMessage?: string;
@@ -126,6 +129,8 @@ export interface PlanRecoveryInput {
   intents: PublishIntent[];
   /** Replacement moments the server found and evaluated (REPLACE options). */
   replacements?: ReplacementInput[];
+  /** Video-search hits for the moment's query inside the SOURCE asset (relevance evidence for SAFE_SECTION). */
+  sourceHits?: { start: number; end: number; rank: number; query: string }[];
   /** Prefix for derived ids (edit plans / EDLs), e.g. the campaign id. */
   idPrefix: string;
   limits?: Partial<RecoveryLimits>;
@@ -266,7 +271,10 @@ export function locateProblems(ctx: RecoveryEvalContext, assetId: string, interv
     results.push({ piece, clip });
   }
 
-  const everywhere = results.length ? [...results[0].clip.keys()].filter((k) => results.every((p) => p.clip.has(k))) : [];
+  // Pervasive = present in every piece AND not placed by any timed observation (an asset fact or rule). A restriction
+  // whose observation merely spans the whole selection is still localized in the asset (a clean section may exist).
+  const placed = (k: string) => results.some((p) => p.clip.has(k) && triggeringEvidence(p.clip.get(k)!, p.piece, evidence, ctx.policies).length > 0);
+  const everywhere = results.length ? [...results[0].clip.keys()].filter((k) => results.every((p) => p.clip.has(k)) && !placed(k)) : [];
   const pervasive = everywhere.map((k) => results[0].clip.get(k)!);
 
   const dirty: LocalizedProblem[] = [];
@@ -294,11 +302,26 @@ export function locateProblems(ctx: RecoveryEvalContext, assetId: string, interv
   return { localized, pervasive, campaign: [...campaign.values()] };
 }
 
-/** "Manchester United crest" style summary of what a localized problem shows. */
-const whatIsThere = (p: LocalizedProblem) => {
-  const names = unique(p.evidence.map(entityOf));
-  return names.length ? names.join(", ") : "restricted content";
+/** "Player #18", "Richarlison, Porro and the Kraken logo": what a localized problem shows, by kind. */
+const whatIsThere = (p: Pick<LocalizedProblem, "evidence">) => {
+  const kind = (ev: Evidence) => (ev.label ? normalizeLabel(ev.label).split(":")[0] : "");
+  const people = unique(p.evidence.filter((e) => kind(e) === "person").map(entityOf));
+  const brands = unique(p.evidence.filter((e) => kind(e) === "brand").map((e) => `the ${entityOf(e)} logo`));
+  const other = unique(p.evidence.filter((e) => kind(e) !== "person" && kind(e) !== "brand").map(entityOf));
+  const names = [...people, ...brands, ...other];
+  return names.length ? (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]) : "restricted content";
 };
+
+/** Why a localized problem matters, in one short sentence (several unmatched people share one sentence). */
+function whyItMatters(p: LocalizedProblem, policies: readonly Policy[]): string {
+  const people = p.ruleIds.filter((id) => id.startsWith("subject:person:"));
+  const rules = unique(p.ruleIds.filter((id) => !id.startsWith("subject:person:")).map((id) => policies.flatMap((x) => x.rules).find((r) => r.id === id)?.explanation ?? ""));
+  const peopleText = people.length
+    ? `${people.length > 1 ? "They can't" : "Can't"} be matched to the club's registered squad in ScorePlay, so image rights can't be confirmed (AI identification — a reviewer must confirm).`
+    : "";
+  const subjectBrands = p.ruleIds.filter((id) => id.startsWith("subject:brand:")).length ? "Not an official partner in this rule package." : "";
+  return [...rules.filter(Boolean), subjectBrands, peopleText].filter(Boolean).join(" ") || p.explanations.join(" ");
+}
 
 function removalsFor(problems: readonly LocalizedProblem[], range: Interval, margin: number): Removal[] {
   return problems.map((p) => ({
@@ -331,7 +354,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
     ...where.localized.map((p) => ({
       scope: "CLIP" as const,
       pervasive: false,
-      text: `${whatIsThere(p)} at ${span(p)}: ${p.explanations.join(" ")}`,
+      text: `${whatIsThere(p).replace(/^./, (c) => c.toUpperCase())} at ${span(p)} — ${whyItMatters(p, ctx.policies)}`,
       ruleIds: p.ruleIds,
       at: { start: p.start, end: p.end },
       evidence: p.evidence,
@@ -341,17 +364,34 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   ];
   const clipProblems = where.localized.length + where.pervasive.length;
   const scope: RecoveryPlan["scope"] = clipProblems && where.campaign.length ? "MIXED" : where.campaign.length ? "CAMPAIGN" : "CLIP";
+  const unlicensed = unique(where.campaign.flatMap((c) => (c.reason.dimension === "territory" ? c.intents.map((i) => i.territory.toUpperCase()) : [])));
+  const inFootage = [
+    ...where.localized.map((p) => `${whatIsThere(p)} (${span(p)})`),
+    ...(where.pervasive.length ? ["a restriction on the whole clip"] : []),
+  ];
+  const inPlan = unlicensed.length ? [`${unlicensed.join(", ")} ${unlicensed.length > 1 ? "aren't" : "isn't"} licensed`] : where.campaign.length ? ["the planned use isn't licensed"] : [];
   const headline =
     current.verdict === "ALLOWED"
       ? "Nothing to fix: every planned use is allowed under the demo policy."
-      : `${current.verdict === "BLOCKED" ? "Can't be used as planned" : "Not cleared for every use"} · ${current.allowedUses} of ${current.totalUses} uses allowed`;
+      : [inFootage.length ? `In the footage: ${inFootage.join("; ")}` : "", inPlan.length ? `In the plan: ${inPlan.join("; ")}` : ""].filter(Boolean).join(" · ");
+
+  // No licensed market or channel in the plan at all: no edit, replacement or change of use can pass — a reviewer
+  // cannot grant a licence. Only the honest next step is offered.
+  const remedy = where.campaign.length ? classifyBlocker(currentUses.map((u) => ({ intent: u.intent, decision: u.decision.decision })), ctx.policies).remedy : undefined;
+  const requestedT = unique(intents.map((i) => i.territory.toUpperCase()));
+  const requestedP = unique(intents.map((i) => i.platform));
+  const licenceGap =
+    where.campaign.length > 0 &&
+    (!remedy ||
+      (remedy.territories !== undefined && !requestedT.some((t) => remedy.territories!.includes(t))) ||
+      (remedy.platforms !== undefined && !requestedP.some((p) => remedy.platforms!.includes(p))));
 
   const options: PlannedOption[] = [];
   let n = 0;
   const nextId = (kind: RecoveryKind) => `${kind.toLowerCase()}-${++n}`;
 
   // A — TRIM the localized restrictions out of the selected footage.
-  if (where.localized.length) {
+  if (where.localized.length && !licenceGap) {
     const newCuts = removalsFor(where.localized, source.range, limits.boundaryMarginSec);
     const edl = buildEdl({ id: `${idPrefix}:trim`, sourceAssetId: source.assetId, sourceTitle: source.title, range: source.range, removals: [...prior, ...newCuts], minPieceSec: limits.minPieceSec });
     const title = newCuts.length === 1 ? `Remove ${span(newCuts[0])}` : `Remove ${newCuts.length} flagged parts (${newCuts.map(span).join(", ")})`;
@@ -390,21 +430,28 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
     }
   }
 
-  // B — SAFE_SECTION: the best contiguous section of the same asset with no localized restriction.
+  // B — SAFE_SECTION: the best contiguous section of the same asset with no localized restriction. Preference:
+  // overlapping the chosen moment, then a section video search ALSO matched to the goal, then the nearest.
   const assetEnd = asset?.durationSec;
-  if (asset && assetEnd && where.localized.length) {
+  if (asset && assetEnd && where.localized.length && !licenceGap) {
     const whole = { start: 0, end: assetEnd };
     const all = locateProblems(ctx, source.assetId, [whole], intents);
     const blocked = removalsFor(all.localized, whole, limits.boundaryMarginSec);
     const free = buildEdl({ id: "free", sourceAssetId: asset.id, sourceTitle: source.title, range: whole, removals: blocked, minPieceSec: limits.minPostSec })?.retained ?? [];
     const want = source.range.end - source.range.start;
-    const overlap = (w: Interval) => Math.max(0, Math.min(w.end, source.range.end) - Math.max(w.start, source.range.start));
+    const cross = (a: Interval, b: Interval) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
+    const overlap = (w: Interval) => cross(w, source.range);
     const distance = (w: Interval) => (overlap(w) > 0 ? 0 : Math.min(Math.abs(w.start - source.range.end), Math.abs(source.range.start - w.end)));
-    const best = [...free].sort((a, b) => overlap(b) - overlap(a) || distance(a) - distance(b) || b.end - b.start - (a.end - a.start))[0];
+    const hitIn = (w: Interval) => [...(input.sourceHits ?? [])].sort((a, b) => a.rank - b.rank).find((h) => cross(h, w) >= Math.min(limits.minPostSec, h.end - h.start));
+    const best = [...free].sort(
+      (a, b) => overlap(b) - overlap(a) || (hitIn(a)?.rank ?? Infinity) - (hitIn(b)?.rank ?? Infinity) || distance(a) - distance(b) || b.end - b.start - (a.end - a.start),
+    )[0];
     if (best) {
-      // Fit to the moment's length, as close to the selected range as the window allows.
+      // Fit to the moment's length inside the window, anchored on the chosen moment or else on the search hit.
       const len = Math.min(want, best.end - best.start);
-      const anchor = Math.min(Math.max(source.range.start, best.start), best.end - len);
+      const hit = overlap(best) > 0 ? undefined : hitIn(best);
+      const target = hit ? Math.max(hit.start, best.start) : source.range.start;
+      const anchor = Math.min(Math.max(target, best.start), best.end - len);
       const pick = { start: r3(anchor), end: r3(anchor + len) };
       const sameAsTrim = options.some(
         (o) => o.kind === "TRIM" && o.edl?.retained.length === 1 && Math.abs(o.edl.retained[0].start - pick.start) < 1e-3 && Math.abs(o.edl.retained[0].end - pick.end) < 1e-3,
@@ -414,6 +461,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
         const edit = edlToEditPlan(edl, `${source.title} (${span(pick)})`);
         const recheck = summarizeUses(evaluateUses(ctx, edit, intents));
         const inside = overlap(pick);
+        const matched = hitIn(pick);
         options.push({
           id: nextId("SAFE_SECTION"),
           kind: "SAFE_SECTION",
@@ -423,7 +471,10 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
           relevance:
             inside > 0
               ? `Overlaps the searched moment by ${secs(inside)}.`
-              : `${secs(distance(pick))} away from the moment search found — search did not match this section to the goal; check it fits the story.`,
+              : matched
+                ? `Video search also matched this section to “${matched.query}” (#${matched.rank}).`
+                : `${secs(distance(pick))} away from the moment search found — search did not match this section to the goal; check it fits the story.`,
+          tie: { overlapsMoment: inside > 0, ...(matched ? { searchRank: matched.rank } : {}) },
           changesGoal: false,
           edl,
           edit,
@@ -436,7 +487,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   }
 
   // C — REPLACE with real moments the server found and evaluated.
-  for (const rep of input.replacements ?? []) {
+  for (const rep of licenceGap ? [] : (input.replacements ?? [])) {
     const recheck = summarizeUses(rep.evaluations);
     options.push({
       id: nextId("REPLACE"),
@@ -444,7 +495,6 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
       title: `Use “${rep.title}” ${span(rep.segment)}`,
       summary: `A different real moment for the same goal, found by video search for “${rep.query}” (#${rep.rank}) and checked on its own for every use.`,
       tradeoff: "Different footage, same length, same campaign.",
-      relevance: `Found by video search for “${rep.query}” (#${rep.rank}).`,
       changesGoal: false,
       edit: segmentEdit(`${idPrefix}:replace:${rep.key}`, rep.title, [rep.segment], source.assetId),
       intents,
@@ -455,12 +505,10 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   }
 
   // D — ADAPT_CAMPAIGN: the restriction is in the planned use, not in the footage.
-  const requested = unique(intents.map((i) => i.territory.toUpperCase()));
-  const requestedPlatforms = unique(intents.map((i) => i.platform));
   const adapt = (keepT: string[], keepP: string[], usage: PublishIntent["usage"] | undefined, title: string, summary: string) => {
     const reduced = intents.filter((i) => keepT.includes(i.territory.toUpperCase()) && keepP.includes(i.platform)).map((i) => (usage ? { ...i, usage } : i));
-    const droppedT = requested.filter((t) => !keepT.includes(t));
-    const droppedP = requestedPlatforms.filter((p) => !keepP.includes(p));
+    const droppedT = requestedT.filter((t) => !keepT.includes(t));
+    const droppedP = requestedP.filter((p) => !keepP.includes(p));
     if (!reduced.length || !(droppedT.length || droppedP.length || usage)) return;
     const recheck = summarizeUses(evaluateUses(ctx, currentEdit, reduced));
     const parts = [droppedT.length ? `drop ${droppedT.join(", ")}` : "", droppedP.length ? `drop ${droppedP.join(", ")}` : "", usage ? `post as ${usage.toLowerCase()}` : ""].filter(Boolean);
@@ -478,35 +526,31 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
       outcome: outcomeOf(recheck.verdict),
     });
   };
-  if (where.campaign.length) {
-    const { remedy } = classifyBlocker(
-      currentUses.map((u) => ({ intent: u.intent, decision: u.decision.decision })),
-      ctx.policies,
-    );
-    const keepT = remedy?.territories ? requested.filter((t) => remedy.territories!.includes(t)) : requested;
-    const keepP = remedy?.platforms ? requestedPlatforms.filter((p) => remedy.platforms!.includes(p)) : requestedPlatforms;
+  if (remedy && !licenceGap) {
+    const keepT = remedy.territories ? requestedT.filter((t) => remedy.territories!.includes(t)) : requestedT;
+    const keepP = remedy.platforms ? requestedP.filter((p) => remedy.platforms!.includes(p)) : requestedP;
     adapt(
       keepT,
       keepP,
-      remedy?.usage,
-      keepT.length < requested.length ? `Limit to licensed markets: ${keepT.join(", ")}` : "Adjust where and how the campaign runs",
+      remedy.usage,
+      keepT.length < requestedT.length ? `Limit to licensed markets: ${keepT.join(", ")}` : "Adjust where and how the campaign runs",
       "A different clip would hit the same restriction — it comes from where or how the campaign runs. Keep the uses the policy licenses.",
     );
   }
   // Some uses already pass (e.g. a full-match clip that may only be shown in its home market): publish there only.
   if (!options.some((o) => o.kind === "ADAPT_CAMPAIGN" && o.outcome === "RESOLVES_DEMO") && current.allowedUses > 0 && current.allowedUses < intents.length) {
     const ok = (t: string, p: string) => currentUses.some((u) => u.intent.territory.toUpperCase() === t && u.intent.platform === p && u.decision.decision.verdict === "ALLOWED");
-    const keepT = requested.filter((t) => requestedPlatforms.every((p) => ok(t, p)));
-    const keepP = keepT.length ? requestedPlatforms : requestedPlatforms.filter((p) => requested.every((t) => ok(t, p)));
+    const keepT = requestedT.filter((t) => requestedP.every((p) => ok(t, p)));
+    const keepP = keepT.length ? requestedP : requestedP.filter((p) => requestedT.every((t) => ok(t, p)));
     if (keepT.length || keepP.length) {
-      const t = keepT.length ? keepT : requested;
+      const t = keepT.length ? keepT : requestedT;
       adapt(t, keepP, undefined, keepT.length ? `Publish only where it's allowed: ${t.join(", ")}` : `Publish only on ${keepP.join(", ")}`, "This footage is cleared for some of the planned markets or channels already. Keep those and drop the rest.");
     }
   }
 
   // E — CHANGE_USAGE: same footage as an organic post, when the restriction is specific to sales/sponsored use.
   const sells = intents.some((i) => i.usage === "COMMERCIAL" || i.usage === "SPONSORED");
-  if (sells && clipProblems) {
+  if (sells && clipProblems && !licenceGap) {
     const organic = intents.map((i) => (i.usage === "COMMERCIAL" || i.usage === "SPONSORED" ? { ...i, usage: "ORGANIC" as const } : i));
     const recheck = summarizeUses(evaluateUses(ctx, currentEdit, organic));
     if (recheck.allowedUses > current.allowedUses) {
@@ -527,29 +571,16 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   }
 
   // F — REQUEST_CLEARANCE: the human next step for what editing cannot fix.
-  const licenceGap = where.campaign.length > 0 && !options.some((o) => o.kind === "ADAPT_CAMPAIGN");
-  // With no licensed market or channel in the plan, nothing that keeps the plan can pass: a reviewer cannot grant
-  // a licence, so options whose re-check still carries the licence problem are rejected, not offered for review.
-  if (licenceGap) {
-    for (const o of options) {
-      const stuck = o.recheck?.remaining.filter((r) => reasonScope(r, ctx.policies) === "CAMPAIGN");
-      if (o.outcome !== "RESOLVES_DEMO" && stuck?.length) {
-        o.outcome = "NOT_VIABLE";
-        o.notViableBecause = `Still not licensed: ${unique(stuck.map((r) => r.explanation)).slice(0, 1).join(" ")} Changing the footage can't fix a missing licence.`;
-      }
-    }
-  }
-  const unlicensed = unique(where.campaign.flatMap((c) => (c.reason.dimension === "territory" ? c.intents.map((i) => i.territory.toUpperCase()) : [])));
   const asks: string[] = [];
   if (unlicensed.length) asks.push(`Request additional usage rights for ${unlicensed.join(", ")} from the rights holder.`);
   else if (where.campaign.length) asks.push(`Ask the rights team: ${where.campaign[0].reason.explanation}`);
-  if (where.pervasive.length) asks.push(`Ask the rights team to clear what applies to the whole clip: ${unique(where.pervasive.map((r) => r.explanation)).join(" ")}`);
-  if (where.localized.length) asks.push(`To keep this exact footage, ask the rights team to clear: ${unique(where.localized.map(whatIsThere)).join("; ")}.`);
+  if (!licenceGap && where.pervasive.length) asks.push(`Ask the rights team to clear what applies to the whole clip: ${unique(where.pervasive.map((r) => r.explanation)).join(" ")}`);
+  if (!licenceGap && where.localized.length) asks.push(`To keep this exact footage, ask the rights team to clear: ${unique(where.localized.map(whatIsThere)).join("; ")}.`);
   if (asks.length) {
     options.push({
       id: nextId("REQUEST_CLEARANCE"),
       kind: "REQUEST_CLEARANCE",
-      title: licenceGap ? "Request additional usage rights" : "Ask the rights team for clearance",
+      title: unlicensed.length ? "Request additional usage rights" : "Ask the rights team for clearance",
       summary: asks.join(" "),
       tradeoff: "No automatic fix: a person with the agreements must decide.",
       changesGoal: false,
@@ -560,8 +591,11 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   // Ranking: workable options that keep the goal first (smallest change first), then review-needed, then goal
   // changes, then rejected options, then next steps. Within a group: allowed uses, then kind order.
   const kindOrder: Record<RecoveryKind, number> = { ADAPT_CAMPAIGN: 0, TRIM: 1, REPLACE: 2, SAFE_SECTION: 3, CHANGE_USAGE: 4, REQUEST_CLEARANCE: 5 };
-  // A section overlapping the searched moment is as goal-relevant as a search-backed replacement and a smaller change.
-  const preference = (o: PlannedOption) => (o.kind === "SAFE_SECTION" && o.relevance?.startsWith("Overlaps") ? 1.5 : kindOrder[o.kind]);
+  // A section of the chosen clip is a smaller change than new footage when it is as tied to the goal: overlapping the
+  // chosen moment, or matched by search at least as well as the best workable replacement.
+  const bestReplacementRank = Math.min(...options.filter((o) => o.kind === "REPLACE" && o.outcome === "RESOLVES_DEMO").map((o) => o.replacement!.rank));
+  const preference = (o: PlannedOption) =>
+    o.kind === "SAFE_SECTION" && (o.tie?.overlapsMoment || (o.tie?.searchRank !== undefined && o.tie.searchRank <= bestReplacementRank)) ? 1.5 : kindOrder[o.kind];
   const group = (o: PlannedOption) =>
     o.outcome === "NEXT_STEP" ? 5 : o.outcome === "NOT_VIABLE" || o.outcome === "STILL_BLOCKED" ? 4 : o.changesGoal ? 3 : o.outcome === "RESOLVES_DEMO" ? 0 : 1;
   options.sort((a, b) => group(a) - group(b) || (b.recheck?.allowedUses ?? 0) - (a.recheck?.allowedUses ?? 0) || preference(a) - preference(b));
@@ -570,7 +604,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   const noPathMessage = recommended
     ? undefined
     : licenceGap
-      ? `No licensed path: ${asks[0]} PULSE won't move the campaign elsewhere.`
+      ? `No licensed path: ${asks[0]} A different clip or edit hits the same wall, and PULSE won't move the campaign elsewhere.`
       : "No change PULSE can make clears this use under the selected policy. The next step is a clearance request.";
-  return { scope, headline, problems, current, options, ...(recommended ? { recommendedId: recommended.id } : {}), ...(noPathMessage ? { noPathMessage } : {}) };
+  return { scope, headline, problems, current, licenceGap, options, ...(recommended ? { recommendedId: recommended.id } : {}), ...(noPathMessage ? { noPathMessage } : {}) };
 }

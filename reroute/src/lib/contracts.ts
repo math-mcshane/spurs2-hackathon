@@ -309,14 +309,14 @@ export const AssetsResponseSchema = z.object({ assets: z.array(AssetSchema) });
 export const DecideRequestSchema = z.object({ edit: EditPlanSchema, intent: PublishIntentSchema });
 export const DecideResponseSchema = EditDecisionSchema;
 
-/** POST /api/resolve — replace one blocked segment of `edit` by searching comparable footage. */
-export const ResolveRequestSchema = z.object({
-  edit: EditPlanSchema,
-  intent: PublishIntentSchema,
-  segmentIndex: z.number().int().nonnegative(),
-  /** Natural-language description of the shot to find (defaults to segment label/observations). */
-  query: z.string().max(500).optional(),
-  limit: z.number().int().min(1).max(10).default(3),
+/**
+ * POST /api/recover — "Find a way to use it" for one moment (exactly one segment of one asset) and every use it
+ * must work for. The first use's club selects the rule package (`packageId`, else the club's default).
+ */
+export const RecoverRequestSchema = z.object({
+  edit: EditPlanSchema.extend({ segments: z.array(SegmentSchema).length(1) }),
+  intents: z.array(PublishIntentSchema).min(1).max(21),
+  packageId: z.string().min(1).max(200).optional(),
 });
 
 /**
@@ -333,13 +333,6 @@ export const BlockerSchema = z.object({
   suggestion: z.string().optional(),
 });
 export type Blocker = z.infer<typeof BlockerSchema>;
-
-export const ResolveResponseSchema = z.object({
-  query: z.string(),
-  blocker: BlockerSchema,
-  candidates: z.array(CandidateSchema), // ranked; eligible first
-  best: CandidateSchema.optional(), // only if eligible (editDecision ALLOWED)
-});
 
 /** POST /api/access — server-side gate. Re-evaluates; never trusts a client-sent verdict. */
 export const AccessActionSchema = z.enum(["PREVIEW", "EXPORT", "RENDER", "DELIVER"]);

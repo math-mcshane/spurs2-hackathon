@@ -233,7 +233,8 @@ function Decision({ goal, status, demo, issues }: { goal: GoalView; status: Stat
           <p className="mt-1.5 text-small text-ink-muted">{sub}</p>
           {issues.length > 0 && (
             <p className="mt-2 text-small">
-              {issues.map((i, n) => (
+              {/* One name per topic: two rules about people on screen are still "People on screen" once here. */}
+              {issues.filter((i, n) => issues.findIndex((x) => x.topic === i.topic && x.outcome === i.outcome) === n).map((i, n) => (
                 <span key={i.key} className={i.outcome === "DENY" ? "text-status-blocked" : "text-status-review"}>
                   {n > 0 && <span className="px-1.5 text-ink-muted">·</span>}
                   {i.topic}

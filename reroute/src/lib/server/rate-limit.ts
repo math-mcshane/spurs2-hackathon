@@ -80,7 +80,7 @@ export async function rateLimitRuleFor(req: Request, pathname: string): Promise<
   const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
   if (req.method === "POST") {
     if (path === "/api/pulse/goal") return (await goalAction(req)) === "run" ? RATE_LIMITS.goalRun : RATE_LIMITS.goalAction;
-    if (path === "/api/resolve" || path === "/api/decide" || path === "/api/access") return RATE_LIMITS.rights;
+    if (path === "/api/recover" || path === "/api/decide" || path === "/api/access") return RATE_LIMITS.rights;
     if (path === "/api/auth/session") return RATE_LIMITS.signIn;
   }
   // GET /api/assets/[id] fetches the asset and triggers TwelveLabs analysis.

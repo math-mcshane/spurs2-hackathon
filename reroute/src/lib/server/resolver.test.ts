@@ -3,7 +3,7 @@ import type { Asset, EditPlan, Evidence, MediaRef, PublishIntent, SearchHit, Vid
 import { AppError } from "@/lib/errors";
 import type { ContextDeps } from "./context";
 import { decideCampaign, decideEdit } from "./decide";
-import { resolve } from "./resolver";
+import { recover } from "./recovery";
 
 const now = new Date("2026-10-22T12:00:00Z");
 const commercial: PublishIntent = {
@@ -97,65 +97,80 @@ function deps(opts: { hits?: SearchHit[]; queries?: string[]; limits?: number[];
   };
 }
 
-describe("resolve", () => {
-  it("CLIP blocker: re-checks every candidate alone and in the full edit, excludes the original and its renditions", async () => {
+const source = (s: Partial<{ assetId: string; title: string; start: number; end: number }> = {}) => ({
+  assetId: s.assetId ?? "goal",
+  title: s.title ?? "Goal Man United 9x16 (A) v1.mp4",
+  range: { start: s.start ?? 5, end: s.end ?? 10 },
+});
+
+describe("recover (server): search + independent re-checks", () => {
+  it("CLIP restriction: searches once, re-checks each replacement on its own, never offers the original or its renditions", async () => {
     const queries: string[] = [];
-    const hits = [hit("goal", 12, 18, 1), hit("goalDup", 0, 5, 2), hit("boards", 0, 5, 3), hit("fans", 2, 6, 4), hit("nba", 0, 4, 5)];
     const limits: number[] = [];
-    const result = await resolve({ edit, intent: commercial, segmentIndex: 0, limit: 5 }, { deps: deps({ hits, queries, limits }), now });
-    expect(limits).toEqual([12]); // hits analysed per resolve are capped
-
-    expect(queries).toEqual(["celebrating fans"]); // query = segment label
-    expect(result.blocker).toMatchObject({ scope: "CLIP", dimensions: ["sponsor"] });
-    expect(result.candidates.map((c) => c.hit.scoreplayMediaId)).toEqual(["fans", "boards", "nba"]);
-
-    const [fans, boards, nba] = result.candidates;
-    expect(fans).toMatchObject({ eligible: true, segmentDecision: { verdict: "ALLOWED", clearance: "DEMO" } });
-    expect(fans.editDecision.decision).toMatchObject({ verdict: "ALLOWED", clearance: "DEMO", policyFictional: true });
-    expect(result.best?.hit.scoreplayMediaId).toBe("fans");
-
-    expect(boards.eligible).toBe(false);
-    expect(boards.segmentDecision.verdict).toBe("BLOCKED"); // third-party brand, independently re-checked
-
+    const hits = [hit("goal", 12, 18, 1), hit("goalDup", 0, 5, 2), hit("boards", 0, 5, 3), hit("fans", 2, 6, 4), hit("nba", 0, 4, 5)];
+    const { plan } = await recover({ source: source(), intents: [commercial], query: "celebrating fans", replacements: 5, idPrefix: "c" }, { deps: deps({ hits, queries, limits }), now });
+    expect(queries).toEqual(["celebrating fans"]);
+    expect(limits).toEqual([12]); // hits analysed per recovery are capped
+    const reps = plan.options.filter((o) => o.kind === "REPLACE");
+    expect(reps.map((o) => o.replacement!.scoreplayMediaId).sort()).toEqual(["boards", "fans", "nba"]);
+    const by = (id: string) => reps.find((o) => o.replacement!.scoreplayMediaId === id)!;
+    expect(by("fans")).toMatchObject({ outcome: "RESOLVES_DEMO", recheck: { verdict: "ALLOWED", clearance: "DEMO" } });
+    expect(by("boards")).toMatchObject({ outcome: "STILL_BLOCKED" }); // third-party brand, independently re-checked
     // Another club's footage: evaluated under ITS own selection → no policy for a Tottenham publication.
-    expect(nba.eligible).toBe(false);
-    expect(nba.segmentDecision).toMatchObject({ verdict: "NEEDS_REVIEW", policyId: "none" });
+    expect(by("nba").recheck).toMatchObject({ verdict: "NEEDS_REVIEW", policyId: "none" });
+    expect(plan.recommendedId).toBe(by("fans").id);
   });
 
-  it("CAMPAIGN blocker: no search, no candidates, a concrete suggestion", async () => {
+  it("licence gap (single unlicensed market): no search, nothing executable, honest next step", async () => {
     const queries: string[] = [];
     const intent = { ...commercial, usage: "EDITORIAL" as const, territory: "IN" };
-    const result = await resolve({ edit, intent, segmentIndex: 0, limit: 3 }, { deps: deps({ hits: [hit("fans", 0, 5, 1)], queries }), now });
+    const { plan } = await recover({ source: source(), intents: [intent], query: "q", replacements: 3, idPrefix: "c" }, { deps: deps({ hits: [hit("fans", 0, 5, 1)], queries }), now });
     expect(queries).toEqual([]);
-    expect(result.candidates).toEqual([]);
-    expect(result.blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
-    expect(result.blocker.suggestion).toMatch(/GB, IE, US, CA, AU, NZ/);
+    expect(plan.licenceGap).toBe(true);
+    expect(plan.options.map((o) => o.kind)).toEqual(["REQUEST_CLEARANCE"]);
+    expect(plan.noPathMessage).toMatch(/usage rights for IN/);
   });
 
-  it("CAMPAIGN blocker over every use: lists all unlicensed territories and returns the licensed subset as remedy", async () => {
+  it("CAMPAIGN restriction over several markets: keeps the licensed subset, no clip search", async () => {
+    const queries: string[] = [];
     const editorial = { ...commercial, usage: "EDITORIAL" as const };
     const intents = ["GB", "FR", "ES", "DE", "IN", "US"].map((territory) => ({ ...editorial, territory }));
-    const result = await resolve({ edit, intent: intents[0], intents, segmentIndex: 0, limit: 3 }, { deps: deps(), now });
-    expect(result.blocker.scope).toBe("CAMPAIGN");
-    expect(result.blocker.explanation).toMatch(/Not licensed for France \(FR\), Spain \(ES\), Germany \(DE\) and India \(IN\)\./);
-    expect(result.blocker.suggestion).toMatch(/Drop FR, ES, DE, IN/);
-    expect(result.remedy).toEqual({ territories: ["GB", "US"] });
-    expect(result.candidates).toEqual([]);
+    const { plan } = await recover({ source: source(), intents, query: "q", replacements: 3, idPrefix: "c" }, { deps: deps({ queries }), now });
+    expect(queries).toEqual([]);
+    expect(plan.scope).toBe("CAMPAIGN");
+    expect(plan.headline).toBe("In the plan: FR, ES, DE, IN aren't licensed");
+    const adapt = plan.options.find((o) => o.kind === "ADAPT_CAMPAIGN")!;
+    expect(adapt.campaignChange).toMatchObject({ territories: ["GB", "US"], dropped: ["FR", "ES", "DE", "IN"] });
+    expect(adapt.recheck).toMatchObject({ verdict: "ALLOWED", allowedUses: 2, totalUses: 2 });
   });
 
-  it("works for NEEDS_REVIEW segments (ambiguous media identity ⇒ MEDIA_IDENTITY, CLIP)", async () => {
-    const result = await resolve(
-      { edit, intent: commercial, segmentIndex: 0, limit: 3 },
+  it("unproven media identity (NEEDS_REVIEW, CLIP) still gets re-checked replacements", async () => {
+    const { plan } = await recover(
+      { source: source(), intents: [commercial], query: "q", replacements: 3, idPrefix: "c" },
       { deps: deps({ hits: [hit("fans", 0, 5, 1)], refs: { goal: ref("goal", "AMBIGUOUS") } }), now },
     );
-    expect(result.blocker.scope).toBe("CLIP");
-    expect(result.best?.hit.scoreplayMediaId).toBe("fans");
+    expect(plan.current.verdict).toBe("NEEDS_REVIEW");
+    expect(plan.options.find((o) => o.id === plan.recommendedId)?.replacement?.scoreplayMediaId).toBe("fans");
   });
 
-  it("nothing to resolve for an ALLOWED segment", async () => {
+  it("nothing to fix for an allowed use", async () => {
+    const queries: string[] = [];
     const intent = { ...commercial, usage: "EDITORIAL" as const };
-    const result = await resolve({ edit, intent, segmentIndex: 0, limit: 3 }, { deps: deps(), now });
-    expect(result).toMatchObject({ blocker: { scope: "NONE" }, candidates: [] });
+    const { plan } = await recover({ source: source(), intents: [intent], query: "q", replacements: 3, idPrefix: "c" }, { deps: deps({ queries }), now });
+    expect(queries).toEqual([]);
+    expect(plan.current.verdict).toBe("ALLOWED");
+    expect(plan.options).toEqual([]);
+  });
+
+  it("a clean section of the same clip that video search also matched is preferred and says so", async () => {
+    assets.clap = thfc("clap", "Fans clap Man United A 9x16.mp4", 30, squad);
+    observations.clap = [rubric("clap", "group"), { ...brand("clap", "manchester-united"), start: 9, end: 14.5 }];
+    const hits = [hit("clap", 20, 28, 2), hit("fans", 0, 5, 3)];
+    const { plan } = await recover({ source: source({ assetId: "clap", title: "Fans clap", start: 9, end: 14 }), intents: [commercial], query: "fans clapping", replacements: 3, idPrefix: "c" }, { deps: deps({ hits }), now });
+    const section = plan.options.find((o) => o.kind === "SAFE_SECTION")!;
+    expect(section.edl!.retained).toEqual([{ start: 20, end: 25 }]);
+    expect(section.relevance).toBe("Video search also matched this section to “fans clapping” (#2).");
+    expect(section.recheck?.verdict).toBe("ALLOWED");
   });
 });
 

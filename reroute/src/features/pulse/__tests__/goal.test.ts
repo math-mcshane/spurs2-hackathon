@@ -417,8 +417,8 @@ describe("goal → campaign → rights → alternative → review", () => {
       recheck: { verdict: "ALLOWED", clearance: "DEMO", allowedUses: 3, totalUses: 3 },
     });
     expect(v.recovery!.recommendedId).toBe(replace.id);
-    // The brand covers the whole moment: no cut of it is offered as workable.
-    expect(v.recovery!.options.some((o) => (o.kind === "TRIM" || o.kind === "SAFE_SECTION") && o.applicable)).toBe(false);
+    // The brand covers the whole selected moment: cutting it out leaves nothing, so no trim is workable.
+    expect(v.recovery!.options.some((o) => o.kind === "TRIM" && o.applicable)).toBe(false);
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(v))).success).toBe(true);
     // A second request for the same evaluation reuses the stored plan.
     expect((await goals.findRecovery(at(v), d)).recovery!.id).toBe(v.recovery!.id);
@@ -566,6 +566,7 @@ describe("goal → campaign → rights → alternative → review", () => {
       headline: "Restricted for every use",
       problems: [{ scope: "CLIP", pervasive: false, text: "Partner brand on screen", ruleIds: ["THFC-13-partner-exclusivity"], at: { start: 2, end: 3.5 }, evidence: [] }],
       current: recheck,
+      licenceGap: false,
       options: [
         { id: "trim-1", kind: "TRIM", title: "Remove 0:01.5–0:06.0", summary: "Cut the brand", tradeoff: "Keeps 1.4 s of 6.9 s", changesGoal: false, outcome: "NOT_VIABLE", notViableBecause: "Leaves 1.4 s — shorter than a 3 s post." },
         { id: "request_clearance-2", kind: "REQUEST_CLEARANCE", title: "Request clearance", summary: "Ask the rights holder", tradeoff: "Takes time", changesGoal: false, outcome: "NEXT_STEP" },

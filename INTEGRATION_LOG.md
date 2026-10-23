@@ -47,7 +47,7 @@ Design reference: `docs/ARCHITECTURE.md`.
 | SP↔TL identity | `lib/media` `MediaResolver`: filename + duration ±0.5 s, unique both ways, ambiguity exposed | `findVideoByCustomId` / `user_metadata.scoreplay_id` as identity (index ids come from a cloned workspace, 0/58 resolve; a claim may only confirm an existing filename+duration match) |
 | Policy | `selectPolicy()` per asset + intent (`lib/rights/select.ts`) | env-global `REROUTE_POLICY_ID` |
 | Rights decision | `lib/server/decide.ts` + `lib/rights/engine.ts`; `decideCampaign()` per channel × territory | PULSE ad-hoc approval rules (board `service.ts`, fictional check in `goal-service`) |
-| Alternatives | `lib/server/resolver.ts` `resolve()` with `Blocker` (CLIP vs CAMPAIGN) + `remedy` | PULSE pool re-check (`findAlternatives` is now a thin caller) |
+| Alternatives | Media Compliance Recovery Engine: `lib/rights/recovery` planner + `lib/server/recovery.ts` `recover()` (goal flow `findRecovery`; desk `POST /api/recover`, read-only) | PULSE pool re-check; the old `/api/resolve` |
 | Publication gate | `canPublish()` in contracts | any other publish logic |
 | Persistence | Supabase repositories (`lib/server/store.ts`, `lib/server/repositories/*`; in-memory adapter for tests only) | `.data/pulse.json` goal/campaign storage |
 | Writeback | `lib/scoreplay/writeback.ts` plan/apply, dry-run default, `GET` preview | always-live `writeDecision` |
@@ -63,7 +63,8 @@ Also removed: the PULSE diagnostics script (`scripts/pulse-integration-diagnosti
 Frozen in `ca29022`: `MediaRef`, `PolicySelection`, `Clearance`, `Blocker`, writeback dry-run shapes, `canPublish`.
 Later, parent-approved additions: error codes `CONFLICT` (409) and `RATE_LIMITED` (429); request limits (≤ 20 segments,
 query ≤ 500 chars, `intents` ≤ 20 on `/api/resolve`); optional `remedy` on resolve results; receipts carry `intents`
-(every use) and `campaignVersion`.
+(every use) and `campaignVersion`. `/api/resolve` was later replaced by the read-only `POST /api/recover`
+(`{ edit (1 segment), intents (1..21), packageId? }` → `{ recovery, media, notes, policy }`).
 
 ### Review findings fixed in W3 (ReviewCorrectness 15, ReviewSecurity 6)
 
@@ -117,5 +118,5 @@ long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is i
    are confirmed, optional `DEMO_REPLAY`. Remove obsolete `REROUTE_POLICY_ID`, `PULSE_ENABLED`, `TWELVELABS_REPLAY`,
    `REROUTE_REVIEWER_PASSCODE`. Never commit `.env*`.
 5. Vercel: enable Deployment Protection (event media), add a Firewall rate-limit rule on `/api/*` (e.g. 30 req/min/IP;
-   5/min on `/api/pulse/goal`, `/api/resolve`, `/api/auth/session`) — the in-app limiter is per instance.
+   5/min on `/api/pulse/goal`, `/api/recover`, `/api/auth/session`) — the in-app limiter is per instance.
 6. Merge with a merge commit after review; keep the `backup/*` refs until production is verified.

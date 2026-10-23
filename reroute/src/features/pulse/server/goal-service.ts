@@ -6,9 +6,9 @@ import { forMediaAccess, type MediaAccess } from "@/lib/media/preview";
 import { mergeProvenance, trackProvenance } from "@/lib/media/provenance";
 import { reasonScope, type Policy } from "@/lib/rights";
 import { policiesForEvaluation, toPolicyContext } from "@/lib/rights/packages";
-import type { PlannedOption, ProblemItem } from "@/lib/rights/recovery";
 import { decideCampaign, type CampaignDecision } from "@/lib/server/decide";
 import { recover, type Recovered, type RecoverInput } from "@/lib/server/recovery";
+import { problemLine, storedOption } from "@/lib/server/recovery-view";
 import { alternatives, campaigns, evaluations, events, goalRuns } from "@/lib/server/repositories";
 import { createReceipt, getReceipt } from "@/lib/server/store";
 import { CLUBS } from "../clubs";
@@ -16,7 +16,7 @@ import { MEDIA_PREVIEW_DISABLED_NOTE, MEDIA_PREVIEW_REVIEWER_ONLY_NOTE } from ".
 import { configuredDestination, onClubDomain } from "../commerce";
 import { buildGoalCampaign, campaignEdit, proposedPublishAt } from "../goal-campaign";
 import { goalPlan, parseMatch } from "../goal-intents";
-import { buildGoalView, evidenceSource, latestEvaluation, noLicenceReason, underRunPolicy } from "../goal-view";
+import { buildGoalView, latestEvaluation, noLicenceReason, underRunPolicy } from "../goal-view";
 import { clock } from "../moment-ranking";
 import { PRODUCTS, parseObjective } from "../objective-parser";
 import type {
@@ -32,7 +32,6 @@ import type {
   Preview,
   Recommendation,
   RunProvenance,
-  SourcedLine,
   StoredRecoveryOption,
 } from "../types";
 import { RecoveryOptionSchema } from "../types";
@@ -383,62 +382,6 @@ export async function checkGoalRights(target: GoalTarget, deps: GoalDeps = defau
     provenance,
   );
   return present(saved.run, saved.version, deps);
-}
-
-/** Where a reason's fact or rule comes from, for the user. */
-function reasonSource(r: Reason, policyTitle: string): string {
-  if (r.basis === "TECHNICAL_OBSERVATION") return "TwelveLabs video analysis";
-  if (r.basis === "MEDIA_IDENTITY") return "ScorePlay ↔ TwelveLabs link";
-  if (r.basis === "POLICY_SELECTION") return "Policy selection";
-  if (r.ruleId.startsWith("subject:")) return "ScorePlay squad list + TwelveLabs video analysis";
-  return `${policyTitle} · rule ${r.ruleId}`;
-}
-
-function problemLine(p: ProblemItem, policyTitle: string): SourcedLine {
-  const sources = [...new Set(p.evidence.map(evidenceSource))];
-  const source = sources.length ? sources.join(" + ") : p.scope === "CAMPAIGN" ? "Your campaign plan" : `${policyTitle} · ${p.ruleIds.join(", ")}`;
-  return { text: p.text, source, ...(p.at ? { at: p.at } : {}) };
-}
-
-/** A planned option as stored on the run (view fields + what applying it needs). */
-function storedOption(o: PlannedOption, recommendedId: string | undefined, media: readonly MediaRef[], policyTitle: string): StoredRecoveryOption {
-  return {
-    id: o.id,
-    kind: o.kind,
-    title: o.title,
-    summary: o.summary,
-    tradeoff: o.tradeoff,
-    changesGoal: o.changesGoal,
-    outcome: o.outcome,
-    ...(o.notViableBecause ? { notViableBecause: o.notViableBecause } : {}),
-    ...(o.recheck
-      ? {
-          recheck: {
-            verdict: o.recheck.verdict,
-            clearance: o.recheck.clearance,
-            allowedUses: o.recheck.allowedUses,
-            totalUses: o.recheck.totalUses,
-            remaining: o.recheck.remaining.map((r) => ({
-              text: r.explanation,
-              source: reasonSource(r, policyTitle),
-              ...(r.start !== undefined && r.end !== undefined ? { at: { start: r.start, end: r.end } } : {}),
-            })),
-            policyId: o.recheck.policyId,
-            policyVersion: o.recheck.policyVersion,
-            evaluatedAt: o.recheck.evaluatedAt,
-          },
-        }
-      : {}),
-    ...(o.replacement ? { replacement: o.replacement } : {}),
-    ...(o.campaignChange ? { campaignChange: o.campaignChange } : {}),
-    ...(o.relevance ? { relevance: o.relevance } : {}),
-    recommended: o.id === recommendedId,
-    applicable: o.outcome === "RESOLVES_DEMO" || o.outcome === "NEEDS_REVIEW",
-    ...(o.edl ? { edl: o.edl } : {}),
-    ...(o.intents ? { intents: o.intents } : {}),
-    ...(o.edit && o.kind === "REPLACE" ? { segment: o.edit.segments[0] } : {}),
-    ...(o.replacement ? { media: media.find((m) => m.scoreplayMediaId === o.replacement!.scoreplayMediaId) } : {}),
-  };
 }
 
 /** The recovery plan of the latest evaluation of the current moment, if any. */

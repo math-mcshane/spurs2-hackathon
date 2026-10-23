@@ -15,10 +15,12 @@ import type {
   Product,
   Recommendation,
   RecommendationView,
+  RecoveryOption,
   RecoveryView,
   ReviewStatus,
   RightsIssue,
   RightsView,
+  StoredRecoveryOption,
   ReasonFinding,
 } from "./types";
 
@@ -288,6 +290,18 @@ type Receipt = Pick<RightsReceipt, "id" | "decision" | "humanReviewStatus" | "wr
 /** "N of M uses allowed" counts of one evaluation. */
 const usesOf = (e: GoalEvaluation) => ({ allowedUses: e.perIntent.filter((p) => p.decision.verdict === "ALLOWED").length, totalUses: e.perIntent.length });
 
+/**
+ * A stored recovery option as the Compliance Editor shows it: the view schema drops what only `applyRecovery`
+ * needs (EDL internals, intents, segment, media refs); a cut becomes its before/after timeline.
+ */
+export function recoveryOptionView(o: StoredRecoveryOption, assetDurationSec?: number): RecoveryOption {
+  return RecoveryOptionSchema.parse({
+    ...o,
+    ...(o.relevance ? { summary: `${o.summary} ${o.relevance}` } : {}),
+    ...(o.edl ? { timeline: timelineOf(o.edl, assetDurationSec) } : {}),
+  });
+}
+
 /** The recovery plan of the latest evaluation of the current version, as the Compliance Editor shows it. */
 function recoveryView(run: GoalRun, latest: GoalEvaluation | undefined, current: boolean): RecoveryView | undefined {
   if (!latest || !current) return undefined;
@@ -300,14 +314,7 @@ function recoveryView(run: GoalRun, latest: GoalEvaluation | undefined, current:
     generatedAt: found.generatedAt,
     scope: found.scope,
     problem: { headline: found.headline, items: found.problems },
-    // The view schema drops what only `applyRecovery` needs (EDL internals, intents, segment, media refs).
-    options: found.options.map((o) =>
-      RecoveryOptionSchema.parse({
-        ...o,
-        ...(o.relevance ? { summary: `${o.summary} ${o.relevance}` } : {}),
-        ...(o.edl ? { timeline: timelineOf(o.edl, assetDuration) } : {}),
-      }),
-    ),
+    options: found.options.map((o) => recoveryOptionView(o, assetDuration)),
     ...(found.recommendedId ? { recommendedId: found.recommendedId } : {}),
     ...(found.noPathMessage ? { noPathMessage: found.noPathMessage } : {}),
   };

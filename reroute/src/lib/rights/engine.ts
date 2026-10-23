@@ -358,12 +358,15 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
     }
     const club = ctx.policy.applicability.clubNames[0];
     const post = usage === "COMMERCIAL" ? "a sales post" : usage === "SPONSORED" ? "a sponsored post" : `${usage.toLowerCase()} use`;
+    const aiOnly = s.evidence.length > 0 && s.evidence.every((e) => e.source === "TWELVELABS");
     const text =
       dim === "sponsor"
         ? `${s.display} isn't an official partner in ${ctx.policy.title}, so it can't appear in ${post}.`
         : s.club === "OTHER"
           ? `${s.display} plays for ${s.clubs.join(", ")} (per ScorePlay), so ${club}'s image rights can't cover them in ${post}.`
-          : `${s.display} isn't on ${club}'s registered squad in ScorePlay, so the club's image rights can't cover them in ${post}.`;
+          : aiOnly
+            ? `Video analysis identified “${s.display}”, who can't be matched to ${club}'s registered squad in ScorePlay, so the club's image rights can't be confirmed for ${post}. AI identifications can be wrong — a reviewer must confirm who it is.`
+            : `${s.display} isn't on ${club}'s registered squad in ScorePlay, so the club's image rights can't cover them in ${post}.`;
     out.push(reason(ctx, `subject:${s.label}`, dim, "MISSING", "LEGAL_ENTITLEMENT", text, s.evidence));
   }
   if (dim === "people" && !gap && ctx.people.length === 0) {

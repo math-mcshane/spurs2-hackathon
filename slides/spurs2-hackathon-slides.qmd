@@ -7,6 +7,7 @@ title-slide-attributes:
   data-background-image: images/spurs2-title-bg.svg
   data-background-size: cover
 slide-number: false
+embed-resources: true
 ---
 
 ```{r setup, echo = FALSE}
@@ -197,3 +198,26 @@ Every club on ScorePlay. Music, player-status, betting-partner and AI-image chec
 ::: notes
 Closing: clubs already own the content; PULSE makes sure they can actually use it — and when they can't, it finds the way that works and shows exactly why.
 :::
+
+### {.unnumbered .statement .center}
+
+[Demo]{.headline}
+
+
+
+### {.unnumbered .statement .center}
+
+[Roadmap]{.headline}
+
+::: {.incremental}
+
+* Real compliance engine
+* Jockey
+* Access to more media
+
+:::
+
+
+
+
+

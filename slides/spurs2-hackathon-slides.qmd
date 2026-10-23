@@ -6,6 +6,7 @@ date: "2026-10-23"
 title-slide-attributes:
   data-background-image: images/spurs2-title-bg.svg
   data-background-size: cover
+slide-number: false
 ---
 
 ```{r setup, echo = FALSE}

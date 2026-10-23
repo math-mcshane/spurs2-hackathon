@@ -136,8 +136,10 @@ const KNOWN_PARTNERS: Record<string, { words: string[] }> = Object.fromEntries(K
 const NAME = String.raw`([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,2})`;
 const AFTER_PARTNER_WORD = new RegExp(String.raw`\b(?:[Oo]ur\s+)?(?:[Pp]artner|[Ss]ponsor)\s+${NAME}`);
 const AFTER_VERB = new RegExp(String.raw`\b(?:[Pp]romote|[Aa]ctivate|[Ff]eature|[Ss]howcase)\s+${NAME}(?=\s+(?:with|to|for|in|on|across|among|using)\b|\s*[,.!?]|\s*$)`);
+/** One capitalised word right before "sponsor"/"partner": "a Wembanyama-led Ledger sponsor campaign" → Ledger. */
+const BEFORE_PARTNER_WORD = /(?<![\w-])([A-Z][\w&'’.]*)\s+(?:[Ss]ponsor|[Pp]artner)\b/;
 /** Words that can follow "promote" capitalised but are the club, a market or a product — never a partner. */
-const NOT_A_PARTNER = /\b(tottenham|hotspur|spurs|thfc|san antonio|club|team|fans?|supporters?)\b/;
+const NOT_A_PARTNER = /\b(tottenham|hotspur|spurs|thfc|san antonio|club|team|fans?|supporters?|our|the|a|an|official|new)\b/;
 
 /**
  * The partner the goal promotes, as written: a partner a bundled rule package names ("our partner AIA"), else a
@@ -147,7 +149,7 @@ const NOT_A_PARTNER = /\b(tottenham|hotspur|spurs|thfc|san antonio|club|team|fan
 function parseTargetSponsor(raw: string): string | null {
   const known = firstMatch(normalize(raw), KNOWN_PARTNERS);
   if (known) return known.key;
-  const name = (AFTER_PARTNER_WORD.exec(raw) ?? AFTER_VERB.exec(raw))?.[1].replace(/[.,!?]+$/, "").trim();
+  const name = (AFTER_PARTNER_WORD.exec(raw) ?? AFTER_VERB.exec(raw) ?? BEFORE_PARTNER_WORD.exec(raw))?.[1].replace(/[.,!?]+$/, "").trim();
   if (!name || /['’]s$/.test(name)) return null;
   const n = normalize(name);
   const elsewhere = firstMatch(n, MARKETS) ?? firstMatch(n, PRODUCTS);

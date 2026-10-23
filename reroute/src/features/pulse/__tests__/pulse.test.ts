@@ -365,6 +365,8 @@ describe("objective parser", () => {
     expect(parseObjective("Activate our sponsor with Solanke's late goal for UK fans", NOW)).toMatchObject({ summary: "Run a sponsor activation in United Kingdom", targetSponsor: null });
     expect(parseObjective("Promote Tottenham merchandise to UK supporters", NOW)).toMatchObject({ product: { key: "merch" }, targetSponsor: null });
     expect(parseObjective("Promote Solanke's goal to UK fans", NOW).targetSponsor).toBeNull();
+    expect(parseObjective("Build a Wembanyama-led Ledger sponsor campaign", NOW)).toMatchObject({ targetSponsor: "Ledger", product: { key: "sponsor" } });
+    expect(parseObjective("Our sponsor campaign for UK fans", NOW).targetSponsor).toBeNull();
   });
 });
 

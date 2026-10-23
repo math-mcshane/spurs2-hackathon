@@ -90,6 +90,11 @@ variables were corrected via the Vercel API (named reviewers, previews off); **P
 Deployment Protection) by user decision; dry-run writeback, render off, upload off, `MEDIA_PREVIEW_ENABLED` unset.
 Per-IP API rate limits are in memory per instance, i.e. best-effort on serverless.
 
+Design sprint 01 (`edf3924`, UI only): https://spurs2-hackathon-ms17fye85-merlins-projects-2b20d832.vercel.app — same
+Preview env. Deploy with `vercel deploy --force` after any change to `globals.css` tokens: with the build cache restored,
+the Tailwind Turbopack loader served the previous compiled stylesheet (seen on the first sprint deploy and in a
+long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is ignored by the R `.gitignore` template).
+
 ### Mistakes caught
 
 - The contracts were first written to the main checkout (`../hackathon-repo`) instead of this worktree; reverted there

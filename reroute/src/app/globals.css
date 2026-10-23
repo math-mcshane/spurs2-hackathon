@@ -160,6 +160,77 @@
   --sidebar-ring: #d4fb77;
 }
 
+/*
+ * Club workspace themes (docs/design/DESIGN_SYSTEM.md, Club themes). The Studio sets `data-club` on its root and on
+ * <html> (for portals); only surfaces, ink, lines and the accent change. Rights-status colours are deliberately not
+ * overridden: they mean the same thing in every club and keep ≥ 4.5:1 on both palettes.
+ */
+[data-club="tottenham"] {
+  /* Tottenham Hotspur: navy and white. */
+  --color-obsidian: #000a3c;
+  --color-surface: #0a1650;
+  --color-surface-raised: #13205e;
+  --color-ink: #ffffff;
+  --color-ink-soft: #c8ccde;
+  --color-ink-muted: #9097b8;
+  --color-line: rgb(255 255 255 / 0.09);
+  --color-line-strong: rgb(255 255 255 / 0.18);
+  --color-signal: #ffffff;
+  --color-signal-ink: #000a3c;
+  --club-selection: rgb(255 255 255 / 0.24);
+
+  --background: #000a3c;
+  --foreground: #ffffff;
+  --card: #0a1650;
+  --card-foreground: #ffffff;
+  --popover: #0a1650;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #000a3c;
+  --secondary: #13205e;
+  --secondary-foreground: #ffffff;
+  --muted: #0a1650;
+  --muted-foreground: #9097b8;
+  --accent: #13205e;
+  --accent-foreground: #ffffff;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.16);
+  --ring: #ffffff;
+}
+
+[data-club="spurs"] {
+  /* San Antonio Spurs: black and silver (not the Fiesta palette). */
+  --color-obsidian: #000000;
+  --color-surface: #15181b;
+  --color-surface-raised: #212528;
+  --color-ink: #ffffff;
+  --color-ink-soft: #c4ced4;
+  --color-ink-muted: #8d979e;
+  --color-line: rgb(196 206 212 / 0.1);
+  --color-line-strong: rgb(196 206 212 / 0.2);
+  --color-signal: #c4ced4;
+  --color-signal-ink: #000000;
+  --club-selection: rgb(196 206 212 / 0.3);
+
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #15181b;
+  --card-foreground: #ffffff;
+  --popover: #15181b;
+  --popover-foreground: #ffffff;
+  --primary: #c4ced4;
+  --primary-foreground: #000000;
+  --secondary: #212528;
+  --secondary-foreground: #ffffff;
+  --muted: #15181b;
+  --muted-foreground: #8d979e;
+  --accent: #303438;
+  --accent-foreground: #ffffff;
+  --border: rgb(196 206 212 / 0.12);
+  --input: rgb(196 206 212 / 0.2);
+  --ring: #c4ced4;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -174,8 +245,8 @@
     font-feature-settings: "ss01", "cv11";
   }
   ::selection {
-    background: rgb(212 251 119 / 0.28);
-    color: #f3f1e9;
+    background: var(--club-selection, rgb(212 251 119 / 0.28));
+    color: var(--color-ink);
   }
   :focus-visible {
     outline-color: var(--ring);

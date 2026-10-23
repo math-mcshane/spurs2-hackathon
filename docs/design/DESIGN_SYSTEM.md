@@ -54,6 +54,31 @@ decision carries the dashed note **"Demo policy — not verified legal clearance
 Legacy bridge: `globals.css` re-points Tailwind's `zinc` and `sky` scales at PULSE neutrals and signal lime so the desk
 and the flagged board stay on-brand without a rewrite. New code uses PULSE tokens only.
 
+### Club themes
+
+The Studio themes itself to the selected club workspace: `data-club` on its root and on `<html>` (portals, Policy
+Center after an in-app visit) re-points surfaces, ink, lines and `signal`/`primary` in `globals.css`. Structure, type,
+spacing and components are unchanged; **status colours are never overridden** (all ≥ 4.5:1 on both palettes). The
+neutral palette above remains for direct loads of other pages; the desk resets to it (`NeutralClubTheme`).
+
+| Token | Tottenham Hotspur | San Antonio Spurs |
+|---|---|---|
+| `obsidian` (page, header) | `#000A3C` navy | `#000000` black |
+| `surface` / `surface-raised` | `#0A1650` / `#13205E` | `#15181B` / `#212528` (accent `#303438`) |
+| `ink` / `ink-soft` / `ink-muted` | `#FFFFFF` / `#C8CCDE` / `#9097B8` | `#FFFFFF` / `#C4CED4` / `#8D979E` |
+| `signal` = primary action, current step, focus | `#FFFFFF` on navy | `#C4CED4` silver on black |
+
+The San Antonio Fiesta palette and the optional Tottenham yellow are not used.
+
+Club marks (`reroute/public/clubs/`), shown only in the header club switcher on fixed tiles so they read on every theme.
+They identify the selected content workspace and imply no club endorsement:
+
+- `tottenham-hotspur.svg` — the cockerel crest (no club-name text) from tottenhamhotspur.com's own icon sprite
+  (`icons.svg#icn-spurs-badge`); only the viewBox is cropped to its clip area and the fill set to club navy, on white.
+- `san-antonio-spurs.png` — the spur from the NBA team CDN
+  (`cdn.nba.com/teams/uploads/sites/1610612759/2023/07/spurs_logo_transparent.png`), transparent padding trimmed and
+  scaled to 320 px tall, on black.
+
 ## Type
 
 Two families, both SIL OFL 1.1, self-hosted by `next/font`: **Space Grotesk** (500/600; editorial: page titles, media

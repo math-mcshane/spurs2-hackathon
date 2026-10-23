@@ -9,7 +9,7 @@ import { CLUBS } from "../clubs";
 import { RANKING, clock } from "../moment-ranking";
 import { utc } from "@/components/reroute/shared";
 import type { GoalView } from "../types";
-import { CHANNEL_LABEL, duration } from "./parts";
+import { CHANNEL_LABEL, ProvenanceTag, duration } from "./parts";
 
 const OUTCOME_CLS: Record<Reason["outcome"], string> = { DENY: "text-status-blocked", MISSING: "text-status-review", PERMIT: "text-status-clear" };
 
@@ -58,6 +58,11 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
         <section>
           <H>Data provenance</H>
           <ul className="space-y-1">
+            {goal.dataOrigin && (
+              <li>
+                <ProvenanceTag origin={goal.dataOrigin} />
+              </li>
+            )}
             {goal.recommendations.map((rec, n) => (
               <li key={rec.key} className="flex flex-wrap items-center gap-2">
                 <OriginBadge origin={rec.candidate.origin} className="h-4 px-1 text-[9px]" />

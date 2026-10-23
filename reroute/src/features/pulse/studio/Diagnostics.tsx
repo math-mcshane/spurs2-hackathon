@@ -52,7 +52,7 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
   return (
     <details className="group min-w-0 rounded-xl text-meta break-words text-ink-muted ring-1 ring-line ring-inset">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 text-small text-ink-muted transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
-        <WrenchIcon className="size-3.5" aria-hidden /> Technical detail — data provenance, media links, scoring, raw ids
+        <WrenchIcon className="size-3.5" aria-hidden /> Technical details
       </summary>
       <div className="space-y-6 border-t border-line px-6 py-6">
         <section>

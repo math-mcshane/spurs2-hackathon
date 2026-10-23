@@ -9,11 +9,10 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, tcRange, utc } from "@/components/reroute/shared";
 import { reviewApi, type AuditedReceipt, type ReviewerSession } from "@/components/reroute/reviewer";
 import { WritebackAction, WritebackLog } from "@/components/reroute/writeback-plan";
-import { cn } from "@/lib/utils";
 import { reasonFinding } from "../goal-view";
 import type { GoalView } from "../types";
 import { MomentPreview, recommendationSource } from "./MomentPreview";
-import { CHANNEL_LABEL, DemoPolicyNote, Eyebrow, IssueBlock, StatusPill, calmDemoLabel, country, displayTitle, groupIssues, rightsStatus, usageWord } from "./parts";
+import { CHANNEL_LABEL, Eyebrow, IssueBlock, PolicyContext, StatusPill, calmDemoLabel, country, displayTitle, groupIssues, rightsStatus, usageWord } from "./parts";
 
 const METHOD_TEXT: Record<MediaRef["method"], string> = {
   AUTHORITATIVE_ID: "linked by ScorePlay id",
@@ -68,7 +67,11 @@ export function ReviewView({
       <div className="min-w-0 lg:col-span-7">
         {receipt ? (
           <Reveal>
-            <ReceiptDocument receipt={receipt} titles={goal.campaign ? { [goal.campaign.media.scoreplayAssetId]: displayTitle(goal.campaign.media.title) } : {}} />
+            <ReceiptDocument
+              receipt={receipt}
+              uploaded={!!goal.policy && goal.policy.sourceType !== "PRESET"}
+              titles={goal.campaign ? { [goal.campaign.media.scoreplayAssetId]: displayTitle(goal.campaign.media.title) } : {}}
+            />
           </Reveal>
         ) : error !== null ? (
           <div className="space-y-3">
@@ -280,7 +283,17 @@ function Publish({ goal }: { goal: GoalView }) {
 }
 
 /** The audit receipt, read as a document. Identifiers and the hash chain sit in a disclosure at the end. */
-function ReceiptDocument({ receipt, titles }: { receipt: AuditedReceipt; /** ScorePlay id → display title, when known. */ titles: Record<string, string> }) {
+function ReceiptDocument({
+  receipt,
+  uploaded,
+  titles,
+}: {
+  receipt: AuditedReceipt;
+  /** The run's package was uploaded (not a bundled preset). */
+  uploaded: boolean;
+  /** ScorePlay id → display title, when known. */
+  titles: Record<string, string>;
+}) {
   const d = receipt.decision;
   const uses = receipt.intents?.length ? receipt.intents : [receipt.intent];
   const issues = groupIssues([{ channel: "", territory: "", findings: d.reasons.flatMap((r) => reasonFinding(r, { evidence: d.evidence, fictional: d.policyFictional }) ?? []) }]);
@@ -302,15 +315,13 @@ function ReceiptDocument({ receipt, titles }: { receipt: AuditedReceipt; /** Sco
         <dd className="space-y-1">
           <StatusPill status={status} />
           <p className="text-ink-soft">
-            For {uses.length} use{uses.length === 1 ? "" : "s"} of {receipt.edit.segments.length} clip{receipt.edit.segments.length === 1 ? "" : "s"}
+            For {uses.length} use{uses.length === 1 ? "" : "s"} · {receipt.edit.segments.length} segment{receipt.edit.segments.length === 1 ? "" : "s"}
           </p>
         </dd>
         <dt>Policy</dt>
         <dd className="text-ink">
           {d.policyId} <span className="text-ink-muted">v{d.policyVersion}</span>
-          <span className={cn("mt-0.5 block text-meta", d.policyFictional ? "text-status-review" : "text-status-clear")}>
-            {d.policyFictional ? "Fictional demo policy" : "Verified policy"}
-          </span>
+          <PolicyContext verified={!d.policyFictional} uploaded={uploaded} className="mt-1 block" />
         </dd>
         <dt>Uses covered</dt>
         <dd className="space-y-0.5 text-ink">
@@ -347,12 +358,6 @@ function ReceiptDocument({ receipt, titles }: { receipt: AuditedReceipt; /** Sco
           Decided {utc(d.evaluatedAt)} · receipt {utc(receipt.createdAt)}
         </dd>
       </dl>
-
-      {d.policyFictional && (
-        <div className="px-7 pb-6">
-          <DemoPolicyNote />
-        </div>
-      )}
 
       {issues.length > 0 && (
         <div className="border-t border-line px-7 py-6">

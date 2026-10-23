@@ -1,23 +1,21 @@
 "use client";
 
-import { ArrowRightIcon, ChevronRightIcon, FileSearchIcon, Loader2Icon, RefreshCwIcon, RouteIcon, ScaleIcon, SendIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react";
-import { DEMO_CLEARANCE_LABEL } from "@/lib/contracts";
+import { ArrowRightIcon, ChevronRightIcon, FileSearchIcon, Loader2Icon, RefreshCwIcon, RouteIcon, ScaleIcon, SendIcon } from "lucide-react";
 import { Reveal, Swap } from "@/components/pulse/motion";
 import { Button } from "@/components/ui/button";
 import { utc } from "@/components/reroute/shared";
 import { cn } from "@/lib/utils";
-import type { GoalView, RightsView } from "../types";
+import type { GoalView } from "../types";
 import { BeforeAfterPanel, ComplianceEditor, momentSpan } from "./ComplianceEditor";
 import {
   CHANNEL_LABEL,
-  DemoPolicyNote,
+  PolicyContext,
   Eyebrow,
   IssueBlock,
   StagedProgress,
   StatusMark,
   StatusPill,
   country,
-  demoLabelText,
   groupIssues,
   rightsStatus,
   usesPhrase,
@@ -28,12 +26,6 @@ import {
 import { PolicyPicker } from "./PolicyPicker";
 
 export type LensBusy = "rights" | "recovery" | "policy" | "submit" | `apply:${string}` | null;
-
-/** The label every demo-policy verdict must carry, or null for verified policies. */
-function demoLabel(rights: RightsView): string | null {
-  if (rights.clearanceLabel) return rights.clearanceLabel;
-  return rights.perIntent.some((p) => p.policyFictional) ? DEMO_CLEARANCE_LABEL : null;
-}
 
 const REVIEW_LINE: Record<Exclude<GoalView["reviewStatus"], "NOT_SUBMITTED">, string> = {
   PENDING: "Submitted · waiting for a reviewer",
@@ -70,7 +62,6 @@ export function RightsLens(props: Props) {
   const checked = r.state !== "NOT_CHECKED";
   const stale = checked && !r.current;
   const status: Status = stale ? "stale" : rightsStatus(r.state, r.clearance);
-  const demo = checked && !stale ? demoLabel(r) : null;
   const restricted = r.current && (r.state === "BLOCKED" || r.state === "NEEDS_REVIEW");
   /** Recovery options exist only for the latest evaluation: a stale search is never shown or usable. */
   const recovery = goal.recovery && r.current && goal.recovery.forEvaluationId === r.evaluationId ? goal.recovery : undefined;
@@ -100,7 +91,7 @@ export function RightsLens(props: Props) {
           {recheck && progress ? (
             <StagedProgress stages={progress.stages} note={progress.note} className="py-2" />
           ) : (
-            <Decision goal={goal} status={status} demo={demo} issues={issues} />
+            <Decision goal={goal} status={status} issues={issues} />
           )}
         </Swap>
       </div>
@@ -182,7 +173,7 @@ export function RightsLens(props: Props) {
   );
 }
 
-/** The rule package the campaign is judged against, how authentic it is, and the switch to another package. */
+/** The rule package the campaign is judged against, the one policy-context indicator, and the switch to another package. */
 function PolicyRow({ goal, disabled, onSetPolicy }: { goal: GoalView; disabled: boolean; onSetPolicy: (packageId: string) => void }) {
   const p = goal.policy;
   return (
@@ -191,12 +182,7 @@ function PolicyRow({ goal, disabled, onSetPolicy }: { goal: GoalView; disabled: 
         <ScaleIcon className="mt-0.5 size-3.5 shrink-0 text-ink-muted" aria-hidden />
         <div className="min-w-0">
           <p className="text-small text-ink-soft">{p ? p.title : "Club rights policy"}</p>
-          {p && (
-            <p className={cn("mt-0.5 flex items-center gap-1 text-meta", p.verified ? "text-status-clear" : "text-status-review/90")}>
-              {p.verified ? <ShieldCheckIcon className="size-3 shrink-0" aria-hidden /> : <TriangleAlertIcon className="size-3 shrink-0" aria-hidden />}
-              {demoLabelText(p.label)}
-            </p>
-          )}
+          {p && <PolicyContext verified={p.verified} uploaded={p.sourceType !== "PRESET"} className="mt-1" />}
         </div>
       </div>
       <PolicyPicker club={goal.run.club} value={p?.packageId} disabled={disabled} triggerLabel="Change rules" onChange={onSetPolicy} />
@@ -204,8 +190,8 @@ function PolicyRow({ goal, disabled, onSetPolicy }: { goal: GoalView; disabled: 
   );
 }
 
-/** The answer, in one line, then its scope, then the policy label when it is fictional. */
-function Decision({ goal, status, demo, issues }: { goal: GoalView; status: Status; demo: string | null; issues: Issue[] }) {
+/** The answer, in one line, then its scope. */
+function Decision({ goal, status, issues }: { goal: GoalView; status: Status; issues: Issue[] }) {
   const r = goal.rights;
   const plan = goal.campaign?.plan ?? goal.run.plan;
   const allowed = r.perIntent.filter((p) => p.verdict === "ALLOWED").length;
@@ -214,13 +200,13 @@ function Decision({ goal, status, demo, issues }: { goal: GoalView; status: Stat
     idle: "Not checked yet",
     stale: "Needs a fresh check",
     clear: "Cleared for this campaign",
-    provisional: "Allowed under the demo policy",
+    provisional: "Allowed under these rules",
     blocked: "Can’t be used as planned",
     review: "Not cleared for every use",
   };
   const sub =
     status === "idle"
-      ? `We check ${usesPhrase(plan.channels, plan.territories)} — every use separately. Nothing is cleared until it is.`
+      ? `Each use is checked separately: ${usesPhrase(plan.channels, plan.territories)}.`
       : status === "stale"
         ? `The campaign or its rules changed after the last check (${allowed} of ${total} uses allowed then). Check again before review.`
         : `${allowed} of ${total} uses allowed · ${usesPhrase(plan.channels, plan.territories)}`;
@@ -244,7 +230,6 @@ function Decision({ goal, status, demo, issues }: { goal: GoalView; status: Stat
           )}
         </div>
       </div>
-      {demo && <DemoPolicyNote label={demo} />}
       {r.current && goal.reviewStatus !== "NOT_SUBMITTED" && (
         <p className="flex items-center gap-2 text-small text-ink-soft">
           <span className={cn("size-1.5 rounded-full", goal.reviewStatus === "PENDING" ? "bg-status-review" : goal.reviewStatus === "APPROVED" ? "bg-ink" : "bg-status-blocked")} aria-hidden />

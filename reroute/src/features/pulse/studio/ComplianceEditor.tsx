@@ -55,12 +55,9 @@ const KIND: Record<RecoveryKind, { label: string; Icon: typeof ScissorsIcon }> =
   REQUEST_CLEARANCE: { label: "Ask for clearance", Icon: MailIcon },
 };
 
-/** The demo-policy line every RESOLVES_DEMO re-check carries. */
-const DEMO_ALLOWED = "Allowed under the demo policy — not legal clearance";
-
 function verdictWords(status: Status): string {
   return status === "provisional"
-    ? "Allowed under the demo policy"
+    ? "Allowed under these rules"
     : status === "clear"
       ? "Cleared"
       : status === "blocked"
@@ -238,12 +235,6 @@ function RecheckBlock({ option, progress }: { option: RecoveryOption; progress?:
         </span>{" "}
         uses allowed after this change
       </p>
-      {option.outcome === "RESOLVES_DEMO" && (
-        <p role="note" className="flex items-start gap-2 rounded-md border border-dashed border-status-review/45 px-3 py-2 text-meta text-ink-soft">
-          <TriangleAlertIcon className="mt-px size-3.5 shrink-0 text-status-review" aria-hidden />
-          {DEMO_ALLOWED}
-        </p>
-      )}
       {rc.remaining.length > 0 && (
         <ul className="space-y-1.5 text-small">
           {rc.remaining.map((x, i) => (
@@ -477,7 +468,7 @@ function OptionRow({
             status && (
               <StatusPill
                 status={status}
-                label={option.recheck && `${status === "provisional" ? "Allowed · demo policy" : verdictWords(status)} · ${option.recheck.allowedUses} of ${option.recheck.totalUses}`}
+                label={option.recheck && `${status === "provisional" ? "Allowed · illustrative" : verdictWords(status)} · ${option.recheck.allowedUses} of ${option.recheck.totalUses}`}
               />
             )
           )}
@@ -792,7 +783,6 @@ export function BeforeAfterPanel({ beforeAfter: ba, chosen, totalNow }: { before
           <Side label="After" status="stale" uses="Check rights to see" title="" />
         )}
       </div>
-      {after === "provisional" && <p className="text-meta text-ink-muted">Allowed under the demo policy · not legal clearance</p>}
       {ba.timeline && <EditPlanView timeline={ba.timeline} chosen={chosen} />}
     </section>
   );

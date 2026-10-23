@@ -357,7 +357,7 @@ function nextStep(
   if (review === "APPROVED")
     return publishable
       ? "Approved with verified clearance — ready to publish in the club's own tool, then record it back in ScorePlay."
-      : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Preview the ScorePlay record (dry run) to log the decision.`;
+      : `Approved by a reviewer. Publishing stays locked: ${rights.clearanceLabel ? "the decision was made under illustrative rules" : "the clearance is not verified"}. The ScorePlay record is a dry run.`;
   if (review === "REJECTED") return "The reviewer rejected this version. Find a way to use it or change the proposal, then submit again.";
   if (review === "PENDING") return "Waiting for a reviewer to approve or reject.";
   if (gap) return `${noLicenceReason(gap)}. Request a licence — we won't move your campaign to other markets.`;
@@ -490,8 +490,8 @@ export function buildGoalView(
     publishNote: publishable
       ? "Verified clearance and human approval: publishable."
       : rights.clearanceLabel
-        ? `${rights.clearanceLabel} — never publishable, even after approval.`
-        : "Publishable only with a verified REROUTE clearance AND human approval.",
+        ? "Decided under illustrative rules — publishing needs a verified club agreement, even after approval."
+        : "Publishing needs a verified rights agreement and human approval.",
     nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable, recovery, gap),
     kpi,
     timing: { toRecommendationsSec: seconds(run.resultsAt), toProposalSec: run.proposalAt ? seconds(run.proposalAt) : undefined },

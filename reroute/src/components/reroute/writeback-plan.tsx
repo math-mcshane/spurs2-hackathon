@@ -37,7 +37,14 @@ export function WritebackPlan({ result }: { result: Plan }) {
         <p role="note" className="flex items-start gap-2 text-ink-soft">
           <ShieldOffIcon className="mt-0.5 size-3.5 shrink-0 text-status-review" aria-hidden />
           <span>
-            <span className="text-ink">Live write refused.</span> {result.refusedReason.replaceAll(DEMO_CLEARANCE_LABEL, "Demo policy — not verified legal clearance")}
+            {/* Illustrative-rule receipts are refused by design; other refusals are quoted verbatim. */}
+            {result.refusedReason.includes(DEMO_CLEARANCE_LABEL) ? (
+              "Decisions under illustrative rules are never written to ScorePlay."
+            ) : (
+              <>
+                <span className="text-ink">Live write refused.</span> {result.refusedReason}
+              </>
+            )}
           </span>
         </p>
       )}

@@ -29,7 +29,7 @@ export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalVi
     <Swap id={`${c.key}:${edit?.edlId ?? ""}`}>
       <MomentPreview
         size="stage"
-        label={edit ? `Edited cut · ${edit.executionLabel}` : replacement ? "Replacement moment · re-checked" : "Campaign moment"}
+        label={edit ? "Edited cut" : replacement ? "Replacement moment · re-checked" : "Campaign moment"}
         source={
           goal.selected
             ? { ...recommendationSource(goal.selected), ...(edit && { start: edit.original.start, end: edit.original.end, skip: edit.removed }) }

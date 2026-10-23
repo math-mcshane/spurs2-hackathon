@@ -423,7 +423,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
         edit,
         intents,
         recheck,
-        tradeoff: `Keeps ${secs(edl.durationSec)} of ${secs(edl.originalDurationSec)} (${Math.round((100 * edl.durationSec) / edl.originalDurationSec)}%)${jumps ? ` with ${jumps} jump cut${jumps > 1 ? "s" : ""}` : ""}. Cut points come from AI timestamps — a reviewer confirms them on the render.`,
+        tradeoff: `Keeps ${secs(edl.durationSec)} of ${secs(edl.originalDurationSec)} (${Math.round((100 * edl.durationSec) / edl.originalDurationSec)}%)${jumps ? ` with ${jumps} jump cut${jumps > 1 ? "s" : ""}` : ""}. Cut points come from AI timestamps — an editor confirms them before rendering.`,
         outcome: outcomeOf(recheck.verdict),
         ...(recheck.verdict === "ALLOWED" ? {} : { notViableBecause: `The kept footage still isn't cleared: ${recheck.remaining.map((r) => r.explanation).slice(0, 2).join(" ")}` }),
       });

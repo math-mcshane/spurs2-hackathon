@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { policiesApi, type PackageSummary } from "@/features/policies/api";
 import { cn } from "@/lib/utils";
 
-const tagOf = (p: PackageSummary) => (p.sourceType !== "PRESET" ? "Uploaded — unverified" : p.verified ? "Verified" : "Demo policy");
+const tagOf = (p: PackageSummary) => (p.sourceType !== "PRESET" ? "Uploaded · unverified" : p.verified ? "Verified" : "Illustrative");
 
 /**
  * Compact switch between the club's rule packages (Policy Center library). `value` = the package the run uses;

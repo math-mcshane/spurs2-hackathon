@@ -199,10 +199,10 @@ export function MomentPreview({ source: s, size = "compact", label, className }:
           setFailed(true);
         }}
       />
-      <span className="tabular pointer-events-none absolute top-3 left-3 rounded bg-obsidian/80 px-1.5 py-0.5 font-mono text-meta text-ink">{span}</span>
-      {s.skip && s.skip.length > 0 && (
+      {size !== "thumb" && <span className="tabular pointer-events-none absolute top-3 left-3 rounded bg-obsidian/80 px-1.5 py-0.5 font-mono text-meta text-ink">{span}</span>}
+      {size !== "thumb" && s.skip && s.skip.length > 0 && (
         <span className="pointer-events-none absolute top-3 right-3 rounded bg-obsidian/80 px-1.5 py-0.5 text-meta text-ink">
-          Plays the kept seconds, skips {s.skip.map((r) => `${r.start.toFixed(1)}–${r.end.toFixed(1)} s`).join(", ")} · edit plan, not a rendered file
+          Edit plan preview · skips {s.skip.map((r) => `${r.start.toFixed(1)}–${r.end.toFixed(1)} s`).join(", ")}
         </span>
       )}
     </div>

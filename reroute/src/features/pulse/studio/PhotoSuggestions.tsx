@@ -78,7 +78,6 @@ function Photo({ photo: p }: { photo: PhotoSuggestion }) {
           </summary>
           <div className="mt-2 space-y-1.5 border-l border-line pl-3">
             <p className="text-ink-soft">{calmDemoLabel(p.rights.reason)}</p>
-            {p.rights.demoPolicy && <p>Checked under a demo policy — not verified legal clearance.</p>}
           </div>
         </details>
       )}

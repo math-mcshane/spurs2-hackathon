@@ -378,8 +378,7 @@ export function PulseStudio() {
       </main>
 
       <PulseFooter>
-        PULSE drafts and checks; it never publishes or buys media. Rights decisions come from its REROUTE rights engine — AI video analysis is evidence, never a licence.
-        Footage stays in ScorePlay and TwelveLabs.
+        PULSE proposes and checks campaigns — it never publishes or buys media. AI video analysis is evidence, not a licence.
       </PulseFooter>
 
       <ReviewerSignInDialog

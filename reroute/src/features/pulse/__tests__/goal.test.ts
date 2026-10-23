@@ -647,7 +647,7 @@ describe("goal → campaign → rights → alternative → review", () => {
     const approved = (await goals.getGoal(v.run.id, d))!;
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(approved))).success).toBe(true);
     expect(approved).toMatchObject({ reviewStatus: "APPROVED", publishable: false });
-    expect(approved.publishNote).toContain(DEMO_CLEARANCE_LABEL);
+    expect(approved.publishNote).toMatch(/illustrative rules — publishing needs a verified club agreement/);
 
     const review = deps({ decideCampaign: campaignDecider({ "901": "NEEDS_REVIEW" }) });
     const nr = await goals.runGoal(A, "tottenham", review);

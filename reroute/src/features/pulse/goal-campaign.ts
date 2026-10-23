@@ -90,9 +90,12 @@ export function buildGoalCampaign(input: {
   const start = edl ? edl.retained[0].start : (rec.candidate.startSeconds ?? 0);
   const seconds = Math.round(edl ? edl.durationSec : (rec.candidate.endSeconds ?? 0) - (rec.candidate.startSeconds ?? 0));
   // Edited cuts quote tenths: whole-second rounding would put "0:15" inside a cut that starts at 0:14.5.
+  const metadataOnly = rec.candidate.foundBy !== "TWELVELABS";
   const cut = edl
     ? `an edited ${edl.durationSec.toFixed(1)}-second cut (${edl.retained.map((r) => `${timecode(r.start)}–${timecode(r.end)}`).join(" + ")})`
-    : `the ${seconds}-second moment at ${clock(start)}`;
+    : metadataOnly
+      ? `the whole ${seconds}-second clip`
+      : `the ${seconds}-second moment at ${clock(start)}`;
   const organic = plan.usage === "ORGANIC" || plan.usage === "EDITORIAL";
   const draft = composeCampaign({
     id: input.campaignId,
@@ -106,7 +109,11 @@ export function buildGoalCampaign(input: {
     angle: `${rec.headline}: ${cut} in “${rec.candidate.title}”, as a vertical social cut for ${plan.channels.length} channels.`,
     cohort: audienceOf(run, plan),
     rationale: [rec.why.opportunity, rec.why.media],
-    evidenceLabels: ["Ranking: objective × live TwelveLabs evidence — no fan-signal or market data used"],
+    evidenceLabels: [
+      metadataOnly
+        ? "Ranking: objective × ScorePlay tags — footage not visually analysed; no fan-signal or market data used"
+        : "Ranking: objective × live TwelveLabs evidence — no fan-signal or market data used",
+    ],
     destination: organic ? undefined : input.destination,
     ...(organic && run.plan.usage === "COMMERCIAL" ? { organicNote: "Posted as organic club content after a rights recovery: no store or ticketing link." } : {}),
     now,

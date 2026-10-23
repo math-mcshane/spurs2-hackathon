@@ -5,8 +5,8 @@
  *   pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A B C]
  *   … scripts/record-demo-cache.ts --sanitize   # re-apply the current sanitizer to demo-cache/ offline, then verify
  *
- * Scenarios = the Studio's brief library (club tottenham): A merchandise UK, B global engagement, C jerseys Mexico,
- * D tickets, E sleeve-sponsor activation, F jerseys UK, G UK followers. Each is walked through every moment:
+ * Scenarios = the Studio's brief library: A merchandise UK, B global engagement, C jerseys Mexico, D tickets, E sleeve-sponsor
+ * activation, F jerseys UK, G UK followers, I Solanke sponsor (tottenham); H Spurs France, J Wembanyama × Ledger (spurs). Each is walked through every moment:
  * select → rights check → "Find a way to use it" → the recommended option, if any → independent re-check.
  *
  * Read-only upstream (TwelveLabs list/search/analyze, ScorePlay GET + POST /media/search); goal runs are
@@ -35,6 +35,7 @@ const SCENARIOS: { name: string; goal: string; club: Club }[] = [
   { name: "G", goal: "Get more followers in the UK", club: "tottenham" },
   { name: "H", goal: "Grow engagement with Spurs fans in France", club: "spurs" },
   { name: "I", goal: "Activate our sponsor with Solanke's late goal for UK fans", club: "tottenham" },
+  { name: "J", goal: "Build a Wembanyama-led Ledger sponsor campaign", club: "spurs" },
 ];
 
 /** What must never be in a committed fixture: any URL (protected footage links), storage locators, e-mails, or token-like material. */

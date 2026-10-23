@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { isMediaPreviewEnabled } from "@/features/pulse/flags";
 import { defaultScorePlayHttp, getMedia, type ScorePlayHttp } from "@/features/pulse/server/scoreplay-discovery";
 import { createTwelveLabsSdk, videoStream, type TwelveLabsSdk } from "@/features/pulse/server/twelvelabs-moments";
@@ -25,17 +26,25 @@ function defaultDeps(club?: string): PreviewDeps {
   };
 }
 
+/** ScorePlay's own rendition of a video, as nested under `video` in `GET /media/{id}` (top-level proxies may be empty). */
+const NestedVideoShape = z.object({ video: z.object({ proxy_medium: z.string().nullish(), proxy_large: z.string().nullish() }).loose().nullish() }).loose();
+
 async function resolve(ref: MediaRef, deps: PreviewDeps): Promise<Preview | undefined> {
+  let nested: string | undefined;
   if (ref.scoreplayMediaId) {
     try {
-      const proxy = mapMediaToAsset(await getMedia(deps.scoreplay, ref.scoreplayMediaId), []).previewUrl;
+      const media = await getMedia(deps.scoreplay, ref.scoreplayMediaId);
+      const proxy = mapMediaToAsset(media, []).previewUrl;
       if (proxy?.startsWith("https://")) return { source: "SCOREPLAY_PROXY", url: proxy, hls: /\.m3u8(\?|$)/.test(proxy) };
+      const video = NestedVideoShape.safeParse(media).data?.video;
+      nested = [video?.proxy_medium, video?.proxy_large].find((u): u is string => !!u?.startsWith("https://"));
     } catch (err) {
       console.warn(`[media] ScorePlay preview lookup failed for ${ref.scoreplayMediaId}:`, err instanceof Error ? err.message : err);
     }
   }
-  // A TwelveLabs stream is shown for a ScorePlay asset only through a linkable identity.
-  if (!isEvidenceLinkable(ref)) return undefined;
+  // A TwelveLabs stream is shown for a ScorePlay asset only through a linkable identity. An un-indexed clip plays
+  // ScorePlay's own nested rendition instead (linked clips keep the TwelveLabs stream, as before).
+  if (!isEvidenceLinkable(ref)) return nested ? { source: "SCOREPLAY_PROXY", url: nested, hls: false } : undefined;
   try {
     const { sdk, indexId } = deps.twelvelabs();
     const hls = await videoStream(sdk, indexId, ref.twelvelabsVideoId!);

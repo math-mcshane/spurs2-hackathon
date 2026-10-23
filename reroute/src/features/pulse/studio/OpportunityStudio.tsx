@@ -10,6 +10,7 @@ import {
   angleKicker,
   evidenceSource,
   matchEvidence,
+  metadataOnly,
   opportunityHeadline,
   postConcept,
   recommendationReason,
@@ -110,7 +111,7 @@ export function OpportunityStudio({ goal, preflight, busy, loadingKey, openKey, 
                 Searched only the {goal.run.playerFilter.videos} videos ScorePlay tags with <span className="text-ink">{goal.run.playerFilter.requested}</span>.{" "}
               </>
             ) : null}
-            Real club footage, located to the second. Select one to see its full rights decision beside the list.
+            {recs[0] && metadataOnly(recs[0]) ? "Real club footage, ranked on its ScorePlay tags." : "Real club footage, located to the second."} Select one to see its full rights decision beside the list.
           </p>
           {checking && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta">
@@ -120,6 +121,14 @@ export function OpportunityStudio({ goal, preflight, busy, loadingKey, openKey, 
           )}
         </div>
       </div>
+
+      {recs[0] && metadataOnly(recs[0]) && (
+        <div className="mt-6 max-w-3xl">
+          <Notice tone="info">
+            {goal.run.search.message} A missing sponsor tag does not mean a clip is free of brands, and a tagged sponsor is not proof it is on screen — the rights check treats both as unknown.
+          </Notice>
+        </div>
+      )}
 
       <div className="mt-8 grid grid-cols-1 gap-x-8 gap-y-10 lg:grid-cols-12">
         <div id="opportunity-rail" className="min-w-0 scroll-mt-24 lg:col-span-4 xl:col-span-3">
@@ -386,10 +395,15 @@ function SearchDetail({ rec }: { rec: RecommendationView }) {
         <p>{rec.why.opportunity}</p>
         <ul className="space-y-0.5 text-meta">
           {rec.matches.map((m) => (
-            <li key={m.intent}>
-              Matched “{m.label}” · {spanLabel(m)} · search rank {m.rank}
-            </li>
+            <li key={m.intent}>{metadataOnly(rec) ? `${m.label} (ScorePlay tag)` : `Matched “${m.label}” · ${spanLabel(m)} · search rank ${m.rank}`}</li>
           ))}
+          {metadataOnly(rec) && (
+            <>
+              <li>Relevance {rec.breakdown.relevance}: {rec.breakdown.notes.relevance}</li>
+              <li>Readiness {rec.breakdown.readiness}: {rec.breakdown.notes.readiness}</li>
+              {rec.duplicates.length > 0 && <li>Also in ScorePlay as {rec.duplicates.length} other aspect-ratio version(s).</li>}
+            </>
+          )}
           <li className="tabular">Score {rec.score.toFixed(2)}</li>
         </ul>
       </div>

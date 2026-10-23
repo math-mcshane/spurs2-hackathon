@@ -225,6 +225,109 @@ export function rankMoments(
   return dedupe(diversify(ranked.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))));
 }
 
+/** Relevance points per ScorePlay signal when no video intelligence exists (shown in the breakdown). */
+export const METADATA_RANKING = { player: 40, sponsor: 40, focus: { solo: 20, small: 10 } } as const;
+
+/** A ScorePlay video of an un-indexed library with its real MediaRef (UNMAPPED: nothing can be observed in it). */
+export type MetadataVideo = { asset: Asset; discoveredBy: MediaCandidate["discoveredBy"]; media: MediaRef };
+
+/** Sponsors the goal names that ScorePlay tags on this asset (whole-word, case-insensitive). */
+export function namedSponsors(asset: Asset, goalTerms: readonly string[]): string[] {
+  const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  return (asset.facts.sponsors ?? []).filter((s) => fold(s).split(/[^\p{L}\p{N}]+/u).some((w) => goalTerms.includes(w)));
+}
+
+/**
+ * Whole ScorePlay clips ranked on ScorePlay metadata ONLY, for a club whose footage is in no TwelveLabs index.
+ * Nothing inside a clip has been observed: there is no moment, no timecode inside the clip and no visual evidence
+ * (a missing sponsor tag never means a brand-free picture). Signals, all from ScorePlay tags:
+ *   relevance = player tag (the goal's player) 40 + sponsor tag the goal names 40 + focus (1 player tagged 20, ≤ 3: 10)
+ *   readiness = as for moments (vertical edit / short clip / needs trimming), from the filename and exact duration
+ *   score     = 0.85 × relevance + 0.15 × readiness
+ */
+export function rankByMetadata(videos: readonly MetadataVideo[], ctx: RankingContext & { player?: string; sponsorTerms: readonly string[] }): Recommendation[] {
+  const objective = ctx.objective;
+  const where = objective.market ? ` in ${objective.market.label}` : objective.scope === "GLOBAL" ? " worldwide" : "";
+  const action = ACTION[objective.product?.key ?? "default"](where);
+  const ranked = videos.flatMap((v): Recommendation[] => {
+    const asset = v.asset;
+    const duration = asset.durationSec;
+    if (asset.kind !== "video" || !duration || duration <= 0) return [];
+    const people = asset.facts.people ?? [];
+    const player = ctx.player && people.includes(ctx.player) ? ctx.player : undefined;
+    const sponsors = namedSponsors(asset, ctx.sponsorTerms);
+    const focus = player ? (people.length === 1 ? METADATA_RANKING.focus.solo : people.length <= 3 ? METADATA_RANKING.focus.small : 0) : 0;
+    const relevance = (player ? METADATA_RANKING.player : 0) + (sponsors.length ? METADATA_RANKING.sponsor : 0) + focus;
+    if (relevance === 0) return [];
+    const ready = readiness(asset);
+    const score = Math.round(RANKING.relevance * relevance + RANKING.readiness * ready.value);
+    const signals = [
+      ...(player ? [{ intent: "scoreplay:player", label: `Tagged ${player}` }] : []),
+      ...sponsors.map((s) => ({ intent: `scoreplay:sponsor:${s.toLowerCase()}`, label: `Tagged ${s}` })),
+    ];
+    const evidence = signals.map((s) => s.label.replace(/^Tagged /, "")).join(" + ");
+    const event = typeof asset.metadata.event === "object" && asset.metadata.event && "name" in asset.metadata.event ? String(asset.metadata.event.name) : undefined;
+    const season = seasonOf(asset.title);
+    return [
+      {
+        key: `${asset.id}@0-${duration}`,
+        candidate: {
+          scoreplayAssetId: asset.id,
+          title: asset.title,
+          kind: asset.kind,
+          thumbnailUrl: asset.thumbnailUrl,
+          durationSec: duration,
+          startSeconds: 0,
+          endSeconds: duration,
+          competition: asset.facts.competition,
+          recordedAt: asset.facts.recordedAt,
+          foundBy: "SCOREPLAY_METADATA_FALLBACK",
+          discoveredBy: v.discoveredBy,
+          origin: asset.origin,
+        },
+        media: v.media,
+        duplicates: [],
+        headline: [player ?? "Club highlight", ...sponsors].join(" × "),
+        score,
+        breakdown: {
+          relevance,
+          readiness: ready.value,
+          contextFactor: 1,
+          notes: {
+            relevance: `ScorePlay tags: ${[
+              player ? `${player} (+${METADATA_RANKING.player})` : "",
+              sponsors.length ? `${sponsors.join(", ")} (+${METADATA_RANKING.sponsor})` : "",
+              focus ? `${people.length} player(s) tagged (+${focus})` : "",
+            ]
+              .filter(Boolean)
+              .join(", ")}.`,
+            readiness: ready.note,
+            context: [event && `ScorePlay folder “${event}”.`, season ? `Filename marks the ${season} season.` : ""].filter(Boolean).join(" ") || "No season marked in the filename.",
+          },
+        },
+        matches: signals.map((s) => ({ ...s, query: "ScorePlay tag", rank: 1, start: 0, end: duration })),
+        ...(season ? { season } : {}),
+        why: {
+          opportunity: `ScorePlay links this clip to ${evidence} — which serves “${objective.summary}”.`,
+          media: `Whole ${Math.round(duration)}-second ScorePlay clip “${asset.title}”, chosen on its ScorePlay tags (${evidence}). Not visually analysed: this footage is in no TwelveLabs index, so nothing inside it has been observed — including which brands are on screen.`,
+          action,
+        },
+        previewNote: "",
+      },
+    ];
+  });
+  // Whole clips all start at 0, so length alone is no duplicate signal: only aspect-ratio versions of one edit
+  // ("Vic FB Backboard Oop_4x5" / "_9x16", same length ± 0.5 s) fold into the best-ranked one.
+  const stem = (title: string) => title.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[_\s-]*(\d+x\d+)[_\s-]*/g, " ").trim();
+  const kept: Recommendation[] = [];
+  for (const r of ranked.sort((a, b) => b.score - a.score || (a.candidate.durationSec ?? 0) - (b.candidate.durationSec ?? 0) || a.key.localeCompare(b.key))) {
+    const original = kept.find((k) => stem(k.candidate.title) === stem(r.candidate.title) && Math.abs((k.candidate.durationSec ?? 0) - (r.candidate.durationSec ?? 0)) <= 0.5);
+    if (original) original.duplicates = [...original.duplicates, r.key];
+    else kept.push(r);
+  }
+  return kept;
+}
+
 /** Probable re-upload: a different ScorePlay asset of the same length, cut at the same timecode. */
 export const probableDuplicate = (a: Recommendation, b: Recommendation) =>
   a.candidate.scoreplayAssetId !== b.candidate.scoreplayAssetId &&

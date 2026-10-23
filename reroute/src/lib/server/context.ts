@@ -117,7 +117,7 @@ export class DecisionContext {
       const detail =
         ref.method === "AMBIGUOUS"
           ? `${ref.candidates.length} candidate videos match by filename and duration`
-          : "no TwelveLabs video matches its filename and duration";
+          : "it is not in the video-intelligence index — no indexed video matches its filename and duration";
       return { status: { status: "UNLINKABLE", detail }, evidence: [] };
     }
     try {

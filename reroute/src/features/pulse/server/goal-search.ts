@@ -1,9 +1,11 @@
+import type { MediaRef } from "@/lib/contracts";
+import { mapMediaToAsset } from "@/lib/scoreplay/map";
 import { CLUBS } from "../clubs";
 import { goalIntents } from "../goal-intents";
-import { goalTerms, latestSeason, rankMoments, type LinkedVideo } from "../moment-ranking";
+import { goalTerms, latestSeason, rankByMetadata, rankMoments, type LinkedVideo, type MetadataVideo } from "../moment-ranking";
 import type { Club, GoalRun, MatchFilter, ParsedObjective } from "../types";
 import { candidateMapping, defaultMediaDeps, linkDiscovered, mappingAttempt, openIndex, stageIssue, type MediaDeps } from "./media-lookup";
-import { ScorePlayDiscoveryError, discoverVideos, resolveTags, searchMediaPages, type DiscoveredVideo, type Discovery, type ScorePlayHttp } from "./scoreplay-discovery";
+import { ScorePlayDiscoveryError, discoverVideos, getMedia, resolveTags, searchMediaPages, type DiscoveredVideo, type Discovery, type ScorePlayHttp } from "./scoreplay-discovery";
 import { classifyTwelveLabsError, searchMoments } from "./twelvelabs-moments";
 
 /** Moments per question: one page; enough for agreement between questions to show. */
@@ -38,11 +40,42 @@ export function filterByMatch(videos: readonly DiscoveredVideo[], requested: str
     : { videos: [...videos], filter: { requested, status: "NOT_FOUND", videos: videos.length } };
 }
 
-/** Capitalized words of the goal that could name a person ("Solanke's" → "Solanke"); club names are excluded. */
+/** Capitalized words of the goal that could name a person ("Solanke's" → "Solanke", "Wembanyama-led" → "Wembanyama"); club names are excluded. */
 function nameCandidates(goal: string, exclude: readonly string[]): string[] {
   const skip = new Set(exclude.flatMap((e) => e.toLowerCase().split(/[^\p{L}]+/u)));
   const words = goal.match(/\p{Lu}[\p{L}-]{3,}/gu) ?? [];
-  return [...new Set(words.map((w) => w.replace(/['’]s$/u, "")).filter((w, i) => !(i === 0 && goal.trimStart().startsWith(w)) && !skip.has(w.toLowerCase())))].slice(0, 3);
+  // A lower-case hyphen suffix is an English compound ("-led", "-inspired"), not part of a name ("Solanke-Mitchell").
+  const names = words.map((w) => w.replace(/['’]s$/u, "").replace(/-\p{Ll}[\p{L}-]*$/u, ""));
+  return [...new Set(names.filter((w, i) => w.length >= 4 && !(i === 0 && goal.trimStart().startsWith(words[i]!)) && !skip.has(w.toLowerCase())))].slice(0, 3);
+}
+
+/** Concurrent `GET /media/{id}` reads when ranking an un-indexed library on exact ScorePlay metadata. */
+const METADATA_REFINE_CONCURRENCY = 8;
+/** Upper bound of ScorePlay reads for the metadata ranking (a named player narrows the library well below this). */
+const METADATA_MAX_VIDEOS = 60;
+
+/**
+ * An un-indexed library, ranked on exact ScorePlay metadata (`GET /media/{id}`: full tags and nanosecond duration),
+ * only when the goal gives a ScorePlay signal to rank on — a tagged player it names, or a sponsor it names that
+ * ScorePlay tags. Otherwise nothing is proposed (a library ranked on nothing would be a guess).
+ */
+async function rankUnindexed(
+  http: ScorePlayHttp,
+  videos: readonly DiscoveredVideo[],
+  unmapped: readonly MediaRef[],
+  ctx: { objective: ParsedObjective; player?: string; exclude: readonly string[] },
+): Promise<GoalSearch["pool"]> {
+  const sponsorTerms = goalTerms(ctx.objective.raw, ctx.exclude);
+  if (!ctx.player && sponsorTerms.length === 0) return [];
+  const refs = new Map(unmapped.map((r) => [r.scoreplayMediaId, r]));
+  const subset = videos.filter((v) => refs.has(v.asset.id)).slice(0, METADATA_MAX_VIDEOS);
+  const exact: MetadataVideo[] = [];
+  for (let i = 0; i < subset.length; i += METADATA_REFINE_CONCURRENCY) {
+    const batch = subset.slice(i, i + METADATA_REFINE_CONCURRENCY);
+    const read = await Promise.all(batch.map(async (v) => ({ v, asset: mapMediaToAsset(await getMedia(http, v.asset.id), []) })));
+    exact.push(...read.map(({ v, asset }) => ({ asset, discoveredBy: v.discoveredBy, media: refs.get(v.asset.id)! })));
+  }
+  return rankByMetadata(exact, { objective: ctx.objective, player: ctx.player, sponsorTerms });
 }
 
 /**
@@ -138,6 +171,25 @@ export async function searchGoal(
     if (mapping) attempts.push(mapping);
     const indexed = { ...library, indexed: links.length, indexName: catalog.indexName };
     if (links.length === 0) {
+      if (!ambiguous.length) {
+        const exclude = [club.label, ...terms, ...(input.match ? [input.match] : []), input.objective.market?.matched ?? "", input.objective.market?.label ?? "", input.objective.product?.matched ?? ""];
+        const pool = await rankUnindexed(deps.scoreplay, videos, unmapped, { objective: input.objective, player: playerFilter?.requested, exclude });
+        if (pool.length) {
+          attempts.push({ service: "ScorePlay", query: "metadata ranking (not indexed)", outcome: "OK", detail: `${pool.length} whole clip(s) ranked on ScorePlay tags of ${Math.min(unmapped.length, METADATA_MAX_VIDEOS)} video(s); no moment search` });
+          return {
+            intents,
+            library: indexed,
+            attempts,
+            pool,
+            matchFilter,
+            playerFilter,
+            search: {
+              status: "NOT_INDEXED",
+              message: `None of the ${videos.length} ${club.label} videos is in the video-intelligence index ${indexLabel}, so no moment inside a clip can be located. PULSE ranked whole ScorePlay clips on their ScorePlay tags instead — nothing in them has been visually analysed.`,
+            },
+          };
+        }
+      }
       return {
         intents,
         library: indexed,

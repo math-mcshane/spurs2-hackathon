@@ -157,6 +157,7 @@ export function timecode(t: number): string {
 const span = (i: Interval) => `${timecode(i.start)}–${timecode(i.end)}`;
 const secs = (t: number) => `${t.toFixed(1)} s`;
 const unique = <T>(xs: readonly T[]) => [...new Set(xs)];
+const CHANNEL_NAME: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", x: "X", tiktok: "TikTok", youtube: "YouTube" };
 const reasonKey = (r: Reason) => `${r.ruleId}|${r.dimension}|${r.outcome}`;
 const entityOf = (ev: Evidence) => ev.observation.split(":")[0]?.trim() || ev.label || "an observation";
 const timed = (ev: Evidence) => ev.start !== undefined || ev.end !== undefined;
@@ -387,11 +388,25 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
       evidence: p.evidence,
     })),
     ...where.pervasive.map((r) => ({ scope: "CLIP" as const, pervasive: true, text: r.explanation, ruleIds: [r.ruleId], evidence: [] })),
-    ...where.campaign.map(({ reason }) => ({ scope: "CAMPAIGN" as const, pervasive: true, text: reason.explanation, ruleIds: [reason.ruleId], evidence: [] })),
+    // One unmatched licence rule fails on several dimensions with the same explanation: list it once.
+    ...unique(where.campaign.map(({ reason }) => reason.explanation)).map((text) => ({
+      scope: "CAMPAIGN" as const,
+      pervasive: true,
+      text,
+      ruleIds: unique(where.campaign.filter(({ reason }) => reason.explanation === text).map(({ reason }) => reason.ruleId)),
+      evidence: [],
+    })),
   ];
   const clipProblems = where.localized.length + where.pervasive.length;
   const scope: RecoveryPlan["scope"] = clipProblems && where.campaign.length ? "MIXED" : where.campaign.length ? "CAMPAIGN" : "CLIP";
-  const unlicensed = unique(where.campaign.flatMap((c) => (c.reason.dimension === "territory" ? c.intents.map((i) => i.territory.toUpperCase()) : [])));
+  // A territory (or channel) is unlicensed only when EVERY planned use there fails on it: an unlicensed channel also
+  // leaves its territory unmatched ("US" on Facebook), which must not read as "US isn't licensed" when Instagram/US is.
+  const failsEverywhere = (dimension: "territory" | "platform", value: string, pick: (i: PublishIntent) => string) =>
+    currentUses.filter((u) => pick(u.intent) === value).every((u) => u.decision.decision.reasons.some((r) => r.dimension === dimension && r.outcome !== "PERMIT"));
+  const unlicensedIn = (dimension: "territory" | "platform", pick: (i: PublishIntent) => string) =>
+    unique(where.campaign.flatMap((c) => (c.reason.dimension === dimension ? c.intents.map(pick) : []))).filter((v) => failsEverywhere(dimension, v, pick));
+  const unlicensedPlatforms = unlicensedIn("platform", (i) => i.platform).map((p) => CHANNEL_NAME[p] ?? p);
+  const unlicensed = [...unlicensedIn("territory", (i) => i.territory.toUpperCase()), ...unlicensedPlatforms];
   // Whether the plan's target sponsor is a partner is a question for a reviewer, not a missing licence.
   const isTargetQuestion = (r: Reason) => r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX);
   const licensing = where.campaign.filter((c) => !isTargetQuestion(c.reason));

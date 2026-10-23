@@ -1077,8 +1077,65 @@ export type RightsView = z.infer<typeof RightsViewSchema>;
 export const RecommendationViewSchema = RecommendationSchema.extend({
   /** Latest recorded overall verdict for this moment, if REROUTE evaluated it. */
   rights: z.object({ state: RightsStateSchema, clearance: ClearanceSchema.optional() }),
+  /**
+   * Identity of the inputs a selection-time preflight of this moment would use (run, moment, rule package,
+   * usage, territories, channels, derived cut). A preflight result is shown only while its `basis` equals this.
+   */
+  preflightBasis: z.string(),
 });
 export type RecommendationView = z.infer<typeof RecommendationViewSchema>;
+
+/** One non-permitting REROUTE reason of a preflight, de-duplicated across uses: real finding + the rule applied. */
+export const PreflightFindingSchema = z.object({
+  /** Plain-language topic (goal-view TOPIC), e.g. "Brands on screen", "Licence terms". */
+  topic: z.string(),
+  outcome: z.enum(["DENY", "MISSING"]),
+  /** What was actually found, verbatim from `reasonFinding` (e.g. TwelveLabs observation with its seconds). */
+  found: z.string(),
+  /** Where the finding came from, e.g. "Video analysis · TwelveLabs", "ScorePlay data", "Your campaign plan". */
+  source: z.string(),
+  /** Restricted seconds on the source asset, from the engine's reason (absent for licence terms). */
+  at: z.object({ start: z.number().nonnegative(), end: z.number().nonnegative() }).optional(),
+  ruleId: z.string().optional(),
+  /** REROUTE's explanation, verbatim. */
+  rule: z.string(),
+  /** Planned markets this finding applies to. */
+  territories: z.array(z.string()),
+});
+export type PreflightFinding = z.infer<typeof PreflightFindingSchema>;
+
+/**
+ * Selection-time REROUTE check of one recommended moment for the run's current plan and rule package. Same engine
+ * call as "Check rights" (decideCampaign) but NOT recorded as the campaign's evaluation: an early read, never final.
+ */
+export const OpportunityPreflightSchema = z.object({
+  key: z.string(),
+  /** The `preflightBasis` this result was computed for. */
+  basis: z.string(),
+  /** REROUTE's overall (worst) verdict, verbatim. */
+  verdict: VerdictSchema,
+  clearance: ClearanceSchema,
+  /** Any part was decided by a demo / unverified rule package. */
+  illustrative: z.boolean(),
+  allowedUses: z.number().int().nonnegative(),
+  totalUses: z.number().int().positive(),
+  /** `plannedUsesLabel` of the uses checked, e.g. "all 3 planned uses (Instagram, Facebook, X · GB · sponsored)". */
+  plannedUses: z.string(),
+  /** The exact segments evaluated (moment boundaries, or the campaign's derived cut when `edited`). */
+  segments: z.array(z.object({ scoreplayMediaId: z.string(), start: z.number().nonnegative(), end: z.number().nonnegative() })).min(1),
+  edited: z.boolean(),
+  /** Where the non-permits come from: the footage (CLIP), the plan (CAMPAIGN) or both. Absent when ALLOWED. */
+  scope: z.enum(["CLIP", "CAMPAIGN", "MIXED"]).optional(),
+  /** Planned markets where no use is allowed. */
+  blockedTerritories: z.array(z.string()),
+  /** No planned market (or channel) is licensed at all: only a licence request can help. */
+  licenceGap: z.object({ territories: z.array(z.string()), platforms: z.array(z.string()) }).optional(),
+  /** DENY first, at most 4. */
+  findings: z.array(PreflightFindingSchema).max(4),
+  policy: PolicyContextSchema.optional(),
+  evaluatedAt: iso,
+});
+export type OpportunityPreflight = z.infer<typeof OpportunityPreflightSchema>;
 
 export const ChecklistItemSchema = z.object({
   item: z.string(),

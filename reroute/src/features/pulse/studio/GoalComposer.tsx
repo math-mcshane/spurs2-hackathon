@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
 import { goalPlan, parseMatch } from "../goal-intents";
-import { parseObjective } from "../objective-parser";
+import { marketsLabel, objectiveMarkets, parseObjective } from "../objective-parser";
 import type { Club } from "../types";
 import { Eyebrow, StagedProgress, country, usageWord, type Stage } from "./parts";
 
@@ -22,10 +22,7 @@ const EXAMPLES: Record<Club, { label: string; goal: string }[]> = {
     { label: "Grow UK followers", goal: "Get more followers in the UK" },
     { label: "Open a new market", goal: "Sell more Spurs jerseys in Mexico" },
   ],
-  spurs: [
-    { label: "Wembanyama × Ledger partner post", goal: "Build a Wembanyama-led Ledger sponsor campaign" },
-    { label: "Sell jerseys abroad", goal: "Sell Spurs jerseys in Mexico using the best moments from the Kings game" },
-  ],
+  spurs: [{ label: "Wembanyama jerseys · France & US", goal: "Drive Wembanyama jersey sales in France and the US using a spectacular dunk." }],
 };
 
 /**
@@ -163,7 +160,7 @@ function understand(text: string, club: Club): { text: string; unknown?: boolean
   return [
     o.product ? { text: o.product.label } : { text: "Goal type not recognised", unknown: true },
     o.scope === "MARKET" && o.market
-      ? { text: o.market.label }
+      ? { text: marketsLabel(objectiveMarkets(o)) }
       : o.scope === "GLOBAL"
         ? { text: `Global · ${plan.territories.length} markets` }
         : { text: `No market — ${country(plan.territories[0])} by default`, unknown: true },

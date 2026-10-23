@@ -23,8 +23,9 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
 
 ## Product journey (`/`, the Studio)
 
-1. **Goal** — free text + club, e.g. "Promote Tottenham merchandise to UK supporters". `objective-parser.ts` reads
-   market / product / KPI; `goal-intents.ts` turns it into weighted visual questions.
+1. **Goal** — free text + club, e.g. "Promote Tottenham merchandise to UK supporters" or (San Antonio) "Drive Wembanyama
+   jersey sales in France and the US using a spectacular dunk.". `objective-parser.ts` reads market(s) / product / KPI
+   (every market the goal names becomes a planned territory); `goal-intents.ts` turns it into weighted visual questions.
 2. **Three moments** — ScorePlay lists the club's videos; each question is a live TwelveLabs Marengo search in those
    videos; hits are linked back to ScorePlay assets by `MediaResolver` (filename + duration, unique both ways) with exact
    timestamps; `moment-ranking.ts` picks the top three distinct assets. Video previews are off unless
@@ -33,7 +34,8 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    same club are suggested from metadata only (captions, person tags, event, orientation — never visually analysed,
    no image URL in any response), each with the rights engine's verdict for the planned uses (typically NEEDS_REVIEW
    for sales/sponsored posts: who and which brands appear can't be confirmed without analysis).
-3. **Campaign** — localized Instagram / Facebook / X copy (e.g. es-MX for Mexico), cut, CTA, intents for every
+3. **Campaign** — localized Instagram / Facebook / X copy (e.g. es-MX for Mexico; one line per language when the goal
+   names markets with different languages, e.g. French + English for France and the US), cut, CTA, intents for every
    channel × territory. Each edit is a new campaign version. The CTA links only to a configured
    `PULSE_COMMERCE_DESTINATIONS` entry (e.g. `tottenham:tickets:*=https://…`) or a producer link on the club's site.
    Sponsor goals use usage SPONSORED. A partner the goal names ("Promote our partner AIA …") is the run's
@@ -61,9 +63,12 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
    (re-check counts: allowed · restricted · unresolved). Only an option whose re-check is ALLOWED for every use and keeps
    the goal is recommended; review-required candidates are listed as such, never as a fix ("No verified replacement
    available"); NOT_VIABLE / STILL_BLOCKED / NEXT_STEP options are never applicable. Applying one writes a new campaign version and re-evaluates it
-   from scratch (before/after). A licence gap (no licensed market or channel, e.g. "Sell more Spurs jerseys in
-   Mexico") offers only "Request additional usage rights" and the campaign cannot be submitted; PULSE never re-targets
-   the goal to other countries. Switching the rule package (`setPolicy`) marks the verdict stale until re-checked.
+   from scratch (before/after). A licence gap (no licensed market, channel or use, e.g. "Sell more Spurs jerseys in
+   Mexico", or a commercial merchandise post under a licence that only covers editorial/organic/sponsored social use)
+   offers only "Request additional usage rights" and the campaign cannot be submitted; PULSE never re-targets the goal to
+   other countries or turns a sales post into an editorial one. A licence rule that grants several dimensions at once
+   reports a miss under the field that failed ("COMMERCIAL use is not licensed", not "France is not licensed").
+   Switching the rule package (`setPolicy`) marks the verdict stale until re-checked.
 6. **Review** — submit → a named reviewer signs in (Reviewer id + personal passcode) → approve/reject → receipt with
    every use, the reviewer's configured name and a hash-chained audit trail.
 7. **Writeback** — ScorePlay writeback plan (dry run by default).
@@ -103,8 +108,8 @@ pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/live-walkt
 pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts spurs
 pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts "celebration"
 # Record demo replay (needs local Supabase): A merch, B global engagement, C Mexico, D tickets, E sponsor,
-# F jerseys UK, G UK followers, H Spurs France (not indexed), I Solanke sponsor flagship, J Wembanyama × Ledger (Spurs,
-# not indexed: whole clips ranked on ScorePlay tags) — incl. recovery searches
+# F jerseys UK, G UK followers, H Spurs France (not indexed), I Solanke sponsor flagship, J Wembanyama jerseys in France
+# and the US (Spurs, not indexed: whole clips ranked on ScorePlay tags; COMMERCIAL use unlicensed) — incl. recovery searches
 pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A … J]
 ```
 

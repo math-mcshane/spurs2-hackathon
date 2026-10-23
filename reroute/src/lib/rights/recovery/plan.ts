@@ -147,6 +147,13 @@ const span = (i: Interval) => `${timecode(i.start)}–${timecode(i.end)}`;
 const secs = (t: number) => `${t.toFixed(1)} s`;
 const unique = <T>(xs: readonly T[]) => [...new Set(xs)];
 const CHANNEL_NAME: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", x: "X", tiktok: "TikTok", youtube: "YouTube" };
+/** A use no rule licenses, as a rights holder reads it: merchandise advertising is a different right from a social post. */
+export const UNLICENSED_USE: Record<string, string> = {
+  COMMERCIAL: "commercial use (merchandise and sales posts)",
+  SPONSORED: "sponsored posts",
+  ORGANIC: "organic club posts",
+  EDITORIAL: "editorial use",
+};
 const reasonKey = (r: Reason) => `${r.ruleId}|${r.dimension}|${r.outcome}`;
 const entityOf = (ev: Evidence) => ev.observation.split(":")[0]?.trim() || ev.label || "an observation";
 const timed = (ev: Evidence) => ev.start !== undefined || ev.end !== undefined;
@@ -388,14 +395,15 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   ];
   const clipProblems = where.localized.length + where.pervasive.length;
   const scope: RecoveryPlan["scope"] = clipProblems && where.campaign.length ? "MIXED" : where.campaign.length ? "CAMPAIGN" : "CLIP";
-  // A territory (or channel) is unlicensed only when EVERY planned use there fails on it: an unlicensed channel also
+  // A territory, channel or use is unlicensed only when EVERY planned use with it fails on it: an unlicensed channel also
   // leaves its territory unmatched ("US" on Facebook), which must not read as "US isn't licensed" when Instagram/US is.
-  const failsEverywhere = (dimension: "territory" | "platform", value: string, pick: (i: PublishIntent) => string) =>
+  const failsEverywhere = (dimension: "territory" | "platform" | "usage", value: string, pick: (i: PublishIntent) => string) =>
     currentUses.filter((u) => pick(u.intent) === value).every((u) => u.decision.decision.reasons.some((r) => r.dimension === dimension && r.outcome !== "PERMIT"));
-  const unlicensedIn = (dimension: "territory" | "platform", pick: (i: PublishIntent) => string) =>
+  const unlicensedIn = (dimension: "territory" | "platform" | "usage", pick: (i: PublishIntent) => string) =>
     unique(where.campaign.flatMap((c) => (c.reason.dimension === dimension ? c.intents.map(pick) : []))).filter((v) => failsEverywhere(dimension, v, pick));
   const unlicensedPlatforms = unlicensedIn("platform", (i) => i.platform).map((p) => CHANNEL_NAME[p] ?? p);
-  const unlicensed = [...unlicensedIn("territory", (i) => i.territory.toUpperCase()), ...unlicensedPlatforms];
+  const unlicensedUses = unlicensedIn("usage", (i) => i.usage);
+  const unlicensed = [...unlicensedUses.map((u) => UNLICENSED_USE[u] ?? u), ...unlicensedIn("territory", (i) => i.territory.toUpperCase()), ...unlicensedPlatforms];
   // Whether the plan's target sponsor is a partner — or a club partner on screen may appear — is a question for a
   // reviewer, not a missing licence and not a restriction a cut or another clip should "fix".
   const isReviewerQuestion = (r: Reason) => r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX) || r.ruleId.startsWith(CLUB_PARTNER_RULE_PREFIX);
@@ -426,14 +434,17 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
       ? "Nothing to fix: every planned use is allowed under the demo policy."
       : [inFootage.length ? `In the footage: ${inFootage.join("; ")}` : "", inPlan.length ? `In the plan: ${inPlan.join("; ")}` : "", toConfirm].filter(Boolean).join(" · ");
 
-  // No licensed market or channel in the plan at all: no edit, replacement or change of use can pass — a reviewer
-  // cannot grant a licence. Only the honest next step is offered.
+  // No licensed market, channel or use in the plan at all: no edit, replacement or change of use can pass — a reviewer
+  // cannot grant a licence, and turning a sales post into an editorial one is a different campaign, not a fix. Only the
+  // honest next step is offered.
   const remedy = licensing.length ? classifyBlocker(currentUses.map((u) => ({ intent: u.intent, decision: u.decision.decision })), ctx.policies).remedy : undefined;
   const requestedT = unique(intents.map((i) => i.territory.toUpperCase()));
   const requestedP = unique(intents.map((i) => i.platform));
+  const useGap = unique(intents.map((i) => i.usage)).every((u) => unlicensedUses.includes(u));
   const licenceGap =
     licensing.length > 0 &&
     (!remedy ||
+      useGap ||
       (remedy.territories !== undefined && !requestedT.some((t) => remedy.territories!.includes(t))) ||
       (remedy.platforms !== undefined && !requestedP.some((p) => remedy.platforms!.includes(p))));
 
@@ -662,7 +673,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   const noPathMessage = recommended
     ? undefined
     : licenceGap
-      ? `No licensed path: ${asks[0]} A different clip or edit hits the same wall, and PULSE won't move the campaign elsewhere.`
+      ? `No licensed path: ${asks[0]} A different clip or edit hits the same wall, and PULSE won't ${useGap ? "turn the campaign into a different kind of post" : "move the campaign elsewhere"}.`
       : review
         ? `No verified correction: no change keeps the goal and clears every use under these rules. ${review === 1 ? "One candidate still needs" : `${review} candidates still need`} a reviewer — not a fix.`
         : "No change PULSE can make clears this use under the selected policy. The next step is a clearance request.";

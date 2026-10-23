@@ -4,6 +4,7 @@
  * Nothing here states a fact the data does not contain, and nothing promises that a fix will work.
  */
 import { DEFAULT_LIMITS } from "@/lib/rights/recovery/limits";
+import { UNLICENSED_USE } from "@/lib/rights/recovery/plan";
 import { clock } from "../moment-ranking";
 import type { GoalPlan, GoalView, RecommendationView } from "../types";
 import { channelList, country, displayTitle, usageWord, type Issue } from "./parts";
@@ -67,6 +68,17 @@ const clubPartnerBrand = (sponsor: Sponsor | undefined) => sponsor?.brands.find(
 /** The top problem: DENY before MISSING (`groupIssues` already orders them so). */
 const topIssue = (issues: readonly Issue[]) => issues.find((i) => i.outcome === "DENY") ?? issues[0];
 
+/**
+ * The planned use itself (e.g. commercial merchandise posts) is unlicensed for every planned channel and market: the
+ * social licence does not cover it, and no cut or other clip changes that — only a licence request does.
+ */
+function unlicensedUse(goal: GoalView, issues: readonly Issue[]): Issue | undefined {
+  const plan = planOf(goal);
+  return issues.find(
+    (i) => i.topic === "Type of use" && i.licence && i.outcome === "MISSING" && i.channels.length === plan.channels.length && i.territories.length === plan.territories.length,
+  );
+}
+
 const capital = (name: string) => name.charAt(0).toUpperCase() + name.slice(1);
 const where = (brand: Sponsor["brands"][number]) => (brand.spans.length ? ` (${brand.spans.map(brandSpan).join(", ")})` : "");
 
@@ -93,6 +105,7 @@ export function issueSentence(goal: GoalView, issues: readonly Issue[]): string 
   if (partner && !denied) {
     return `${capital(partner.name)} appears on screen${where(partner)} — ${partner.clubPartner ?? "a club partner"}. These illustrative rules don't list it, so a reviewer confirms the contract; it is not a conflict.`;
   }
+  if (!denied && unlicensedUse(goal, issues)) return `Type of use: ${UNLICENSED_USE[planOf(goal).usage]} is not licensed under these rules.`;
   const issue = topIssue(issues);
   if (!issue) return undefined;
   const verb = issue.outcome === "DENY" ? "not permitted" : issue.licence ? "not licensed" : "not confirmed";
@@ -139,6 +152,7 @@ export function fixHint(goal: GoalView, issues: readonly Issue[]): string {
   }
   const issue = topIssue(issues);
   const markets = planOf(goal).territories.length;
+  if (!denied && unlicensedUse(goal, issues)) return `ask the rights holder for a licence covering ${UNLICENSED_USE[planOf(goal).usage]} — another clip or cut hits the same licence.`;
   if (issue?.topic === "Market" && issue.territories.length < markets) return "drop the unlicensed markets and re-check.";
   return "try other club footage and re-check.";
 }

@@ -1,6 +1,7 @@
 import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type Evidence, type PublishIntent, type Reason, type RightsReceipt, type Sponsorship } from "@/lib/contracts";
 import { CLUB_PARTNER_RULE_PREFIX, isUnverifiedPerson, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
 import { EDL_EXECUTION_LABEL, type Edl } from "@/lib/rights/recovery/edl";
+import { UNLICENSED_USE } from "@/lib/rights/recovery/plan";
 import { analysisRunLabel } from "@/lib/twelvelabs/runs";
 import { withPreview } from "./moment-ranking";
 import { MARKETS, PRODUCTS } from "./objective-parser";
@@ -56,8 +57,8 @@ const countryOf = (territory: string) => {
 };
 
 /** Why a licence gap cannot go to review: a human reviewer cannot grant a missing licence. */
-export function noLicenceReason(gap: { territories: string[]; platforms: string[] }): string {
-  const what = [...gap.territories.map(countryOf), ...gap.platforms.map((p) => PLATFORM[p] ?? p)].join(", ");
+export function noLicenceReason(gap: GoalEvaluation["licenceGap"] & {}): string {
+  const what = [...(gap.usages ?? []).map((u) => UNLICENSED_USE[u] ?? u), ...gap.territories.map(countryOf), ...gap.platforms.map((p) => PLATFORM[p] ?? p)].join(", ");
   return `No licence covers ${what} — request a licence before review`;
 }
 
@@ -487,7 +488,8 @@ function nextStep(
       : `Approved by a reviewer. Publishing stays locked: ${rights.clearanceLabel ? "the decision was made under illustrative rules" : "the clearance is not verified"}. The ScorePlay record is a dry run.`;
   if (review === "REJECTED") return "The reviewer rejected this version. Find a way to use it or change the proposal, then submit again.";
   if (review === "PENDING") return "Waiting for a reviewer to approve or reject.";
-  if (gap) return `${noLicenceReason(gap)}. Request a licence — we won't move your campaign to other markets.`;
+  if (gap)
+    return `${noLicenceReason(gap)}. Request a licence — ${gap.usages?.length ? "we won't turn your campaign into a different kind of post" : "we won't move your campaign to other markets"}.`;
   if (recovery?.recommendedId) return "Review the suggested correction: each option was re-checked on its own. Use the revised plan, or send it for human review.";
   if (recovery?.noPathMessage) return recovery.noPathMessage;
   if (rights.state === "BLOCKED") return "This clip can't be used as planned. Find a way to use it — PULSE locates the problem, proposes the smallest fix and re-checks it.";

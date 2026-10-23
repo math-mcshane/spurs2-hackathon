@@ -208,11 +208,12 @@ export async function runPolicies(run: GoalRun, deps: GoalDeps): Promise<RunPoli
 }
 
 /**
- * Markets (or channels) of the campaign that no rule licenses, when NONE of them is licensed: nothing in the
- * footage can fix it and a reviewer cannot grant it. A partly licensed campaign is not a gap (keep the licensed part).
+ * Markets, channels or the use (commercial, sponsored…) of the campaign that no rule licenses, when NONE of the planned
+ * values is licensed: nothing in the footage can fix it and a reviewer cannot grant it. A partly licensed campaign is
+ * not a gap (keep the licensed part).
  */
 export function licenceGapOf(perIntent: GoalEvaluation["perIntent"], policies: readonly Policy[]): GoalEvaluation["licenceGap"] {
-  const unlicensed = (dimension: "territory" | "platform", pick: (i: PublishIntent) => string) => {
+  const unlicensed = (dimension: "territory" | "platform" | "usage", pick: (i: PublishIntent) => string) => {
     const all = [...new Set(perIntent.map((p) => pick(p.intent)))];
     const bad = all.filter((v) =>
       perIntent
@@ -223,7 +224,8 @@ export function licenceGapOf(perIntent: GoalEvaluation["perIntent"], policies: r
   };
   const territories = unlicensed("territory", (i) => i.territory.toUpperCase());
   const platforms = unlicensed("platform", (i) => i.platform);
-  return territories.length || platforms.length ? { territories, platforms } : undefined;
+  const usages = unlicensed("usage", (i) => i.usage);
+  return territories.length || platforms.length || usages.length ? { territories, platforms, ...(usages.length ? { usages } : {}) } : undefined;
 }
 
 /** Asks REROUTE about every channel × territory of the campaign (for a fresh publication slot) and records each decision. */

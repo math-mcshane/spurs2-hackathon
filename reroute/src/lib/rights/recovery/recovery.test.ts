@@ -260,6 +260,28 @@ describe("Recovery engine — planRecovery", () => {
     expect(plan.headline).not.toMatch(/US/);
   });
 
+  it("merchandise post under a social-only licence: a licence gap for commercial use — request rights, never 'post it as editorial'", () => {
+    const nba: Asset = {
+      id: "jam",
+      title: "Vic one hand jam!!_9x16.mp4",
+      kind: "video",
+      durationSec: 7.3,
+      tags: ["San Antonio Spurs (SAS)", "Sacramento Kings (SAC)", "NBA"],
+      facts: { competition: "NBA", teams: ["San Antonio Spurs (SAS)", "Sacramento Kings (SAC)"], people: ["Victor Wembanyama"] },
+      metadata: {},
+      origin: "LIVE",
+    };
+    const intents = ["FR", "US"].flatMap((territory) =>
+      ["instagram", "facebook", "x"].map((platform) => intent({ platform, territory, usage: "COMMERCIAL", competition: "NBA", club: "spurs" })),
+    );
+    const plan = planRecovery({ ctx: ctxOf([nba], []), source: { assetId: "jam", title: nba.title, range: { start: 0, end: 7.3 } }, intents, idPrefix: "c" });
+    expect(plan.current.verdict).toBe("NEEDS_REVIEW");
+    expect(plan.licenceGap).toBe(true);
+    expect(plan.options.map((o) => o.kind)).toEqual(["REQUEST_CLEARANCE"]);
+    expect(plan.options[0].summary).toBe("Request additional usage rights for commercial use (merchandise and sales posts), Facebook, X from the rights holder.");
+    expect(plan.headline).not.toMatch(/FR|US|France/);
+  });
+
   it("licence gap: no licensed market → no executable option, honest next step", () => {
     const asset = thfc("mx");
     const plan = planRecovery({ ctx: ctxOf([asset], []), source: { assetId: "mx", title: asset.title, range: { start: 0, end: 8 } }, intents: [intent({ territory: "MX" })], idPrefix: "c" });

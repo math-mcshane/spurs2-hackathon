@@ -439,4 +439,19 @@ describe("San Antonio Spurs demo policy", () => {
     expect(d.verdict).toBe("BLOCKED");
     expect(blockerOf(d, gb).scope).toBe("CAMPAIGN");
   });
+
+  it("COMMERCIAL use under the social licence: the miss is the use, never France — NEEDS_REVIEW, not BLOCKED", () => {
+    const sales = { ...organic, usage: "COMMERCIAL" as const };
+    const d = decide(nba("g"), sales, { analysis: NOT_ANALYSED });
+    expect(d.verdict).toBe("NEEDS_REVIEW");
+    expect(open(d).map((r) => [r.ruleId, r.dimension])).toEqual([["SPURS-1-nba-social-license", "usage"]]);
+    const blocker = blockerOf(d, sales);
+    expect(blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["usage"] });
+    expect(blocker.explanation).toMatch(/^COMMERCIAL use isn't licensed\./);
+    expect(blocker.explanation).not.toMatch(/France/);
+
+    // An unlicensed channel is reported as the channel, alongside the use.
+    const facebook = decide(nba("g"), { ...sales, platform: "facebook" }, { analysis: NOT_ANALYSED });
+    expect(open(facebook).map((r) => r.dimension).sort()).toEqual(["platform", "usage"]);
+  });
 });

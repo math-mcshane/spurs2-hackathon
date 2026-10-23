@@ -5,6 +5,7 @@ import { PencilLineIcon } from "lucide-react";
 import { CONTAINER } from "@/components/pulse/shell";
 import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
+import { marketsLabel, objectiveMarkets } from "../objective-parser";
 import type { GoalView } from "../types";
 import { channelList, country, usageWord } from "./parts";
 
@@ -75,7 +76,7 @@ export function StepNav({ view, reached, onView }: { view: View; reached: Record
 export function ObjectiveBar({ goal, onEdit }: { goal: GoalView; onEdit: () => void }) {
   const o = goal.run.objective;
   const p = goal.campaign?.plan ?? goal.run.plan;
-  const market = o.market ? o.market.label : o.scope === "GLOBAL" ? `Global · ${p.territories.length} markets` : `${country(p.territories[0])} (club home)`;
+  const market = o.market ? marketsLabel(objectiveMarkets(o)) : o.scope === "GLOBAL" ? `Global · ${p.territories.length} markets` : `${country(p.territories[0])} (club home)`;
   const sponsor = o.targetSponsor;
   return (
     <div className="border-b border-line">

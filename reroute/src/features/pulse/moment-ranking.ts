@@ -1,5 +1,6 @@
 import type { GoalIntent, MediaCandidate, MomentMatch, ParsedObjective, Preview, Recommendation } from "./types";
 import { isEvidenceLinkable, type Asset, type DataOrigin, type MediaRef } from "@/lib/contracts";
+import { marketsLabel, objectiveMarkets } from "./objective-parser";
 
 /**
  * Ranks live TwelveLabs moments against a business objective. Pure: the server passes in what the
@@ -139,7 +140,7 @@ export function rankMoments(
 
   const totalWeight = results.reduce((n, r) => n + r.intent.weight, 0) || 1;
   const objective = ctx.objective;
-  const where = objective.market ? ` in ${objective.market.label}` : objective.scope === "GLOBAL" ? " worldwide" : "";
+  const where = objective.market ? ` in ${marketsLabel(objectiveMarkets(objective))}` : objective.scope === "GLOBAL" ? " worldwide" : "";
   const action = ACTION[objective.product?.key ?? "default"](where);
 
   const ranked = clusters.map((c): Recommendation => {
@@ -247,7 +248,7 @@ export function namedSponsors(asset: Asset, goalTerms: readonly string[]): strin
  */
 export function rankByMetadata(videos: readonly MetadataVideo[], ctx: RankingContext & { player?: string; sponsorTerms: readonly string[] }): Recommendation[] {
   const objective = ctx.objective;
-  const where = objective.market ? ` in ${objective.market.label}` : objective.scope === "GLOBAL" ? " worldwide" : "";
+  const where = objective.market ? ` in ${marketsLabel(objectiveMarkets(objective))}` : objective.scope === "GLOBAL" ? " worldwide" : "";
   const action = ACTION[objective.product?.key ?? "default"](where);
   const ranked = videos.flatMap((v): Recommendation[] => {
     const asset = v.asset;

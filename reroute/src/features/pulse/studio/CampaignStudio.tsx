@@ -127,7 +127,7 @@ function ChannelCopy({ campaign: c }: { campaign: Campaign }) {
     <Tabs defaultValue={first} className="mt-8 gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-small font-medium text-ink">
-          Post copy <span className="font-normal text-ink-muted">· {c.audience.language.toUpperCase()}</span>
+          Post copy <span className="font-normal text-ink-muted">· {(c.audience.languages ?? [c.audience.language]).map((l) => l.toUpperCase()).join(" + ")}</span>
         </h3>
         <TabsList aria-label="Channel" className="h-8 bg-obsidian ring-1 ring-line ring-inset">
           {c.channels.map((ch) => (

@@ -1,7 +1,7 @@
 import type { EditPlan, PublishIntent } from "@/lib/contracts";
 import { CLUBS } from "./clubs";
 import { buildHandoff, handoffToReroute } from "./handoff-to-reroute";
-import { PRODUCTS } from "./objective-parser";
+import { PRODUCTS, marketsLabel, objectiveMarkets } from "./objective-parser";
 import type {
   CampaignDraft,
   CampaignRights,
@@ -134,11 +134,17 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
   const product = objective.product?.key;
   const templated: Templated = input.organicNote ? "default" : (product ?? "default");
   const club = CLUBS[input.club].label;
-  const language: Language = objective.market ? LANGUAGE_BY_MARKET[objective.market.code] : "en";
-  const copyLanguage: Language = BODY[templated][language] && hooks[language] ? language : "en";
-  const hook = hooks[copyLanguage] ?? hooks.en ?? input.fallbackHook;
-  const body = BODY[templated][copyLanguage]!(hook, club);
-  const ctaText = CTA[templated][copyLanguage]!;
+  const markets = objectiveMarkets(objective);
+  // One post per channel serves every named market: one copy line per market language ("France and the US" → fr, en).
+  const languages: Language[] = markets.length ? [...new Set(markets.map((m) => LANGUAGE_BY_MARKET[m.code]))] : ["en"];
+  const language = languages[0];
+  const copyLanguages = [...new Set(languages.map((l): Language => (BODY[templated][l] && hooks[l] ? l : "en")))];
+  const copyLanguage = copyLanguages[0];
+  const hookIn = (l: Language) => hooks[l] ?? hooks.en ?? input.fallbackHook;
+  const hook = hookIn(copyLanguage);
+  // A hook that reads the same in every language (a player's name) opens the post once.
+  const body = copyLanguages.map((l, i) => BODY[templated][l]!(i > 0 && hookIn(l) === hook ? "" : hookIn(l), club).trim()).filter(Boolean).join("\n");
+  const ctaText = copyLanguages.map((l) => CTA[templated][l]!).join(" / ");
   const segment = input.reroute.edit.segments[0];
 
   const commerceKind = product && !input.organicNote ? PRODUCTS[product].commerce : undefined;
@@ -169,8 +175,9 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
   const xCount = cta.status === "READY" ? linked.length - cta.destination!.url.length + X_URL_LENGTH : linked.length;
 
   const market = objective.market;
-  // The copy's locale: the market's language there (es-MX for Mexico) — only when the copy is actually in it.
-  const locale = market && copyLanguage === language ? `${language}-${market.code}` : undefined;
+  // The copy's locale: the market's language there (es-MX for Mexico) — only for one market, when the copy is in it.
+  const locale = market && markets.length === 1 && copyLanguage === language ? `${language}-${market.code}` : undefined;
+  const unlocalized = languages.filter((l) => !copyLanguages.includes(l));
   return {
     id: previous?.id ?? input.id,
     schemaVersion: 1,
@@ -184,14 +191,15 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
       market: market && { code: market.code, label: market.label },
       cohort: input.cohort,
       language,
+      ...(copyLanguages.length > 1 ? { languages: copyLanguages } : {}),
       ...(locale ? { locale } : {}),
       basis:
         (market
-          ? `Market ${market.label} comes from the objective${input.marketBasis ? `; ${input.marketBasis}` : ""}.`
+          ? `Market${markets.length > 1 ? "s" : ""} ${marketsLabel(markets)} come${markets.length > 1 ? "" : "s"} from the objective${input.marketBasis ? `; ${input.marketBasis}` : ""}.`
           : objective.scope === "GLOBAL"
             ? "Global audience from the objective; no single territory."
             : "No market stated in the objective.") +
-        ` Copy is written in ${LANGUAGE_LABEL[language]}${locale ? ` (${locale})` : ""} for that audience; nobody's location is inferred from language.`,
+        ` Copy is written in ${copyLanguages.map((l) => LANGUAGE_LABEL[l]).join(" and ")}${locale ? ` (${locale})` : ""} for that audience; nobody's location is inferred from language.`,
     },
     media: {
       scoreplayAssetId: candidate.scoreplayAssetId,
@@ -244,7 +252,7 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
     evidenceLabels: [
       ...input.evidenceLabels,
       `Footage: ${candidate.origin} ScorePlay asset${candidate.foundBy === "TWELVELABS" ? `, moment from TwelveLabs (${candidate.origin})` : " (SCOREPLAY_METADATA_FALLBACK)"}`,
-      ...(copyLanguage !== language ? [`Copy not localized for ${LANGUAGE_LABEL[language]} — translate before use`] : []),
+      ...unlocalized.map((l) => `Copy not localized for ${LANGUAGE_LABEL[l]} — translate before use`),
     ],
     safeguards: SAFEGUARDS,
   };

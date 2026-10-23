@@ -4,7 +4,8 @@ import { timecode } from "@/lib/rights/recovery/plan";
 import { composeCampaign } from "./campaign-builder";
 import { CLUBS } from "./clubs";
 import { clock } from "./moment-ranking";
-import type { CommerceDestination, GoalCampaign, GoalPlan, GoalRun, Language, Recommendation } from "./types";
+import { marketsLabel, objectiveMarkets } from "./objective-parser";
+import { LanguageSchema, type CommerceDestination, type GoalCampaign, type GoalPlan, type GoalRun, type Language, type Recommendation } from "./types";
 
 /**
  * Hooks per visual intent. They describe the *kind* of moment TwelveLabs matched, never facts it did
@@ -29,7 +30,7 @@ const REGION = new Intl.DisplayNames(["en"], { type: "region" });
 export function audienceOf(run: Pick<GoalRun, "club" | "objective" | "plan">, plan: Pick<GoalPlan, "territories"> = run.plan): string {
   const club = CLUBS[run.club].label;
   const o = run.objective;
-  if (o.market) return `${club} supporters in ${o.market.label}`;
+  if (o.market) return `${club} supporters in ${marketsLabel(objectiveMarkets(o))}`;
   if (o.scope === "GLOBAL" && plan.territories.length < run.plan.territories.length) {
     return `${club} supporters in ${plan.territories.map((t) => REGION.of(t) ?? t).join(" and ")}`;
   }
@@ -104,7 +105,8 @@ export function buildGoalCampaign(input: {
     objective: run.objective,
     candidate: rec.candidate,
     reroute: { edit, intent: intents[0] },
-    hooks: HOOKS[primary.intent] ?? {},
+    // A ScorePlay player tag gives a name — the same in every language, and no claim about what the footage shows.
+    hooks: primary.intent === "scoreplay:player" ? Object.fromEntries(LanguageSchema.options.map((l) => [l, `${rec.headline}.`])) : (HOOKS[primary.intent] ?? {}),
     fallbackHook: rec.headline,
     angle: `${rec.headline}: ${cut} in “${rec.candidate.title}”, as a vertical social cut for ${plan.channels.length} channels.`,
     cohort: audienceOf(run, plan),

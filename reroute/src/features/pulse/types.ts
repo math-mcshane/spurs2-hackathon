@@ -330,9 +330,12 @@ export const ParsedObjectiveSchema = z.object({
   raw: z.string(),
   summary: z.string(),
   club: ClubSchema.optional(),
-  /** MARKET = one territory; GLOBAL = worldwide audience (no single territory); UNSPECIFIED = neither stated. */
+  /** MARKET = named territories; GLOBAL = worldwide audience (no single territory); UNSPECIFIED = neither stated. */
   scope: z.enum(["MARKET", "GLOBAL", "UNSPECIFIED"]),
+  /** The first market the goal names. */
   market: z.object({ code: MarketCodeSchema, label: z.string(), matched: z.string() }).optional(),
+  /** Every market, in order, when the goal names more than one ("France and the US"); absent otherwise. */
+  markets: z.array(z.object({ code: MarketCodeSchema, label: z.string(), matched: z.string() })).min(2).optional(),
   product: z.object({ key: ProductSchema, label: z.string(), matched: z.string() }).optional(),
   /** The partner the goal names ("AIA"); null = no partner named. Never a search term. Absent on older runs. */
   targetSponsor: z.string().nullable().optional(),
@@ -446,6 +449,8 @@ export const CampaignDraftSchema = z.object({
     market: z.object({ code: MarketCodeSchema, label: z.string() }).optional(),
     cohort: z.string(),
     language: LanguageSchema,
+    /** Every language the copy is written in, when it carries several (one line each, e.g. fr + en for France and the US). */
+    languages: z.array(LanguageSchema).min(2).optional(),
     /** BCP 47 locale the copy is written for (e.g. es-MX for Mexico); absent on older drafts. */
     locale: z.string().optional(),
     basis: z.string(),
@@ -864,6 +869,9 @@ export const PolicyContextSchema = z.object({
 export type PolicyContext = z.infer<typeof PolicyContextSchema>;
 
 /** One recorded REROUTE campaign evaluation (every proposed channel × territory). */
+/** What no rule licenses for ANY planned use: markets, channels, or the use itself (e.g. COMMERCIAL). Usages absent on older runs. */
+export const LicenceGapSchema = z.object({ territories: z.array(z.string()), platforms: z.array(z.string()), usages: z.array(z.string()).optional() });
+
 export const GoalEvaluationSchema = z.object({
   /** Id of the `evaluations` record holding the overall decision. */
   id: z.string(),
@@ -881,10 +889,10 @@ export const GoalEvaluationSchema = z.object({
   /** The rule package the decision used (Policy Center), recorded with it. */
   policy: PolicyContextSchema.optional(),
   /**
-   * Planned markets/channels no rule of the package licenses, when NONE of the campaign's markets (or channels)
-   * is licensed: no edit or replacement can fix it and a reviewer cannot grant it — a licence request is next.
+   * Planned markets/channels/uses no rule of the package licenses, when NONE of the campaign's markets (or channels,
+   * or its use) is licensed: no edit or replacement can fix it and a reviewer cannot grant it — a licence request is next.
    */
-  licenceGap: z.object({ territories: z.array(z.string()), platforms: z.array(z.string()) }).optional(),
+  licenceGap: LicenceGapSchema.optional(),
 });
 export type GoalEvaluation = z.infer<typeof GoalEvaluationSchema>;
 
@@ -1151,8 +1159,8 @@ export const OpportunityPreflightSchema = z.object({
   scope: z.enum(["CLIP", "CAMPAIGN", "MIXED"]).optional(),
   /** Planned markets where no use is allowed. */
   blockedTerritories: z.array(z.string()),
-  /** No planned market (or channel) is licensed at all: only a licence request can help. */
-  licenceGap: z.object({ territories: z.array(z.string()), platforms: z.array(z.string()) }).optional(),
+  /** No planned market, channel or use is licensed at all: only a licence request can help. */
+  licenceGap: LicenceGapSchema.optional(),
   /** DENY first, at most 4. */
   findings: z.array(PreflightFindingSchema).max(4),
   policy: PolicyContextSchema.optional(),

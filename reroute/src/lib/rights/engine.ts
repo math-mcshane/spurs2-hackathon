@@ -164,10 +164,12 @@ interface RuleCheck {
   unknowns: Unknown[];
   /** Segment evidence whose label matched `match.evidenceLabels`. */
   triggering: Evidence[];
-  /** Human-readable intent conditions that do not hold. Empty = intent matches. */
-  intentMisses: string[];
+  /** Intent conditions that do not hold, by the intent field that misses. Empty = intent matches. */
+  intentMisses: { dimension: IntentField; text: string }[];
   window: "VALID" | "NOT_YET" | "EXPIRED";
 }
+
+type IntentField = "territory" | "platform" | "usage";
 
 function overlaps(ev: Evidence, seg: Segment): boolean {
   const start = ev.start ?? 0;
@@ -345,20 +347,20 @@ function checkRule(rule: Rule, ctx: SegmentContext): RuleCheck {
   }
   const selector: Tri = parts.includes("NO") ? "NO" : parts.includes("UNKNOWN") ? "UNKNOWN" : "YES";
 
-  const intentMisses: string[] = [];
+  const intentMisses: RuleCheck["intentMisses"] = [];
   const cond = rule.intent;
   const territory = intent.territory.trim().toUpperCase();
   if (cond?.territories && !cond.territories.some((t) => t.trim().toUpperCase() === territory)) {
-    intentMisses.push(`territory ${territory} is not licensed (licensed: ${cond.territories.join(", ")})`);
+    intentMisses.push({ dimension: "territory", text: `territory ${territory} is not licensed (licensed: ${cond.territories.join(", ")})` });
   }
   if (cond?.exceptTerritories?.some((t) => t.trim().toUpperCase() === territory)) {
-    intentMisses.push(`territory ${territory} is excluded`);
+    intentMisses.push({ dimension: "territory", text: `territory ${territory} is excluded` });
   }
   if (cond?.platforms && !cond.platforms.some((p) => sameSlug(p, intent.platform))) {
-    intentMisses.push(`platform ${intent.platform} is not licensed (licensed: ${cond.platforms.join(", ")})`);
+    intentMisses.push({ dimension: "platform", text: `platform ${intent.platform} is not licensed (licensed: ${cond.platforms.join(", ")})` });
   }
   if (cond?.usage && !cond.usage.includes(intent.usage)) {
-    intentMisses.push(`${intent.usage} use is not licensed (licensed: ${cond.usage.join(", ")})`);
+    intentMisses.push({ dimension: "usage", text: `${intent.usage} use is not licensed (licensed: ${cond.usage.join(", ")})` });
   }
 
   const t = ctx.publishAt.getTime();
@@ -397,13 +399,24 @@ const day = (iso: string) => iso.slice(0, 10);
 /** Reason id for a rule whose applicability is uncertain: asset-fact gaps get a CLIP-scope `fact:` id. */
 const uncertainRuleId = (c: RuleCheck) => (c.unknowns[0]?.fact ? `fact:${c.unknowns[0].fact}:${c.rule.id}` : c.rule.id);
 
-function nearMiss(c: RuleCheck, publishAt: string): { basis: ReasonBasis; text: string } {
+/**
+ * The intent misses a near-miss reports under `dim`. A rule granting several dimensions at once ("FR and US, Instagram
+ * and YouTube, editorial/organic/sponsored") that fails only on the use must not read as "France isn't licensed": the
+ * miss belongs to the intent field that failed. A rule whose misses are all outside its own dimensions (a territory
+ * grant limited to some uses) reports them under each of its dimensions.
+ */
+function missesFor(c: RuleCheck, dim: Dimension): RuleCheck["intentMisses"] {
+  const own = c.intentMisses.filter((m) => c.rule.dimensions.includes(m.dimension));
+  return own.length === 0 ? c.intentMisses : own.filter((m) => m.dimension === dim);
+}
+
+function nearMiss(c: RuleCheck, dim: Dimension, publishAt: string): { basis: ReasonBasis; text: string } {
   if (c.selector === "UNKNOWN") {
     return { basis: c.unknowns[0].basis, text: `${c.rule.explanation} This cannot be confirmed because ${c.unknowns.map((u) => u.what).join(" and ")}.` };
   }
   if (c.window === "EXPIRED") return { basis: "LEGAL_ENTITLEMENT", text: `The licence (${c.rule.id}) ended on ${day(c.rule.validUntil!)}; the publish date is ${day(publishAt)}.` };
   if (c.window === "NOT_YET") return { basis: "LEGAL_ENTITLEMENT", text: `The licence (${c.rule.id}) only starts on ${day(c.rule.validFrom!)}; the publish date is ${day(publishAt)}.` };
-  return { basis: "LEGAL_ENTITLEMENT", text: `Not licensed: ${c.intentMisses.join("; ")}. ${c.rule.explanation}` };
+  return { basis: "LEGAL_ENTITLEMENT", text: `Not licensed: ${missesFor(c, dim).map((m) => m.text).join("; ")}. ${c.rule.explanation}` };
 }
 
 function competitionGaps(ctx: SegmentContext): Reason[] {
@@ -593,7 +606,9 @@ function dimensionReasons(dim: Dimension, ctx: SegmentContext, all: RuleCheck[])
     const near = checks.filter((c) => c.rule.effect === "PERMIT" && c.selector !== "NO");
     if (near.length > 0) {
       for (const c of near) {
-        const m = nearMiss(c, ctx.intent.publishAt);
+        // Fails only on another intent field: that field's dimension reports it, not this one.
+        if (c.selector === "YES" && c.window === "VALID" && c.intentMisses.length > 0 && missesFor(c, dim).length === 0) continue;
+        const m = nearMiss(c, dim, ctx.intent.publishAt);
         missing.push(reason(ctx, c.selector === "UNKNOWN" ? uncertainRuleId(c) : c.rule.id, dim, "MISSING", m.basis, m.text));
       }
     } else {

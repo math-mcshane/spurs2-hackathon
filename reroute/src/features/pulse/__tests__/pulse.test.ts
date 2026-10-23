@@ -18,6 +18,7 @@ import { buildHandoff, handoffToReroute } from "../handoff-to-reroute";
 import { buildView, rankOpportunities } from "../rank-opportunities";
 import { analyzeMarket, momentumLevel, shiftConfidence } from "../market-signals";
 import { parseObjective } from "../objective-parser";
+import { goalPlan } from "../goal-intents";
 import { marketFit } from "../objective-ranker";
 import { SIGNAL_FIXTURE, SPONSOR_BRIEFS, fixtureSignals } from "../signal-adapter";
 import type {
@@ -367,6 +368,14 @@ describe("objective parser", () => {
     expect(parseObjective("Promote Solanke's goal to UK fans", NOW).targetSponsor).toBeNull();
     expect(parseObjective("Build a Wembanyama-led Ledger sponsor campaign", NOW)).toMatchObject({ targetSponsor: "Ledger", product: { key: "sponsor" } });
     expect(parseObjective("Our sponsor campaign for UK fans", NOW).targetSponsor).toBeNull();
+  });
+
+  it("a goal naming several markets plans every one of them, in order — never just the first", () => {
+    const o = parseObjective("Drive Wembanyama jersey sales in France and the US using a spectacular dunk.", NOW);
+    expect(o).toMatchObject({ summary: "Sell jerseys in France and United States", market: { code: "FR" }, product: { key: "jersey" } });
+    expect(o.markets?.map((m) => m.code)).toEqual(["FR", "US"]);
+    expect(goalPlan(o, "spurs")).toMatchObject({ territories: ["FR", "US"], usage: "COMMERCIAL" });
+    expect(parseObjective("Sell jerseys in Mexico", NOW).markets).toBeUndefined();
   });
 });
 

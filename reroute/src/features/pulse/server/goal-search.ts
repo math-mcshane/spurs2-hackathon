@@ -3,6 +3,7 @@ import { mapMediaToAsset } from "@/lib/scoreplay/map";
 import { CLUBS } from "../clubs";
 import { goalIntents } from "../goal-intents";
 import { goalTerms, latestSeason, rankByMetadata, rankMoments, type LinkedVideo, type MetadataVideo } from "../moment-ranking";
+import { objectiveMarkets } from "../objective-parser";
 import type { Club, GoalRun, MatchFilter, ParsedObjective } from "../types";
 import { candidateMapping, defaultMediaDeps, linkDiscovered, mappingAttempt, openIndex, stageIssue, type MediaDeps } from "./media-lookup";
 import { ScorePlayDiscoveryError, discoverVideos, getMedia, resolveTags, searchMediaPages, type DiscoveredVideo, type Discovery, type ScorePlayHttp } from "./scoreplay-discovery";
@@ -172,7 +173,7 @@ export async function searchGoal(
     const indexed = { ...library, indexed: links.length, indexName: catalog.indexName };
     if (links.length === 0) {
       if (!ambiguous.length) {
-        const exclude = [club.label, ...terms, ...(input.match ? [input.match] : []), input.objective.market?.matched ?? "", input.objective.market?.label ?? "", input.objective.product?.matched ?? ""];
+        const exclude = [club.label, ...terms, ...(input.match ? [input.match] : []), ...objectiveMarkets(input.objective).flatMap((m) => [m.matched, m.label]), input.objective.product?.matched ?? ""];
         const pool = await rankUnindexed(deps.scoreplay, videos, unmapped, { objective: input.objective, player: playerFilter?.requested, exclude });
         if (pool.length) {
           attempts.push({ service: "ScorePlay", query: "metadata ranking (not indexed)", outcome: "OK", detail: `${pool.length} whole clip(s) ranked on ScorePlay tags of ${Math.min(unmapped.length, METADATA_MAX_VIDEOS)} video(s); no moment search` });
@@ -242,8 +243,7 @@ export async function searchGoal(
       club.label,
       ...terms,
       ...(input.match ? [input.match, ...(OPPONENT_ALIASES[input.match.toLowerCase()] ?? [])] : []),
-      o.market?.matched ?? "",
-      o.market?.label ?? "",
+      ...objectiveMarkets(o).flatMap((m) => [m.matched, m.label]),
       o.product?.matched ?? "",
       o.targetSponsor ?? "",
     ];

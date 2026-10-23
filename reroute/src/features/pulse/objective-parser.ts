@@ -117,17 +117,32 @@ function normalize(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Earliest whole-word match of any word in `table`, so "Mexico" in a sentence wins over later words. */
-function firstMatch<K extends string>(text: string, table: Record<K, { words: string[] }>): { key: K; matched: string } | undefined {
-  let best: { key: K; matched: string; at: number } | undefined;
+/** Every key of `table` the text names, ordered by first whole-word mention ("France and the US" → FR, US). */
+function matchesIn<K extends string>(text: string, table: Record<K, { words: string[] }>): { key: K; matched: string }[] {
+  const found: { key: K; matched: string; at: number }[] = [];
   for (const [key, { words }] of Object.entries(table) as [K, { words: string[] }][]) {
+    let best: { key: K; matched: string; at: number } | undefined;
     for (const word of words) {
       const m = new RegExp(`(?<![\\w-])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`).exec(text);
       if (m && (!best || m.index < best.at)) best = { key, matched: m[0], at: m.index };
     }
+    if (best) found.push(best);
   }
-  return best && { key: best.key, matched: best.matched };
+  return found.sort((a, b) => a.at - b.at).map(({ key, matched }) => ({ key, matched }));
 }
+
+/** Earliest whole-word match of any word in `table`, so "Mexico" in a sentence wins over later words. */
+function firstMatch<K extends string>(text: string, table: Record<K, { words: string[] }>): { key: K; matched: string } | undefined {
+  return matchesIn(text, table)[0];
+}
+
+/** Every market the objective names, in the order it names them (one market: just `market`). */
+export function objectiveMarkets(o: Pick<ParsedObjective, "market" | "markets">): NonNullable<ParsedObjective["market"]>[] {
+  return o.markets ?? (o.market ? [o.market] : []);
+}
+
+/** "France", "France and United States". */
+export const marketsLabel = (markets: readonly { label: string }[]) => markets.map((m) => m.label).join(" and ");
 
 /** Partners the bundled rule packages name (AIA, Nike, Kraken…), matched whole-word like any other keyword. */
 const KNOWN_PARTNERS: Record<string, { words: string[] }> = Object.fromEntries(KNOWN_PARTNER_BRANDS.map((b) => [b, { words: [normalize(b)] }]));
@@ -184,7 +199,8 @@ function parseDeadline(text: string, now: Date): ParsedObjective["deadline"] {
 
 export function parseObjective(raw: string, now: Date = new Date()): ParsedObjective {
   const text = normalize(raw);
-  const market = firstMatch(text, MARKETS);
+  const named = matchesIn(text, MARKETS).map((m) => ({ code: m.key, label: MARKETS[m.key].label, matched: m.matched }));
+  const market = named[0];
   const targetSponsor = parseTargetSponsor(raw);
   // A goal that names a partner to promote is a sponsor activation even without the word "sponsor".
   const product = firstMatch(text, PRODUCTS) ?? (targetSponsor ? { key: "sponsor" as const, matched: targetSponsor } : undefined);
@@ -197,17 +213,18 @@ export function parseObjective(raw: string, now: Date = new Date()): ParsedObjec
       : undefined;
 
   const global = !market && GLOBAL_WORDS.test(text);
-  const marketLabel = market && MARKETS[market.key].label;
+  const marketLabel = market && marketsLabel(named);
   const p = product && PRODUCTS[product.key];
   const where = marketLabel ? ` in ${marketLabel}` : global ? " globally" : "";
   const sponsored = product?.key === "sponsor";
   const verb = sponsored && targetSponsor ? `Promote ${targetSponsor}` : p?.verb;
   return {
     raw,
-    summary: verb ? `${verb}${where}` : marketLabel ? `Grow the ${marketLabel} market` : "Objective not understood",
+    summary: verb ? `${verb}${where}` : marketLabel ? `Grow the ${marketLabel} market${named.length > 1 ? "s" : ""}` : "Objective not understood",
     club,
     scope: market ? "MARKET" : global ? "GLOBAL" : "UNSPECIFIED",
-    market: market && { code: market.key, label: MARKETS[market.key].label, matched: market.matched },
+    market,
+    ...(named.length > 1 ? { markets: named } : {}),
     product: product && { key: product.key, label: PRODUCTS[product.key].label, matched: product.matched },
     targetSponsor,
     kpi: `${p ? (sponsored && targetSponsor ? `${targetSponsor} partner deliverables` : p.kpi) : "Market growth"}${where}${deadline ? ` · ${deadline.text}` : ""}`,

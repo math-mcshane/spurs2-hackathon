@@ -1,4 +1,5 @@
 import { CLUBS, type Sport } from "./clubs";
+import { marketsLabel, objectiveMarkets } from "./objective-parser";
 import { ChannelSchema, type Club, type GoalIntent, type GoalPlan, type GoalUsage, type ParsedObjective, type Product } from "./types";
 
 /**
@@ -138,9 +139,10 @@ const USAGE: Record<Product, GoalUsage> = {
 export function goalPlan(objective: ParsedObjective, club: Club): GoalPlan {
   const c = CLUBS[club];
   const usage: GoalUsage = objective.product ? USAGE[objective.product.key] : "EDITORIAL";
+  const markets = objectiveMarkets(objective);
   const [territories, territoryBasis] =
-    objective.scope === "MARKET" && objective.market
-      ? [[objective.market.code], `${objective.market.label}, as stated in the objective (“${objective.market.matched}”).`]
+    objective.scope === "MARKET" && markets.length
+      ? [markets.map((m) => m.code), `${marketsLabel(markets)}, as stated in the objective (${markets.map((m) => `“${m.matched}”`).join(", ")}).`]
       : objective.scope === "GLOBAL"
         ? [[...GLOBAL_TERRITORIES], `Global objective: checked separately in ${GLOBAL_TERRITORIES.join(", ")} (PULSE's documented global list).`]
         : [[c.editorialIntent.territory], `No market in the objective: the club's home territory (${c.editorialIntent.territory}).`];

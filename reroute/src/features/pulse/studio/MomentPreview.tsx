@@ -32,6 +32,8 @@ export type MomentPreviewSource = {
   start: number;
   end?: number;
   preview?: Preview;
+  /** Edit plan: ranges cut from [start, end]. Playback jumps over them — a preview of the plan, not a rendered file. */
+  skip?: readonly { start: number; end: number }[];
   /** What the user sees instead of a player when there is no stream. */
   note: string;
 };
@@ -178,10 +180,17 @@ export function MomentPreview({ source: s, size = "compact", label, className }:
           if (Math.abs(e.currentTarget.currentTime - start) > 0.5) e.currentTarget.currentTime = start;
         }}
         onTimeUpdate={(e) => {
+          const el = e.currentTarget;
+          // Edit plan: jump over a cut range the playhead enters (seek lands at its end).
+          const cut = s.skip?.find((r) => el.currentTime >= r.start && el.currentTime < r.end - 0.05);
+          if (cut && !el.paused) {
+            el.currentTime = cut.end;
+            return;
+          }
           // Stop once when playback first runs through the moment's end; after that the viewer is free.
-          if (s.end === undefined || stopped.current || e.currentTarget.currentTime <= s.end) return;
+          if (s.end === undefined || stopped.current || el.currentTime <= s.end) return;
           stopped.current = true;
-          e.currentTarget.pause();
+          el.pause();
         }}
         onError={(e) => {
           const err = e.currentTarget.error;
@@ -191,6 +200,11 @@ export function MomentPreview({ source: s, size = "compact", label, className }:
         }}
       />
       <span className="tabular pointer-events-none absolute top-3 left-3 rounded bg-obsidian/80 px-1.5 py-0.5 font-mono text-meta text-ink">{span}</span>
+      {s.skip && s.skip.length > 0 && (
+        <span className="pointer-events-none absolute top-3 right-3 rounded bg-obsidian/80 px-1.5 py-0.5 text-meta text-ink">
+          Plays the kept seconds, skips {s.skip.map((r) => `${r.start.toFixed(1)}–${r.end.toFixed(1)} s`).join(", ")} · edit plan, not a rendered file
+        </span>
+      )}
     </div>
   );
 }

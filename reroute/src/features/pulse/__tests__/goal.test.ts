@@ -480,7 +480,7 @@ describe("goal → campaign → rights → alternative → review", () => {
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(cut))).success).toBe(true);
   });
 
-  it("footage-derived URLs (previews, thumbnails) reach the goal view only when media access is ALLOWED", async () => {
+  it("footage-derived URLs (previews, video and photo thumbnails) reach the goal view only when media access is ALLOWED", async () => {
     const MEDIA_URL = /https?:\/\/[^"\s]*(scoreplay|amazonaws|cloudfront|twelvelabs)/i;
     const withThumbs = (s: GoalSearch): GoalSearch => ({
       ...s,
@@ -493,6 +493,20 @@ describe("goal → campaign → rights → alternative → review", () => {
         decideCampaign: campaignDecider({ "901": "BLOCKED", "907": "ALLOWED" }),
         recover: engineRecover({ evidence: [seen("901", "brand:manchester-united", 0, 30), CROWD_907], replacements: [{ id: "907", start: 3, end: 8.4 }] }),
         preview: vi.fn(async (r: MediaRef) => ({ source: "TWELVELABS_STREAM" as const, url: `https://d1abc.cloudfront.net/${r.twelvelabsVideoId}.m3u8`, hls: true })),
+        photos: vi.fn(async () => ({
+          photos: [
+            {
+              scoreplayMediaId: "11",
+              filename: "CK1_11.JPG",
+              people: [],
+              orientation: "PORTRAIT" as const,
+              matchReason: "caption mentions a celebration",
+              thumbnailUrl: "https://cdn.scoreplay.io/photos/11/thumb.jpg",
+              rights: { verdict: "NEEDS_REVIEW" as const, clearance: "NONE" as const, allowedUses: 0, totalUses: 3, demoPolicy: true },
+            },
+          ],
+          attempt: { service: "ScorePlay" as const, query: "club photos (metadata only)", outcome: "OK" as const, detail: "1 suggested" },
+        })),
       });
     const allowed = media("ALLOWED");
     let v = await goals.runGoal(A, "tottenham", allowed);
@@ -504,6 +518,7 @@ describe("goal → campaign → rights → alternative → review", () => {
     expect(reviewer).toMatch(MEDIA_URL);
     expect(reviewer).toContain("cloudfront.net/tl-907");
     expect(reviewer).toContain("cdn.scoreplay.io/thumbs");
+    expect(reviewer).toContain("cdn.scoreplay.io/photos/11/thumb.jpg");
 
     for (const access of ["DISABLED", "REVIEWER_ONLY"] as const) {
       const d = media(access);
@@ -512,6 +527,7 @@ describe("goal → campaign → rights → alternative → review", () => {
       expect(view.recommendations.length).toBeGreaterThan(1);
       expect(view.campaign).toMatchObject({ mediaRef: { scoreplayMediaId: "907" } });
       expect(JSON.stringify(view)).not.toMatch(MEDIA_URL);
+      expect(view.photos[0]).toMatchObject({ scoreplayMediaId: "11" });
       expect(d.preview).not.toHaveBeenCalled();
       expect(view.recommendations[0].previewNote).toMatch(access === "DISABLED" ? /Video preview disabled until the organizers confirm playback rights/ : /signed-in reviewers only/);
     }

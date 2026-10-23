@@ -170,7 +170,7 @@ function Approval({
             className="w-16 shrink-0"
             source={
               goal.selected
-                ? { ...recommendationSource(goal.selected), ...(goal.edit && { start: goal.edit.original.start, end: goal.edit.original.end }) }
+                ? { ...recommendationSource(goal.selected), ...(goal.edit && { start: goal.edit.original.start, end: goal.edit.original.end, skip: goal.edit.removed }) }
                 : {
                     title: c.media.title,
                     scoreplayAssetId: c.media.scoreplayAssetId,

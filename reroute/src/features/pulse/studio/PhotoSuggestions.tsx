@@ -12,8 +12,9 @@ const ORIENTATION: Record<PhotoSuggestion["orientation"], { word: string; Icon: 
 };
 
 /**
- * Discover, secondary row: club-library photos PULSE matched on ScorePlay captions and tags (never seen —
- * no image, no URL), each with REROUTE's verdict for the goal's planned uses. The video moments stay the hero.
+ * Discover, secondary row: club-library photos PULSE matched on ScorePlay captions and tags (not visually
+ * analysed), each with REROUTE's verdict for the goal's planned uses. The ScorePlay thumbnail appears only when
+ * the server sent one (signed-in reviewer, previews enabled); otherwise an orientation glyph. Video stays the hero.
  */
 export function PhotoSuggestions({ photos, note }: { photos: readonly PhotoSuggestion[]; note?: string }) {
   if (!photos.length && !note) return null;
@@ -22,7 +23,10 @@ export function PhotoSuggestions({ photos, note }: { photos: readonly PhotoSugge
       <h2 id="photos-title">
         <Eyebrow>Photos from the club library · ScorePlay metadata only</Eyebrow>
       </h2>
-      <p className="mt-2 max-w-2xl text-small text-ink-muted">Not visually analysed — PULSE matched these on ScorePlay captions and tags.</p>
+      <p className="mt-2 max-w-2xl text-small text-ink-muted">
+        Not visually analysed — PULSE matched these on ScorePlay captions and tags.
+        {photos.some((p) => p.thumbnailUrl) ? " Thumbnails shown to signed-in reviewers only." : ""}
+      </p>
       {photos.length ? (
         <ul className="mt-6 grid grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
           {photos.map((p) => (
@@ -43,10 +47,16 @@ function Photo({ photo: p }: { photo: PhotoSuggestion }) {
   const status = rightsStatus(p.rights.verdict, p.rights.clearance);
   return (
     <article aria-label={`Photo ${p.filename}`} className="flex min-w-0 flex-col gap-3">
+      {p.thumbnailUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- authorized ScorePlay thumbnail (reviewer session only)
+        <img src={p.thumbnailUrl} alt={p.caption ?? p.filename} loading="lazy" className="aspect-[4/3] w-full rounded-lg bg-surface object-cover ring-1 ring-line ring-inset" />
+      )}
       <div className="flex items-center gap-3">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-ink-muted" role="img" aria-label={`${o.word} photo, not displayed`}>
-          <o.Icon className="size-5" strokeWidth={1.5} aria-hidden />
-        </div>
+        {!p.thumbnailUrl && (
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-ink-muted" role="img" aria-label={`${o.word} photo, not displayed`}>
+            <o.Icon className="size-5" strokeWidth={1.5} aria-hidden />
+          </div>
+        )}
         <div className="min-w-0">
           <h3 className="truncate font-mono text-small text-ink" title={p.filename}>
             {p.filename}

@@ -19,7 +19,8 @@ import { ScorePlayDiscoveryError, defaultScorePlayHttp, resolveTags, searchMedia
  * ONLY — caption (`description`), person tags, event folder and orientation. Photos are not in the
  * video-intelligence index, so nothing about the image itself is known; every photo is then evaluated by the
  * REROUTE engine for the run's planned uses with analysis NOT_CONFIGURED (honest result: sales and sponsored
- * uses need a human look). No URL or thumbnail ever leaves this module (photos are protected media).
+ * uses need a human look). Only the ScorePlay thumbnail URL leaves this module, on the suggestion itself; the API
+ * boundary (`forMediaAccess`) strips it for anyone but a signed-in reviewer with MEDIA_PREVIEW_ENABLED.
  *
  * Work per goal is capped: one paginated `POST /media/search` listing of the club's photos (cached 10 min per
  * process) and at most `DETAIL_READS` `GET /media/{id}` reads for the best candidates (cached 10 min). Reads go
@@ -334,7 +335,8 @@ async function suggest(input: PhotoInput, deps: PhotoDeps): Promise<PhotoResult>
           ...(event ? { event } : {}),
           orientation: photo.orientation,
           matchReason,
-          rights: photoRights(asset, observations, input.plan, policies, now),
+          rights: photoRights(withoutUrls(asset), observations, input.plan, policies, now),
+          ...(asset.thumbnailUrl?.startsWith("https://") ? { thumbnailUrl: asset.thumbnailUrl } : {}),
         };
       }),
     )
@@ -423,16 +425,15 @@ async function listClubPhotos(club: Club): Promise<PhotoSummary[]> {
   return page.media.filter((m) => m.type === "photo").map(photoSummary);
 }
 
-/** The ScorePlay asset without any footage URL (never kept, never needed by the engine). */
-async function assetWithoutUrls(id: string): Promise<Asset> {
-  const asset = await getScorePlayClient().getAsset(id);
+/** The asset as the engine sees it: no footage URL (the engine never needs one). */
+function withoutUrls(asset: Asset): Asset {
   const { thumbnailUrl: _t, previewUrl: _p, ...rest } = asset;
   return rest;
 }
 
 export const defaultPhotoDeps: PhotoDeps = {
   listPhotos: (club) => cachedLoad(libraryCache, club, () => listClubPhotos(club)),
-  getAsset: (id) => cachedLoad(assetCache, id, () => assetWithoutUrls(id)),
+  getAsset: (id) => cachedLoad(assetCache, id, () => getScorePlayClient().getAsset(id)),
   humanObservations: listHumanObservations,
   now: () => new Date(),
 };

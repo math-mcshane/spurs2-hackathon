@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-23T11:40:37.752Z",
+  "recordedAt": "2026-10-23T12:15:19.475Z",
   "source": "twelvelabs",
   "request": {
     "op": "analyze",
@@ -8,7 +8,7 @@
     "videoId": "6ad911f60ca748ea3c0aa65d"
   },
   "value": {
-    "data": "{\"observations\":[{\"category\":\"onscreen_graphic\",\"confidence\":0.95,\"description\":\"An electronic stadium scoreboard is visible showing team names 'MANCHESTER UNITED' and 'TOTTENHAM HOTSPUR', a score of 1-1, and a match timer counting up from 92:29 to 92:32. This is a physical arena display, not a broadcast overlay.\",\"end_time\":17.2,\"entity\":\"Stadium Scoreboard\",\"start_time\":14.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"no_players\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"The clip consists of crowd shots in a stadium stand followed by a shot of the physical arena scoreboard. No broadcast network bugs, scorebugs, or on-screen graphics are present in the feed. The scoreboard at the end (14.0-17.2s) displays team names and match time but is part of the live picture, not an overlay. No identifiable players or coaches are shown, and no gambling or sponsor brands are visible. Rights questions are minimal as the footage appears to be a clean feed without broadcaster branding.\"}",
+    "data": "{\"observations\":[{\"category\":\"onscreen_graphic\",\"confidence\":0.95,\"description\":\"An electronic stadium scoreboard is visible showing team names 'MANCHESTER UNITED' and 'TOTTENHAM HOTSPUR', a score of 1-1, and a match timer counting up from 92:29 to 92:32. This is part of the live arena infrastructure, not a broadcast overlay.\",\"end_time\":17.2,\"entity\":\"Stadium Scoreboard\",\"start_time\":14.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"no_players\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"The clip shows a crowd in a stadium stand celebrating, followed by a shot of the arena's electronic scoreboard displaying the match details between Manchester United and Tottenham Hotspur. No broadcast network bugs, scorebugs, or watermarks are visible on the footage itself; the scoreboard is part of the physical stadium environment. No individual players are identifiable by name or number. The clip contains no gambling branding. Rights questions are minimal as there are no broadcast overlays or identifiable persons, but the stadium signage and scoreboard content are part of the live picture.\"}",
     "finishReason": "stop"
   }
 }

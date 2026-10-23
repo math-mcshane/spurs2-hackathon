@@ -943,6 +943,8 @@ export const PhotoSuggestionSchema = z.object({
   orientation: z.enum(["PORTRAIT", "LANDSCAPE", "SQUARE", "UNKNOWN"]),
   /** Why PULSE suggests it, in plain language (metadata signals only). */
   matchReason: z.string(),
+  /** ScorePlay thumbnail; stripped at the API boundary unless the caller may see media (reviewer + MEDIA_PREVIEW_ENABLED). */
+  thumbnailUrl: z.string().optional(),
   rights: z.object({
     verdict: VerdictSchema,
     clearance: ClearanceSchema,

@@ -140,7 +140,7 @@ const input = () => ({
 });
 
 describe("suggestPhotos", () => {
-  it("returns ≤3 real photos with metadata, reasons and REROUTE verdicts — and no URL at all", async () => {
+  it("returns ≤3 real photos with metadata, reasons and REROUTE verdicts — only the thumbnail URL, never the full image", async () => {
     const deps = fakeDeps();
     const result = await suggestPhotos(input(), deps);
     expect(result.photos.map((p) => p.scoreplayMediaId)).toEqual(["11", "12", "13"]);
@@ -154,9 +154,9 @@ describe("suggestPhotos", () => {
       orientation: "PORTRAIT",
       matchReason: expect.stringContaining(`tagged ${SOLANKE}, who also appears in moment 01`),
     });
-    const json = JSON.stringify(result);
-    expect(json).not.toMatch(/http/i);
-    expect(json).not.toMatch(/thumbnail|previewUrl/i);
+    // Only the ScorePlay thumbnail travels (the API boundary strips it unless the caller may see media).
+    expect(result.photos.map((p) => p.thumbnailUrl)).toEqual(["11", "12", "13"].map((id) => `https://cdn.example/${id}/thumb.jpg`));
+    expect(JSON.stringify(result)).not.toMatch(/previewUrl|compressed/i);
     // The non-matching photo (no caption cue, nobody from the moments) is never read in full.
     expect(deps.getAsset).not.toHaveBeenCalledWith("14");
   });

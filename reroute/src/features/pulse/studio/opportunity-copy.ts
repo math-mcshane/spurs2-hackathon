@@ -51,10 +51,21 @@ export function opportunityHeadline(goal: GoalView, rec: RecommendationView): st
   return `${rec.headline} — ${article(kind)} ${kind} for fans in ${audienceWhere(plan)}`;
 }
 
+/** True when the recommendation is a whole ScorePlay clip chosen on metadata (no TwelveLabs moment inside it). */
+export const metadataOnly = (rec: RecommendationView) => rec.candidate.foundBy !== "TWELVELABS";
+
 /** The proposed post: what is cut, where it runs; then PULSE's own packaging line for the objective. */
 export function postConcept(goal: GoalView, rec: RecommendationView): { cut: string; action: string } {
   const plan = planOf(goal);
   const c = rec.candidate;
+  if (metadataOnly(rec)) {
+    const secs = momentSeconds(rec) ?? 0;
+    const cut =
+      secs <= 20
+        ? `Use the whole ${secs}-second clip “${displayTitle(c.title)}” for ${channelList(plan.channels)}.`
+        : `Trim the ${secs}-second clip “${displayTitle(c.title)}” for ${channelList(plan.channels)} — no moment inside it has been located yet.`;
+    return { cut, action: rec.why.action };
+  }
   const span = `${clock(c.startSeconds ?? 0)}–${clock(c.endSeconds ?? c.startSeconds ?? 0)}`;
   return { cut: `Cut ${span} of “${displayTitle(c.title)}” for ${channelList(plan.channels)}.`, action: rec.why.action };
 }
@@ -66,17 +77,17 @@ export function recommendationReason(goal: GoalView, rec: RecommendationView): s
   return why ? `${why}.` : rec.why.opportunity;
 }
 
-/** What was matched and where: "Celebration 0:15–0:20 · Partner on the kit 0:15–0:20" (deduplicated by label). */
+/** What was matched and where: "Celebration 0:15–0:20 · Partner on the kit 0:15–0:20" (deduplicated by label); tags only for metadata clips. */
 export function matchEvidence(rec: RecommendationView): string {
   const seen = new Set<string>();
   return rec.matches
     .filter((m) => !seen.has(m.label) && seen.add(m.label))
-    .map((m) => `${m.label} ${clock(m.start)}–${clock(m.end)}`)
+    .map((m) => (metadataOnly(rec) ? m.label : `${m.label} ${clock(m.start)}–${clock(m.end)}`))
     .join(" · ");
 }
 
 export const evidenceSource = (rec: RecommendationView) =>
-  rec.candidate.foundBy === "TWELVELABS" ? "Machine-observed by TwelveLabs" : "Matched on ScorePlay metadata";
+  metadataOnly(rec) ? "ScorePlay tags · not visually analysed" : "Machine-observed by TwelveLabs";
 
 /** ScorePlay context: club v match · season · competition. */
 export function scorePlayContext(goal: GoalView, rec: RecommendationView): string {

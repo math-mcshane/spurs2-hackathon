@@ -22,7 +22,10 @@ const EXAMPLES: Record<Club, { label: string; goal: string }[]> = {
     { label: "Grow UK followers", goal: "Get more followers in the UK" },
     { label: "Open a new market", goal: "Sell more Spurs jerseys in Mexico" },
   ],
-  spurs: [{ label: "Sell jerseys abroad", goal: "Sell Spurs jerseys in Mexico using the best moments from the Kings game" }],
+  spurs: [
+    { label: "Wembanyama × Ledger partner post", goal: "Build a Wembanyama-led Ledger sponsor campaign" },
+    { label: "Sell jerseys abroad", goal: "Sell Spurs jerseys in Mexico using the best moments from the Kings game" },
+  ],
 };
 
 /**

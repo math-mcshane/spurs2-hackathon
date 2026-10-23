@@ -240,6 +240,24 @@ describe("Recovery engine — planRecovery", () => {
     expect(plan.options.find((o) => o.kind === "REQUEST_CLEARANCE")?.summary).toMatch(/usage rights for FR, ES/);
   });
 
+  it("an unlicensed channel is named as the channel, not as its territory", () => {
+    const nba: Asset = {
+      id: "wemby",
+      title: "VicDunkCompQ1_9x16.mp4",
+      kind: "video",
+      durationSec: 14.3,
+      tags: ["San Antonio Spurs (SAS)", "Sacramento Kings (SAC)", "NBA"],
+      facts: { competition: "NBA", teams: ["San Antonio Spurs (SAS)", "Sacramento Kings (SAC)"], people: ["Victor Wembanyama"] },
+      metadata: {},
+      origin: "LIVE",
+    };
+    const intents = ["instagram", "facebook", "x"].map((platform) => intent({ platform, territory: "US", usage: "ORGANIC", competition: "NBA", club: "spurs" }));
+    const plan = planRecovery({ ctx: ctxOf([nba], []), source: { assetId: "wemby", title: nba.title, range: { start: 0, end: 14.3 } }, intents, idPrefix: "c" });
+    // Instagram/US is licensed by the Spurs demo policy; Facebook and X are not — "US isn't licensed" would be false.
+    expect(plan.headline).toMatch(/In the plan: Facebook, X aren't licensed$/);
+    expect(plan.headline).not.toMatch(/US/);
+  });
+
   it("licence gap: no licensed market → no executable option, honest next step", () => {
     const asset = thfc("mx");
     const plan = planRecovery({ ctx: ctxOf([asset], []), source: { assetId: "mx", title: asset.title, range: { start: 0, end: 8 } }, intents: [intent({ territory: "MX" })], idPrefix: "c" });

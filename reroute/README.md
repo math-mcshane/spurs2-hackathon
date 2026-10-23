@@ -91,8 +91,9 @@ pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/live-walkt
 pnpm exec tsx --env-file=.env.local scripts/scoreplay-smoke.ts spurs
 pnpm exec tsx --env-file=.env.local scripts/twelvelabs-smoke.ts "celebration"
 # Record demo replay (needs local Supabase): A merch, B global engagement, C Mexico, D tickets, E sponsor,
-# F jerseys UK, G UK followers, H Spurs France (not indexed) — incl. recovery searches
-pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A … H]
+# F jerseys UK, G UK followers, H Spurs France (not indexed), I Solanke sponsor flagship, J Wembanyama × Ledger (Spurs,
+# not indexed: whole clips ranked on ScorePlay tags) — incl. recovery searches
+pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/record-demo-cache.ts [A … J]
 ```
 
 **Demo replay:** `record-demo-cache.ts` records real, read-only TwelveLabs + ScorePlay responses into `demo-cache/`

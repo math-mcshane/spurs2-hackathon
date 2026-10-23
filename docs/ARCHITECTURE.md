@@ -100,7 +100,7 @@ Stored: ids, timestamps, decisions, evidence text. Never media files or preview 
 | SP↔TL links (58/58 by filename + duration) | Writeback: dry-run plan only |
 | Recovery re-checks, reviews, receipts, audit chain, timings | Edits: plans, not rendered · no sales/ROI figures |
 
-Known gaps: Pegasus analysis is refused for videos over 60 min (the 6,335 s full match has no product-run observation); the 65 NBA videos are in no visible TwelveLabs index; ScorePlay assets carry no usage/licence metadata; edits are not rendered.
+Known gaps: Pegasus analysis is refused for videos over 60 min (the 6,335 s full match has no product-run observation); the 78 NBA videos are in no visible TwelveLabs index — a goal naming a tagged player or sponsor ranks whole ScorePlay clips on their ScorePlay tags only (no moment, no visual evidence; sponsored uses stay NEEDS_REVIEW and no replacement is searched in another club's index); ScorePlay assets carry no usage/licence metadata; edits are not rendered.
 
 ## Security model
 

@@ -153,6 +153,17 @@ describe("recover (server): search + independent re-checks", () => {
     expect(plan.options.find((o) => o.id === plan.recommendedId)?.replacement?.scoreplayMediaId).toBe("fans");
   });
 
+  it("source not in the index (UNMAPPED): no replacement search, so another club's footage is never proposed", async () => {
+    const queries: string[] = [];
+    const { plan } = await recover(
+      { source: source(), intents: [commercial], query: "q", replacements: 3, idPrefix: "c" },
+      { deps: deps({ hits: [hit("fans", 0, 5, 1)], refs: { goal: ref("goal", "UNMAPPED") }, queries }), now },
+    );
+    expect(queries).toEqual([]);
+    expect(plan.current.verdict).toBe("NEEDS_REVIEW");
+    expect(plan.options.some((o) => o.kind === "REPLACE")).toBe(false);
+  });
+
   it("nothing to fix for an allowed use", async () => {
     const queries: string[] = [];
     const intent = { ...commercial, usage: "EDITORIAL" as const };

@@ -54,6 +54,12 @@ export async function recover(input: RecoverInput, opts: DecideOptions = {}): Pr
   if (!footageIssue || first.licenceGap || input.replacements <= 0) {
     return { plan: first, media: ctx.mediaRefs([source.assetId]), notes: [...ctx.notes] };
   }
+  // The configured index holds no copy of this clip (UNMAPPED): it is not this club's video library (a club without
+  // its own index falls back to the shared one), so a search there could only propose another club's footage.
+  if (ctx.mediaRefs([source.assetId]).some((r) => r.method === "UNMAPPED")) {
+    ctx.notes.push("Replacement search skipped: this clip is not in the club's video-intelligence index, so comparable club footage cannot be searched.");
+    return { plan: first, media: ctx.mediaRefs([source.assetId]), notes: [...ctx.notes] };
+  }
   const video = ctx.video();
   if ("status" in video) {
     ctx.notes.push(`Replacement search unavailable: ${video.detail}`);

@@ -1,0 +1,47 @@
+{
+  "recordedAt": "2026-10-23T14:51:22.693Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "Wembanyama"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [
+      {
+        "ID": 736859,
+        "CreatedAt": "2026-10-16T12:42:08.991832Z",
+        "UpdatedAt": "2026-10-17T08:50:27.56925Z",
+        "DeletedAt": null,
+        "first_name": "Victor",
+        "last_name": "Wembanyama",
+        "full_name": "Victor Wembanyama",
+        "company_id": 5369,
+        "profile_picture_ai": "",
+        "api_player_id": 0,
+        "run_ai": true,
+        "run_facial_ai": true,
+        "ai_name": "Wembanyama",
+        "app_access": false,
+        "external_id": "clone:5369:nba_1641705",
+        "receive_media": false,
+        "app_installed": false,
+        "phone_os": "",
+        "ai_threshold": 80,
+        "face_id": "faa25f15-15a1-4999-b66f-37dba02bb1ae",
+        "tag_options": null,
+        "sponsors": null,
+        "access_tags": null,
+        "Teams": null,
+        "Managers": null,
+        "Company": null,
+        "media_count": 0
+      }
+    ],
+    "sponsors": [],
+    "tags": []
+  }
+}

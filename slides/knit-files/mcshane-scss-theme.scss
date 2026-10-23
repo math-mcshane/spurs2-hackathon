@@ -1,0 +1,247 @@
+/*-- scss:defaults --*/
+
+// https://quarto.org/docs/presentations/revealjs/themes.html#saas-variables
+// https://github.com/twbs/bootstrap-sass/blob/master/assets/stylesheets/bootstrap/_variables.scss
+// https://github.com/quarto-dev/quarto-cli/blob/main/src/resources/formats/revealjs/reveal/css/reveal.scss
+
+@import url('https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;1,800&display=swap');
+
+// Our colors
+$uchicago-maroon: #800000;
+$charcoal: #1a162d;
+$forestgreen: #005500;
+$codeletter: #002c6b;
+$codegray: #f9f9f9;
+$boxcolor: $uchicago-maroon;
+$siggray: #58595b;
+
+// fonts
+$font-family-sans-serif: 'Jost', sans-serif !default;
+$font-family-serif: 'Zilla Slab', serif !default;
+$code-block-font-size: 0.66em;
+$presentation-font-size-root: 44px;
+
+// title slide
+// $presentation-title-slide-text-align: "left";
+
+// code blocks
+// $code-block-font-size: 0.7em;
+
+// colors
+$body-bg: white !default;
+$body-color: $charcoal !default;
+$link-color: $uchicago-maroon !default;
+$code-bg: $codegray; // inline code background color
+$code-color: $codeletter; // inline code text color
+
+// headings
+$presentation-heading-font: 'Jost', sans-serif !default;
+$presentation-heading-color: white !default;
+$presentation-heading-font-weight: 800;
+
+
+/*-- scss:rules --*/
+
+// Annotation link
+.annotation-link {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  font-size: 75px;
+}
+
+// When `#| output-location: column` is set, it is no longer 100% height
+.reveal .column-output-location .column:first-of-type div.sourceCode {
+  height: unset !important;
+}
+
+
+/*-- scss:rules --*/
+
+details>summary {
+  font-size: 0.75em;
+}
+
+.smaller {
+  font-size: 0.5em;
+}
+
+.small {
+  font-size: 0.75em;
+}
+
+.larger {
+  font-size: 1.5em;
+}
+
+.largest {
+  font-size: 3em;
+}
+
+.header-section-number:after {
+  content: ".";
+}
+
+.reveal h1, .reveal h2{
+  background-color: $boxcolor;
+  padding: 26px;
+  font-size: 2.5em;
+
+}
+
+.reveal h3{
+  background-color: $boxcolor;
+  padding: 26px;
+  font-size: 1.5em;
+}
+
+.reveal h4, .reveal h5, .reveal h6 {
+  background-color: $boxcolor;
+  padding: 5px;
+}
+
+.reveal .slide .task {
+  border-left: 3px solid #7b94a1;
+  padding-left: 0.5em;
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
+  background: #B0D4E670;
+}
+
+.reveal .slide .demo {
+  border-left: 3px solid $boxcolor;
+  padding-left: 0.5em;
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
+  background: lighten($boxcolor, 80%);
+}
+
+.reveal .slide .cloud {
+  border-left: 3px solid #B0D4E6;
+  margin-top: 0.5em;
+  padding: 0.25em;
+  background: #F3F7FB;
+  font-size: 0.75em;
+}
+
+.reveal .slide .share {
+  border-left: 3px solid #717DEF;
+  padding: 0.25em;
+  background: #F0F2FD;
+  font-size: 0.75em;
+}
+
+.reveal .slide .in-out {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-top: 0.1em;
+  padding-bottom: 0.1em;
+  padding-left: 1em;
+  background: #E8E8E8;
+  font-family: $font-family-monospace;
+  font-size: 0.6em;
+}
+
+.reveal .slide .goal {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-top: 0.1em;
+  padding-bottom: 0.1em;
+  padding-left: 1em;
+  background: #B0D4E6;
+}
+
+.reveal countdown {
+  position: fixed;
+  bottom: 0em;
+  right: 0em;
+  font-size: 40px;
+  border: 2px solid;
+  border-radius: 5px;
+  padding-left: 12px;
+  padding-right: 12px;
+  user-select: none;
+}
+
+.reveal .slide .project {
+  padding: 10px;
+  background-color: #FFFFFF;
+  border-style: solid;
+  border-color: $boxcolor;
+  border-width: 5px;
+}
+
+.reveal pre {
+  overflow-x: auto;
+}
+.reveal pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+
+.reveal figcaption {
+    text-align: center;
+}
+
+
+/* for whole slide */
+.scroll{
+  height: 25em;
+  overflow-y: auto;
+}
+
+/* special sizes for code-chunks */
+.scroll-box-8 {
+  height:8em;
+  overflow-y: scroll;
+}
+.scroll-box-10 {
+  height:10em;
+  overflow-y: scroll;
+}
+.scroll-box-12 {
+  height:1000px;
+  overflow-y: scroll;
+}
+.scroll-box-14 {
+  height:14em;
+  overflow-y: scroll;
+}
+.scroll-box-16 {
+  height:16em;
+  overflow-y: scroll;
+}
+.scroll-box-18 {
+  height:18em;
+  overflow-y: scroll;
+}
+.scroll-box-20 {
+  height:20em;
+  overflow-y: scroll;
+}
+.scroll-box-22 {
+  height:22em;
+  overflow-y: scroll;
+}
+.scroll-box-24 {
+  height:24em;
+  overflow-y: scroll;
+}
+
+/* Slide number */
+/* hacky solution was to change line-height*/
+/* changing bottom or top had no effect */
+//.reveal .slide-number {
+//	position: relative;
+//	display: block;
+//	left: 150px;
+//	// bottom: 100px;
+//	z-index: 31;
+//	font-family: Jost, sans-serif;
+//	font-size: 15px;
+//	line-height: 115;
+//	color: #000;
+//	background-color: rgba( 0, 0, 0, 0.4 );
+//	padding: 5px;
+//}

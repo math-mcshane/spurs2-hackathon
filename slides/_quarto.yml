@@ -1,0 +1,41 @@
+author:
+  - name: Ryan McShane, Ph.D.
+    affiliations:
+      - Department of Statistics
+      - The University of Chicago
+  - name: Merlin Salesse
+    affiliations: Naboo.app
+  - name: Andres de la Garza
+    affiliations: Right on Bracket
+  - name: Maurice Thomas
+    affiliations: Library Labs
+  - name: Raj
+    affiliations: Salesforce Consultant
+logo: images/UChicago_Shield_Crop.png
+format:
+  revealjs:
+    theme: [default, knit-files/mcshane-scss-theme.scss]
+    slide-number: c/t
+    width: 1920
+    height: 1080
+    code-block-height: 880px
+    margin: 0.03
+    number-sections: true
+    number-depth: 3
+    # multiplex: true
+    code-annotations: true
+    # transition: fade
+    incremental: false
+    # chalkboard: true
+    embed-resources: true
+    slide-level: 3
+    code-link: false # set to true if not needing code line numbers
+    echo: true
+revealjs-plugins:
+  - codewindow
+knitr:
+  opts_chunk:
+    R.options:
+      width: 88
+crossref:
+  sec-prefix: Slide   # default is Section

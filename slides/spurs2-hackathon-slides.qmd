@@ -1,0 +1,36 @@
+---
+title: "Team 5: Rights and Compliance"
+subtitle: "Pulse: Driving Partner Value within a Compliance Engine"
+footer: "[🔗 Spurs$^2$ Hackathon](https://spurs2-hackathon.vercel.app/) | Pulse"
+date: "2026-10-23"
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(
+  size = "footnotesize", 
+  comment = NA,
+  collapse = TRUE,
+  fig.width = 9,
+  fig.height = 5.7, 
+  cache = TRUE
+)
+```
+
+
+### Overview
+
+:::: {.columns}
+::: {.column width="50%"}
+
+1. ...
+2. ...
+
+:::
+::: {.column width="50%"}
+
+
+:::
+::::
+
+
+

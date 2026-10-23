@@ -430,7 +430,9 @@ export async function findRecovery(target: GoalTarget, deps: GoalDeps = defaultD
   const { value: recovered, provenance } = await trackProvenance(() =>
     deps.recover({
       source,
-      intents: latest.perIntent.map((p) => p.intent),
+      // Same publish slot as the re-check `applyRecovery` will run (evaluate()), so a candidate's predicted verdict and
+      // the post-apply verdict come from identical inputs — never a stale date from the earlier evaluation.
+      intents: latest.perIntent.map((p) => ({ ...p.intent, publishAt: proposedPublishAt(deps.now()) })),
       query: rec.matches[0]?.query ?? rec.headline,
       replacements: REPLACEMENTS,
       idPrefix: `${campaign.campaignId}:v${campaign.version}`,

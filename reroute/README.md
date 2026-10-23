@@ -36,19 +36,26 @@ integration routes return `503 NOT_CONFIGURED`; there are no mock adapters in th
 3. **Campaign** — localized Instagram / Facebook / X copy (e.g. es-MX for Mexico), cut, CTA, intents for every
    channel × territory. Each edit is a new campaign version. The CTA links only to a configured
    `PULSE_COMMERCE_DESTINATIONS` entry (e.g. `tottenham:tickets:*=https://…`) or a producer link on the club's site.
-   Sponsor goals use usage SPONSORED; PULSE never names a sponsor ("Partner credit" stays MISSING in the checklist).
+   Sponsor goals use usage SPONSORED. A partner the goal names ("Promote our partner AIA …") is the run's
+   `targetSponsor` (carried to every intent; never a search term); PULSE never picks one ("Partner credit" stays MISSING).
    The KPI has no value: it reads "Sales attribution not connected." (jersey / merch / tickets / subscriptions),
    "Engagement measurement not connected." (engagement / followers), "Sponsor delivery tracking not connected."
    (sponsor goals) or "Business results not connected." (no product named).
 4. **Rights check** — REROUTE `decideCampaign` evaluates every use under the run's rule package (Policy Center; the
    club's workspace default unless the run switched). ALLOWED / NEEDS_REVIEW / BLOCKED with reasons and evidence
-   (ScorePlay facts, TwelveLabs observations from the product's Pegasus run and the recorded second run).
+   (ScorePlay facts, TwelveLabs observations from the product's Pegasus run and the recorded second run). A brand on
+   screen is never a conflict by itself: the target sponsor a partner rule names is permitted, other brands get exactly
+   the configured rule (e.g. THFC-13 exclusivity), and a target the rules don't describe (Kraken under
+   `demo-tottenham-pl`) is NEEDS_REVIEW, never DENY/PERMIT. People named only by AI that ScorePlay tags can't confirm
+   are unverified identifications (MISSING, a reviewer verifies), never a rights verdict.
 5. **Recovery ("Find a way to use it")** — `lib/rights/recovery` localizes each restriction in time (every elementary
    interval between observation boundaries is evaluated for every use; ±0.5 s margin; minimum post 3 s or 40 %;
    pieces < 1 s dropped) and proposes TRIM (edit decision list, "Edit plan — not rendered"), SAFE_SECTION, REPLACE
    (Marengo moments mapped to ScorePlay), ADAPT_CAMPAIGN (licensed subset, e.g. "Limit to licensed markets: GB, US"),
-   CHANGE_USAGE (flagged as changing the goal) and REQUEST_CLEARANCE. Every option is re-evaluated by the same engine;
-   NOT_VIABLE / NEXT_STEP options are never applicable. Applying one writes a new campaign version and re-evaluates it
+   CHANGE_USAGE (flagged as changing the goal) and REQUEST_CLEARANCE. Every option is re-evaluated by the same engine
+   (re-check counts: allowed · restricted · unresolved). Only an option whose re-check is ALLOWED for every use and keeps
+   the goal is recommended; review-required candidates are listed as such, never as a fix ("No verified replacement
+   available"); NOT_VIABLE / STILL_BLOCKED / NEXT_STEP options are never applicable. Applying one writes a new campaign version and re-evaluates it
    from scratch (before/after). A licence gap (no licensed market or channel, e.g. "Sell more Spurs jerseys in
    Mexico") offers only "Request additional usage rights" and the campaign cannot be submitted; PULSE never re-targets
    the goal to other countries. Switching the rule package (`setPolicy`) marks the verdict stale until re-checked.

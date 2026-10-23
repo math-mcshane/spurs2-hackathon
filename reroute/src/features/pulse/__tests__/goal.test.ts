@@ -576,7 +576,19 @@ describe("goal → campaign → rights → alternative → review", () => {
   });
 
   it("NOT_VIABLE and NEXT_STEP options are shown but can never be applied", async () => {
-    const recheck = { verdict: "BLOCKED" as const, clearance: "NONE" as const, allowedUses: 0, totalUses: 3, remaining: [], policyId: "demo-tottenham-pl", policyVersion: "1", evaluatedAt: NOW.toISOString() };
+    const recheck = {
+      verdict: "BLOCKED" as const,
+      clearance: "NONE" as const,
+      allowedUses: 0,
+      restrictedUses: 3,
+      unresolvedUses: 0,
+      totalUses: 3,
+      remaining: [],
+      evidence: [],
+      policyId: "demo-tottenham-pl",
+      policyVersion: "1",
+      evaluatedAt: NOW.toISOString(),
+    };
     const plan: RecoveryPlan = {
       scope: "CLIP",
       headline: "Restricted for every use",

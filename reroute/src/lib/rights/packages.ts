@@ -8,6 +8,7 @@ import { events, policyPackages } from "@/lib/server/repositories";
 import type { PolicySelectionRecord, StoredPolicyPackage, UploadedPolicySourceType } from "@/lib/server/repositories";
 import { ASSET_BOUND_MATCH_KEYS, PolicySchema, type Policy, type Rule } from "./policy";
 import { PRESET_POLICIES, SAMPLE_UPLOAD_POLICY } from "./registry";
+import { brandName, partnersOf } from "./sponsors";
 
 /**
  * Policy Center: the library of rule packages a campaign can be evaluated against.
@@ -96,42 +97,6 @@ function territoriesByUsage(policy: Policy, usages: readonly Usage[]): Partial<R
   ) as Partial<Record<Usage, string[]>>;
   const shapes = new Set(Object.values(byUsage).map((t) => t!.join(",")));
   return shapes.size > 1 ? byUsage : undefined;
-}
-
-/** "Tottenham Hotspur FC" → "thfc" (all-caps words kept whole), "San Antonio Spurs" → "sas". */
-const acronym = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => (w.length > 1 && w === w.toUpperCase() ? w : w[0]))
-    .join("")
-    .toLowerCase();
-
-/** The club's own marks (club name, its acronym, a nickname inside the name such as "spurs" in "Hotspur"). */
-function isOwnMark(brand: string, policy: Policy): boolean {
-  const a = policy.applicability;
-  const names = a.clubNames.map(slug);
-  if (brand === slug(a.club) || names.includes(brand) || a.clubNames.some((n) => acronym(n) === brand)) return true;
-  const stem = brand.replace(/s$/, "");
-  return stem.length >= 4 && names.some((n) => n.includes(stem));
-}
-
-/** "aia" → "AIA", "thfc" → "THFC", "kraken" → "Kraken", "red-bull" → "Red Bull" (short or vowel-less words read as acronyms). */
-const brandName = (s: string) =>
-  s
-    .split("-")
-    .filter(Boolean)
-    .map((w) => (w.length <= 3 || !/[aeiou]/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)))
-    .join(" ");
-
-function partnersOf(policy: Policy): string[] {
-  const brands = policy.rules
-    .filter((r) => r.effect === "PERMIT" && r.dimensions.includes("sponsor"))
-    .flatMap((r) => r.covers ?? [])
-    .filter((c) => /^brand:/i.test(c))
-    .map((c) => slug(c.slice("brand:".length).replace(/\*$/, "")))
-    .filter((b) => b !== "" && !isOwnMark(b, policy));
-  return unique(brands).map(brandName);
 }
 
 const TOPIC: Record<Dimension, string> = {

@@ -253,8 +253,9 @@ export function photoCandidate(summary: PhotoSummary, asset: Asset): PhotoCandid
 export function photoRights(asset: Asset, observations: readonly Evidence[], plan: GoalPlan, policies: readonly Policy[], now: Date): PhotoSuggestion["rights"] {
   const edit: EditPlan = { id: `photo-${asset.id}`, title: asset.title, segments: [{ scoreplayMediaId: asset.id, start: 0, end: 1 }], derived: false };
   const publishAt = proposedPublishAt(now);
+  const target = plan.usage === "SPONSORED" && plan.targetSponsor ? { targetSponsor: plan.targetSponsor } : {};
   const intents: PublishIntent[] = plan.channels.flatMap((platform) =>
-    plan.territories.map((territory) => ({ territory, platform, usage: plan.usage, competition: plan.competition, publishAt, club: plan.club })),
+    plan.territories.map((territory) => ({ territory, platform, usage: plan.usage, competition: plan.competition, publishAt, club: plan.club, ...target })),
   );
   const decisions: Decision[] = intents.map(
     (intent) =>

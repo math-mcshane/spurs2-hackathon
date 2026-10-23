@@ -1,6 +1,7 @@
 import type { MediaRef, Reason } from "@/lib/contracts";
-import type { PlannedOption, ProblemItem, RecoveryPlan } from "@/lib/rights/recovery";
-import { evidenceSource, recoveryOptionView } from "@/features/pulse/goal-view";
+import { isUnverifiedPerson, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
+import type { PlannedOption, ProblemItem, RecheckSummary, RecoveryPlan } from "@/lib/rights/recovery";
+import { evidenceSource, recoveryOptionView, subjectName, unverifiedPeopleText } from "@/features/pulse/goal-view";
 import type { RecoveryView, SourcedLine, StoredRecoveryOption } from "@/features/pulse/types";
 
 /**
@@ -15,6 +16,7 @@ export function reasonSource(r: Reason, policyTitle: string): string {
   if (r.basis === "MEDIA_IDENTITY") return "ScorePlay ↔ TwelveLabs link";
   if (r.basis === "POLICY_SELECTION") return "Policy selection";
   if (r.ruleId.startsWith("subject:")) return "ScorePlay squad list + TwelveLabs video analysis";
+  if (r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX)) return `Your goal's target sponsor · ${policyTitle}`;
   return `${policyTitle} · rule ${r.ruleId}`;
 }
 
@@ -22,6 +24,24 @@ export function problemLine(p: ProblemItem, policyTitle: string): SourcedLine {
   const sources = [...new Set(p.evidence.map(evidenceSource))];
   const source = sources.length ? sources.join(" + ") : p.scope === "CAMPAIGN" ? "Your campaign plan" : `${policyTitle} · ${p.ruleIds.join(", ")}`;
   return { text: p.text, source, ...(p.at ? { at: p.at } : {}) };
+}
+
+/**
+ * What still stands in the way after a change, one line per reason — except people named only by AI that ScorePlay
+ * can't confirm: several of them are one line ("4 people named by AI couldn't be verified…"), each still in `details`.
+ */
+function remainingLines(rc: RecheckSummary, policyTitle: string): SourcedLine[] {
+  const line = (r: Reason): SourcedLine => ({
+    text: r.explanation,
+    source: reasonSource(r, policyTitle),
+    ...(r.start !== undefined && r.end !== undefined ? { at: { start: r.start, end: r.end } } : {}),
+  });
+  const people = rc.remaining.filter(isUnverifiedPerson);
+  if (people.length < 2) return rc.remaining.map(line);
+  return [
+    ...rc.remaining.filter((r) => !isUnverifiedPerson(r)).map(line),
+    { text: unverifiedPeopleText(people.map((r) => subjectName(r, rc.evidence))), source: "TwelveLabs video analysis · ScorePlay identity data", details: people.map(line) },
+  ];
 }
 
 /** A planned option as stored on a goal run (view fields + what applying it needs). */
@@ -41,12 +61,10 @@ export function storedOption(o: PlannedOption, recommendedId: string | undefined
             verdict: o.recheck.verdict,
             clearance: o.recheck.clearance,
             allowedUses: o.recheck.allowedUses,
+            restrictedUses: o.recheck.restrictedUses,
+            unresolvedUses: o.recheck.unresolvedUses,
             totalUses: o.recheck.totalUses,
-            remaining: o.recheck.remaining.map((r) => ({
-              text: r.explanation,
-              source: reasonSource(r, policyTitle),
-              ...(r.start !== undefined && r.end !== undefined ? { at: { start: r.start, end: r.end } } : {}),
-            })),
+            remaining: remainingLines(o.recheck, policyTitle),
             policyId: o.recheck.policyId,
             policyVersion: o.recheck.policyVersion,
             evaluatedAt: o.recheck.evaluatedAt,

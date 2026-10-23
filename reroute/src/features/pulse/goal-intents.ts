@@ -131,7 +131,10 @@ const USAGE: Record<Product, GoalUsage> = {
   followers: "EDITORIAL",
 };
 
-/** What REROUTE will be asked: every proposed channel × territory, for the selected club's competition. */
+/**
+ * What REROUTE will be asked: every proposed channel × territory, for the selected club's competition. A partner post
+ * (SPONSORED) carries the partner the goal names, so the rules can say whether it is one.
+ */
 export function goalPlan(objective: ParsedObjective, club: Club): GoalPlan {
   const c = CLUBS[club];
   const usage: GoalUsage = objective.product ? USAGE[objective.product.key] : "EDITORIAL";
@@ -147,6 +150,7 @@ export function goalPlan(objective: ParsedObjective, club: Club): GoalPlan {
     territories,
     territoryBasis,
     usage,
+    ...(usage === "SPONSORED" && objective.targetSponsor ? { targetSponsor: objective.targetSponsor } : {}),
     channels: [...ChannelSchema.options],
     competition: c.competition,
   };

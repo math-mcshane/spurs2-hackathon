@@ -13,10 +13,10 @@ import { Eyebrow, StagedProgress, country, usageWord, type Stage } from "./parts
 /** Example objectives by business intent. Each fills the field with a full sentence the parser understands. */
 const EXAMPLES: Record<Club, { label: string; goal: string }[]> = {
   tottenham: [
-    { label: "Sponsor a goal moment", goal: "Activate our sponsor with Solanke's late goal for UK fans" },
+    { label: "Sponsor a goal moment", goal: "Promote our partner AIA with Solanke's late goal for UK fans" },
     { label: "Sell merchandise", goal: "Promote Tottenham merchandise to UK supporters" },
     { label: "Sell tickets", goal: "Sell tickets for the next home game" },
-    { label: "Activate a sponsor", goal: "Activate our sleeve sponsor with fans in the UK" },
+    { label: "Activate a sponsor", goal: "Promote Kraken with fans in the UK" },
     { label: "Grow engagement", goal: "Maximize global engagement from the Manchester United game" },
     { label: "Sell jerseys", goal: "Sell Tottenham jerseys to UK fans" },
     { label: "Grow UK followers", goal: "Get more followers in the UK" },
@@ -28,12 +28,12 @@ const EXAMPLES: Record<Club, { label: string; goal: string }[]> = {
 /**
  * The first screen: one question, one field, one action. While typing, the same deterministic parser the
  * server uses shows what PULSE understood (goal, market, type of use) — unknowns are said, never guessed.
+ * The club is chosen in the header (ClubSwitcher); `club` picks the examples and the plan PULSE reads.
  */
 export function GoalComposer({
   text,
   onText,
   club,
-  onClub,
   busy,
   progress,
   onSubmit,
@@ -42,7 +42,6 @@ export function GoalComposer({
   text: string;
   onText: (t: string) => void;
   club: Club;
-  onClub: (c: Club) => void;
   busy: boolean;
   progress?: { stages: Stage[]; note?: string };
   onSubmit: () => void;
@@ -55,10 +54,7 @@ export function GoalComposer({
 
   return (
     <section aria-labelledby="goal-title" className="mx-auto flex w-full max-w-[860px] flex-1 flex-col justify-center px-5 py-14 sm:px-8 sm:py-20">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Eyebrow>New campaign</Eyebrow>
-        <ClubSwitch club={club} onClub={onClub} disabled={busy} />
-      </div>
+      <Eyebrow>New campaign · {CLUBS[club].label}</Eyebrow>
       <h1 id="goal-title" className="mt-5 font-display text-display font-medium text-balance text-ink">
         What are we trying to achieve?
       </h1>
@@ -171,28 +167,4 @@ function understand(text: string, club: Club): { text: string; unknown?: boolean
     { text: `${usageWord(plan.usage)} use`.replace(/^\w/, (c) => c.toUpperCase()) },
     ...(match ? [{ text: `v ${match}` }] : []),
   ];
-}
-
-/** Segmented control: which club's library and policies to use. */
-function ClubSwitch({ club, onClub, disabled }: { club: Club; onClub: (c: Club) => void; disabled: boolean }) {
-  return (
-    <div role="radiogroup" aria-label="Club" className="inline-flex rounded-lg bg-surface p-0.5 ring-1 ring-line ring-inset">
-      {(["tottenham", "spurs"] as const).map((k) => (
-        <button
-          key={k}
-          type="button"
-          role="radio"
-          aria-checked={club === k}
-          disabled={disabled}
-          onClick={() => onClub(k)}
-          className={cn(
-            "rounded-md px-2.5 py-1 text-meta font-medium transition-colors disabled:opacity-50",
-            club === k ? "bg-surface-raised text-ink shadow-[inset_0_0_0_1px_var(--color-line-strong)]" : "text-ink-muted hover:text-ink",
-          )}
-        >
-          {CLUBS[k].label}
-        </button>
-      ))}
-    </div>
-  );
 }

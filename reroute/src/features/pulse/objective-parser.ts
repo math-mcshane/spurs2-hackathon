@@ -1,3 +1,4 @@
+import { KNOWN_PARTNER_BRANDS } from "@/lib/rights/sponsors";
 import type { Club, MarketCode, Measurement, ParsedObjective, Product } from "./types";
 
 /**
@@ -77,8 +78,8 @@ export const PRODUCTS: Record<
     commerce: "store",
   },
   sponsor: {
-    label: "Sponsor value",
-    verb: "Deliver sponsor value",
+    label: "Sponsor activation",
+    verb: "Run a sponsor activation",
     kpi: "Sponsor deliverables",
     words: ["sponsor", "sponsors", "partner", "partners", "partenaire", "partenaires", "patrocinador", "patrocinadores"],
     measurement: {
@@ -128,6 +129,31 @@ function firstMatch<K extends string>(text: string, table: Record<K, { words: st
   return best && { key: best.key, matched: best.matched };
 }
 
+/** Partners the bundled rule packages name (AIA, Nike, Kraken…), matched whole-word like any other keyword. */
+const KNOWN_PARTNERS: Record<string, { words: string[] }> = Object.fromEntries(KNOWN_PARTNER_BRANDS.map((b) => [b, { words: [normalize(b)] }]));
+
+/** One to three capitalised words: how a goal writes a brand ("AIA", "Red Bull"). */
+const NAME = String.raw`([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,2})`;
+const AFTER_PARTNER_WORD = new RegExp(String.raw`\b(?:[Oo]ur\s+)?(?:[Pp]artner|[Ss]ponsor)\s+${NAME}`);
+const AFTER_VERB = new RegExp(String.raw`\b(?:[Pp]romote|[Aa]ctivate|[Ff]eature|[Ss]howcase)\s+${NAME}(?=\s+(?:with|to|for|in|on|across|among|using)\b|\s*[,.!?]|\s*$)`);
+/** Words that can follow "promote" capitalised but are the club, a market or a product — never a partner. */
+const NOT_A_PARTNER = /\b(tottenham|hotspur|spurs|thfc|san antonio|club|team|fans?|supporters?)\b/;
+
+/**
+ * The partner the goal promotes, as written: a partner a bundled rule package names ("our partner AIA"), else a
+ * capitalised name right after "our partner"/"sponsor" or a promote-verb ("Promote Heineken with UK fans"). Null
+ * when the goal names none ("Activate our sponsor …"). Naming a brand grants nothing: the rules decide.
+ */
+function parseTargetSponsor(raw: string): string | null {
+  const known = firstMatch(normalize(raw), KNOWN_PARTNERS);
+  if (known) return known.key;
+  const name = (AFTER_PARTNER_WORD.exec(raw) ?? AFTER_VERB.exec(raw))?.[1].replace(/[.,!?]+$/, "").trim();
+  if (!name || /['’]s$/.test(name)) return null;
+  const n = normalize(name);
+  const elsewhere = firstMatch(n, MARKETS) ?? firstMatch(n, PRODUCTS);
+  return NOT_A_PARTNER.test(n) || elsewhere ? null : name;
+}
+
 /** `d = 0` is the last day of month `m - 1` (Date.UTC rolls over), used for "by <month>". */
 const endOfDayUtc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d, 23, 59, 59)).toISOString();
 
@@ -157,7 +183,9 @@ function parseDeadline(text: string, now: Date): ParsedObjective["deadline"] {
 export function parseObjective(raw: string, now: Date = new Date()): ParsedObjective {
   const text = normalize(raw);
   const market = firstMatch(text, MARKETS);
-  const product = firstMatch(text, PRODUCTS);
+  const targetSponsor = parseTargetSponsor(raw);
+  // A goal that names a partner to promote is a sponsor activation even without the word "sponsor".
+  const product = firstMatch(text, PRODUCTS) ?? (targetSponsor ? { key: "sponsor" as const, matched: targetSponsor } : undefined);
   const deadline = parseDeadline(text, now);
   // Bare "Spurs" is ambiguous (Tottenham's nickname and San Antonio's name): only explicit names count.
   const club: Club | undefined = /\b(tottenham|thfc|hotspur)\b/.test(text)
@@ -170,14 +198,17 @@ export function parseObjective(raw: string, now: Date = new Date()): ParsedObjec
   const marketLabel = market && MARKETS[market.key].label;
   const p = product && PRODUCTS[product.key];
   const where = marketLabel ? ` in ${marketLabel}` : global ? " globally" : "";
+  const sponsored = product?.key === "sponsor";
+  const verb = sponsored && targetSponsor ? `Promote ${targetSponsor}` : p?.verb;
   return {
     raw,
-    summary: p ? `${p.verb}${where}` : marketLabel ? `Grow the ${marketLabel} market` : "Objective not understood",
+    summary: verb ? `${verb}${where}` : marketLabel ? `Grow the ${marketLabel} market` : "Objective not understood",
     club,
     scope: market ? "MARKET" : global ? "GLOBAL" : "UNSPECIFIED",
     market: market && { code: market.key, label: MARKETS[market.key].label, matched: market.matched },
     product: product && { key: product.key, label: PRODUCTS[product.key].label, matched: product.matched },
-    kpi: `${p ? p.kpi : "Market growth"}${where}${deadline ? ` · ${deadline.text}` : ""}`,
+    targetSponsor,
+    kpi: `${p ? (sponsored && targetSponsor ? `${targetSponsor} partner deliverables` : p.kpi) : "Market growth"}${where}${deadline ? ` · ${deadline.text}` : ""}`,
     deadline,
     missing: [!market && !global && "market", !product && "product", !deadline && "deadline"].filter(
       (m): m is "market" | "product" | "deadline" => typeof m === "string",

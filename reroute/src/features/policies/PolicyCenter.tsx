@@ -101,7 +101,7 @@ export function PolicyCenter() {
     const goal = await pulseApi.goal(runId);
     if (!goal) throw new Error("That campaign no longer exists");
     if (goal.policy?.packageId !== packageId) await pulseApi.goalAction({ action: "setPolicy", id: runId, expectedVersion: goal.version, packageId });
-    router.push(`/?${new URLSearchParams({ run: runId, step: "campaign" })}`);
+    router.push(`/?${new URLSearchParams({ run: runId, step: "opportunities" })}`);
   };
 
   return (
@@ -112,7 +112,7 @@ export function PolicyCenter() {
         <section className={cn(CONTAINER, "py-8 sm:py-10")}>
           {runId && (
             <Link
-              href={`/?${new URLSearchParams({ run: runId, step: "campaign" })}`}
+              href={`/?${new URLSearchParams({ run: runId, step: "opportunities" })}`}
               className="mb-5 inline-flex items-center gap-1.5 text-small text-ink-muted underline-offset-4 hover:text-ink hover:underline"
             >
               <ArrowLeftIcon className="size-3.5" aria-hidden /> Back to your campaign

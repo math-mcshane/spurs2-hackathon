@@ -17,7 +17,7 @@
  */
 import type { Asset, Clearance, EditDecision, EditPlan, Evidence, PublishIntent, Reason, Segment, Verdict } from "@/lib/contracts";
 import { classifyBlocker, reasonScope } from "../blocker";
-import { evaluateEdit, matchesPattern, normalizeLabel, worstVerdict, type AnalysisStatus } from "../engine";
+import { evaluateEdit, isUnverifiedPerson, matchesPattern, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX, worstVerdict, type AnalysisStatus } from "../engine";
 import type { Policy } from "../policy";
 import { buildEdl, edlToEditPlan, mergeIntervals, type Edl, type Interval, type Removal } from "./edl";
 
@@ -56,10 +56,17 @@ export interface UseDecision {
 export interface RecheckSummary {
   verdict: Verdict;
   clearance: Clearance;
+  /** allowed + restricted + unresolved = total: an unknown is never counted as allowed. */
   allowedUses: number;
+  /** Uses REROUTE blocked (a rule denies them). */
+  restrictedUses: number;
+  /** Uses that need a reviewer (something is unknown or unconfirmed). */
+  unresolvedUses: number;
   totalUses: number;
   /** Unique non-PERMIT reasons across every use (empty when ALLOWED). */
   remaining: Reason[];
+  /** Evidence the decisions used (names the subjects of `remaining`). */
+  evidence: Evidence[];
   policyId: string;
   policyVersion: string;
   evaluatedAt: string;
@@ -184,12 +191,16 @@ export function summarizeUses(uses: readonly UseDecision[]): RecheckSummary {
   const remaining = new Map<string, Reason>();
   for (const u of uses) for (const r of u.decision.decision.reasons) if (r.outcome !== "PERMIT" && !remaining.has(reasonKey(r))) remaining.set(reasonKey(r), r);
   const first = uses[0]?.decision.decision;
+  const count = (v: Verdict) => uses.filter((u) => u.decision.decision.verdict === v).length;
   return {
     verdict,
     clearance,
-    allowedUses: uses.filter((u) => u.decision.decision.verdict === "ALLOWED").length,
+    allowedUses: count("ALLOWED"),
+    restrictedUses: count("BLOCKED"),
+    unresolvedUses: count("NEEDS_REVIEW"),
     totalUses: uses.length,
     remaining: [...remaining.values()],
+    evidence: unique(uses.flatMap((u) => u.decision.decision.evidence)),
     policyId: unique(uses.map((u) => u.decision.decision.policyId)).join("+") || "none",
     policyVersion: unique(uses.map((u) => u.decision.decision.policyVersion)).join("+") || "none",
     evaluatedAt: first?.evaluatedAt ?? new Date(0).toISOString(),
@@ -198,12 +209,18 @@ export function summarizeUses(uses: readonly UseDecision[]): RecheckSummary {
 
 const outcomeOf = (v: Verdict): RecoveryOutcome => (v === "ALLOWED" ? "RESOLVES_DEMO" : v === "NEEDS_REVIEW" ? "NEEDS_REVIEW" : "STILL_BLOCKED");
 
+/** A re-check that still blocks says why (the editor lists it as rejected, never as a fix). */
+const stillBlocked = (recheck: RecheckSummary) =>
+  recheck.verdict === "BLOCKED" ? { notViableBecause: `Still restricted after this change: ${recheck.remaining.filter((r) => r.outcome === "DENY").map((r) => r.explanation).slice(0, 2).join(" ")}` } : {};
+
 // ---------- localization ----------
 
 export interface LocalizedProblem extends Interval {
   ruleIds: string[];
   /** Plain-language reason per restriction (rule explanation or subject reason). */
   explanations: string[];
+  /** The engine's reasons placed here (one per rule/subject). */
+  reasons: Reason[];
   evidence: Evidence[];
 }
 
@@ -285,6 +302,7 @@ export function locateProblems(ctx: RecoveryEvalContext, assetId: string, interv
       ...piece,
       ruleIds: unique(local.map((r) => r.ruleId)),
       explanations: unique(local.map((r) => ruleExplanation(r, ctx.policies))),
+      reasons: local,
       evidence: unique(local.flatMap((r) => triggeringEvidence(r, piece, evidence, ctx.policies))),
     });
   }
@@ -296,6 +314,7 @@ export function locateProblems(ctx: RecoveryEvalContext, assetId: string, interv
       last.end = Math.max(last.end, d.end);
       last.ruleIds = unique([...last.ruleIds, ...d.ruleIds]);
       last.explanations = unique([...last.explanations, ...d.explanations]);
+      last.reasons = [...last.reasons, ...d.reasons.filter((r) => !last.reasons.some((x) => reasonKey(x) === reasonKey(r)))];
       last.evidence = unique([...last.evidence, ...d.evidence]);
     } else localized.push({ ...d });
   }
@@ -312,22 +331,30 @@ const whatIsThere = (p: Pick<LocalizedProblem, "evidence">) => {
   return names.length ? (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0]) : "restricted content";
 };
 
-/** Why a localized problem matters, in one short sentence (several unmatched people share one sentence). */
+/**
+ * Why a localized problem matters, in one short sentence per kind: people named only by AI are an unconfirmed
+ * identification (never "no image rights"), several of them share one sentence.
+ */
 function whyItMatters(p: LocalizedProblem, policies: readonly Policy[]): string {
-  const people = p.ruleIds.filter((id) => id.startsWith("subject:person:"));
-  const rules = unique(p.ruleIds.filter((id) => !id.startsWith("subject:person:")).map((id) => policies.flatMap((x) => x.rules).find((r) => r.id === id)?.explanation ?? ""));
-  const peopleText = people.length
-    ? `${people.length > 1 ? "They can't" : "Can't"} be matched to the club's registered squad in ScorePlay, so image rights can't be confirmed (AI identification — a reviewer must confirm).`
-    : "";
-  const subjectBrands = p.ruleIds.filter((id) => id.startsWith("subject:brand:")).length ? "Not an official partner in this rule package." : "";
-  return [...rules.filter(Boolean), subjectBrands, peopleText].filter(Boolean).join(" ") || p.explanations.join(" ");
+  const rules = unique(p.ruleIds.filter((id) => !id.startsWith("subject:")).map((id) => policies.flatMap((x) => x.rules).find((r) => r.id === id)?.explanation ?? ""));
+  const unverified = p.reasons.filter(isUnverifiedPerson).length;
+  const unlisted = p.reasons.filter((r) => r.ruleId.startsWith("subject:person:") && !isUnverifiedPerson(r)).length;
+  const parts = [
+    ...rules.filter(Boolean),
+    p.ruleIds.some((id) => id.startsWith("subject:brand:")) ? "No rule in this package covers this brand — a reviewer must confirm." : "",
+    unverified
+      ? `${unverified > 1 ? `${unverified} people named by AI couldn't` : "The person named by AI couldn't"} be verified against ScorePlay identity data — a reviewer must verify who ${unverified > 1 ? "they are" : "it is"}.`
+      : "",
+    unlisted ? `ScorePlay doesn't confirm ${unlisted > 1 ? "they are" : "this person is"} in the club's registered squad, so image rights can't be confirmed — a reviewer must verify.` : "",
+  ];
+  return parts.filter(Boolean).join(" ") || p.explanations.join(" ");
 }
 
-function removalsFor(problems: readonly LocalizedProblem[], range: Interval, margin: number): Removal[] {
+function removalsFor(problems: readonly LocalizedProblem[], range: Interval, margin: number, policies: readonly Policy[]): Removal[] {
   return problems.map((p) => ({
     start: r3(Math.max(range.start, p.start - margin)),
     end: r3(Math.min(range.end, p.end + margin)),
-    reason: `${whatIsThere(p)} — ${p.explanations.join(" ")}`,
+    reason: `${whatIsThere(p)} — ${whyItMatters(p, policies)}`,
     ruleIds: p.ruleIds,
     evidence: p.evidence,
   }));
@@ -365,11 +392,18 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   const clipProblems = where.localized.length + where.pervasive.length;
   const scope: RecoveryPlan["scope"] = clipProblems && where.campaign.length ? "MIXED" : where.campaign.length ? "CAMPAIGN" : "CLIP";
   const unlicensed = unique(where.campaign.flatMap((c) => (c.reason.dimension === "territory" ? c.intents.map((i) => i.territory.toUpperCase()) : [])));
+  // Whether the plan's target sponsor is a partner is a question for a reviewer, not a missing licence.
+  const isTargetQuestion = (r: Reason) => r.ruleId.startsWith(TARGET_SPONSOR_RULE_PREFIX);
+  const licensing = where.campaign.filter((c) => !isTargetQuestion(c.reason));
+  const target = where.campaign.some((c) => isTargetQuestion(c.reason)) ? intents.find((i) => i.targetSponsor)?.targetSponsor : undefined;
   const inFootage = [
     ...where.localized.map((p) => `${whatIsThere(p)} (${span(p)})`),
     ...(where.pervasive.length ? ["a restriction on the whole clip"] : []),
   ];
-  const inPlan = unlicensed.length ? [`${unlicensed.join(", ")} ${unlicensed.length > 1 ? "aren't" : "isn't"} licensed`] : where.campaign.length ? ["the planned use isn't licensed"] : [];
+  const inPlan = [
+    ...(unlicensed.length ? [`${unlicensed.join(", ")} ${unlicensed.length > 1 ? "aren't" : "isn't"} licensed`] : licensing.length ? ["the planned use isn't licensed"] : []),
+    ...(target ? [`these rules don't describe a partnership with ${target} — a reviewer must confirm it`] : []),
+  ];
   const headline =
     current.verdict === "ALLOWED"
       ? "Nothing to fix: every planned use is allowed under the demo policy."
@@ -377,11 +411,11 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
 
   // No licensed market or channel in the plan at all: no edit, replacement or change of use can pass — a reviewer
   // cannot grant a licence. Only the honest next step is offered.
-  const remedy = where.campaign.length ? classifyBlocker(currentUses.map((u) => ({ intent: u.intent, decision: u.decision.decision })), ctx.policies).remedy : undefined;
+  const remedy = licensing.length ? classifyBlocker(currentUses.map((u) => ({ intent: u.intent, decision: u.decision.decision })), ctx.policies).remedy : undefined;
   const requestedT = unique(intents.map((i) => i.territory.toUpperCase()));
   const requestedP = unique(intents.map((i) => i.platform));
   const licenceGap =
-    where.campaign.length > 0 &&
+    licensing.length > 0 &&
     (!remedy ||
       (remedy.territories !== undefined && !requestedT.some((t) => remedy.territories!.includes(t))) ||
       (remedy.platforms !== undefined && !requestedP.some((p) => remedy.platforms!.includes(p))));
@@ -392,7 +426,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
 
   // A — TRIM the localized restrictions out of the selected footage.
   if (where.localized.length && !licenceGap) {
-    const newCuts = removalsFor(where.localized, source.range, limits.boundaryMarginSec);
+    const newCuts = removalsFor(where.localized, source.range, limits.boundaryMarginSec, ctx.policies);
     const edl = buildEdl({ id: `${idPrefix}:trim`, sourceAssetId: source.assetId, sourceTitle: source.title, range: source.range, removals: [...prior, ...newCuts], minPieceSec: limits.minPieceSec });
     const title = newCuts.length === 1 ? `Remove ${span(newCuts[0])}` : `Remove ${newCuts.length} flagged parts (${newCuts.map(span).join(", ")})`;
     const minKeep = Math.max(limits.minPostSec, limits.minRetainedRatio * (source.range.end - source.range.start));
@@ -425,7 +459,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
         recheck,
         tradeoff: `Keeps ${secs(edl.durationSec)} of ${secs(edl.originalDurationSec)} (${Math.round((100 * edl.durationSec) / edl.originalDurationSec)}%)${jumps ? ` with ${jumps} jump cut${jumps > 1 ? "s" : ""}` : ""}. Cut points come from AI timestamps — an editor confirms them before rendering.`,
         outcome: outcomeOf(recheck.verdict),
-        ...(recheck.verdict === "ALLOWED" ? {} : { notViableBecause: `The kept footage still isn't cleared: ${recheck.remaining.map((r) => r.explanation).slice(0, 2).join(" ")}` }),
+        ...stillBlocked(recheck),
       });
     }
   }
@@ -436,7 +470,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   if (asset && assetEnd && where.localized.length && !licenceGap) {
     const whole = { start: 0, end: assetEnd };
     const all = locateProblems(ctx, source.assetId, [whole], intents);
-    const blocked = removalsFor(all.localized, whole, limits.boundaryMarginSec);
+    const blocked = removalsFor(all.localized, whole, limits.boundaryMarginSec, ctx.policies);
     const free = buildEdl({ id: "free", sourceAssetId: asset.id, sourceTitle: source.title, range: whole, removals: blocked, minPieceSec: limits.minPostSec })?.retained ?? [];
     const want = source.range.end - source.range.start;
     const cross = (a: Interval, b: Interval) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start));
@@ -481,6 +515,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
           intents,
           recheck,
           outcome: outcomeOf(recheck.verdict),
+          ...stillBlocked(recheck),
         });
       }
     }
@@ -501,6 +536,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
       recheck,
       replacement: { key: rep.key, title: rep.title, scoreplayMediaId: rep.segment.scoreplayMediaId, start: rep.segment.start, end: rep.segment.end, query: rep.query, rank: rep.rank },
       outcome: outcomeOf(recheck.verdict),
+      ...stillBlocked(recheck),
     });
   }
 
@@ -524,6 +560,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
       recheck,
       campaignChange: { territories: keepT, ...(droppedT.length ? { dropped: droppedT } : {}), ...(droppedP.length ? { platforms: keepP } : {}), ...(usage ? { usage } : {}) },
       outcome: outcomeOf(recheck.verdict),
+      ...stillBlocked(recheck),
     });
   };
   if (remedy && !licenceGap) {
@@ -566,6 +603,7 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
         recheck,
         campaignChange: { usage: "ORGANIC" },
         outcome: outcomeOf(recheck.verdict),
+        ...stillBlocked(recheck),
       });
     }
   }
@@ -588,8 +626,9 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
     });
   }
 
-  // Ranking: workable options that keep the goal first (smallest change first), then review-needed, then goal
-  // changes, then rejected options, then next steps. Within a group: allowed uses, then kind order.
+  // Ranking: options whose independent re-check clears every use first (keeping the goal before changing it; smallest
+  // change first), then candidates that still need a reviewer, then rejected options, then next steps. Within a
+  // group: allowed uses, then kind order. A candidate that fails a use is never ranked as a correction.
   const kindOrder: Record<RecoveryKind, number> = { ADAPT_CAMPAIGN: 0, TRIM: 1, REPLACE: 2, SAFE_SECTION: 3, CHANGE_USAGE: 4, REQUEST_CLEARANCE: 5 };
   // A section of the chosen clip is a smaller change than new footage when it is as tied to the goal: overlapping the
   // chosen moment, or matched by search at least as well as the best workable replacement.
@@ -597,14 +636,18 @@ export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
   const preference = (o: PlannedOption) =>
     o.kind === "SAFE_SECTION" && (o.tie?.overlapsMoment || (o.tie?.searchRank !== undefined && o.tie.searchRank <= bestReplacementRank)) ? 1.5 : kindOrder[o.kind];
   const group = (o: PlannedOption) =>
-    o.outcome === "NEXT_STEP" ? 5 : o.outcome === "NOT_VIABLE" || o.outcome === "STILL_BLOCKED" ? 4 : o.changesGoal ? 3 : o.outcome === "RESOLVES_DEMO" ? 0 : 1;
+    o.outcome === "NEXT_STEP" ? 5 : o.outcome === "NOT_VIABLE" || o.outcome === "STILL_BLOCKED" ? 4 : o.outcome === "NEEDS_REVIEW" ? 2 : o.changesGoal ? 1 : 0;
   options.sort((a, b) => group(a) - group(b) || (b.recheck?.allowedUses ?? 0) - (a.recheck?.allowedUses ?? 0) || preference(a) - preference(b));
 
-  const recommended = options.find((o) => group(o) === 0) ?? options.find((o) => group(o) === 1);
+  // Recommended = re-checked ALLOWED for every use and the goal unchanged. Never a candidate a reviewer still has to clear.
+  const recommended = options.find((o) => group(o) === 0);
+  const review = options.filter((o) => o.outcome === "NEEDS_REVIEW").length;
   const noPathMessage = recommended
     ? undefined
     : licenceGap
       ? `No licensed path: ${asks[0]} A different clip or edit hits the same wall, and PULSE won't move the campaign elsewhere.`
-      : "No change PULSE can make clears this use under the selected policy. The next step is a clearance request.";
+      : review
+        ? `No verified correction: no change keeps the goal and clears every use under these rules. ${review === 1 ? "One candidate still needs" : `${review} candidates still need`} a reviewer — not a fix.`
+        : "No change PULSE can make clears this use under the selected policy. The next step is a clearance request.";
   return { scope, headline, problems, current, licenceGap, options, ...(recommended ? { recommendedId: recommended.id } : {}), ...(noPathMessage ? { noPathMessage } : {}) };
 }

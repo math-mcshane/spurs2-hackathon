@@ -24,6 +24,11 @@ export const PublishIntentSchema = z.object({
   publishAt: z.iso.datetime({ offset: true }),
   /** Publishing club (CLUBS key, e.g. "tottenham", "spurs"). Drives policy selection; never inferred from footage. */
   club: z.string().max(40).optional(),
+  /**
+   * The partner a SPONSORED/COMMERCIAL post promotes, as the user named it (e.g. "AIA"). Absent = not named: the
+   * policy's brand rules apply literally. Only the policy decides whether it is a partner — naming it grants nothing.
+   */
+  targetSponsor: z.string().trim().min(1).max(80).optional(),
 });
 export type PublishIntent = z.infer<typeof PublishIntentSchema>;
 
@@ -106,6 +111,30 @@ export const PolicySelectionSchema = z.object({
 });
 export type PolicySelection = z.infer<typeof PolicySelectionSchema>;
 
+/**
+ * Which brands a decision saw and how the policy treats each (sponsor dimension), for display. TARGET = the brand
+ * the campaign promotes; OTHER_PARTNER = covered by an explicit partner rule; COMPETING_RESTRICTED = a restriction
+ * rule names it; INCIDENTAL = only a rule covering every brand allows it; UNKNOWN = no rule describes it.
+ */
+export const SponsorshipSchema = z.object({
+  /** null = the campaign names no target sponsor (or the use is not a paid/partner post). */
+  target: z
+    .object({ name: z.string(), label: z.string(), relationship: z.enum(["PARTNER", "UNKNOWN"]), ruleId: z.string().optional() })
+    .nullable(),
+  brands: z.array(
+    z.object({
+      name: z.string(),
+      label: z.string(),
+      role: z.enum(["TARGET", "OTHER_PARTNER", "COMPETING_RESTRICTED", "INCIDENTAL", "UNKNOWN"]),
+      ruleId: z.string().optional(),
+      certainty: z.enum(["SCOREPLAY_TAG", "AI_OBSERVATION", "REVIEWER"]),
+      /** Seconds on the source asset where it was observed ("15–17 s"); empty for an untimed ScorePlay tag. */
+      spans: z.array(z.string()),
+    }),
+  ),
+});
+export type Sponsorship = z.infer<typeof SponsorshipSchema>;
+
 export const DecisionSchema = z.object({
   verdict: VerdictSchema,
   reasons: z.array(ReasonSchema),
@@ -118,6 +147,8 @@ export const DecisionSchema = z.object({
   /** Derived: VERIFIED only when verdict ALLOWED and policy is verified (not fictional). */
   clearance: ClearanceSchema,
   policySelection: PolicySelectionSchema.optional(),
+  /** Brands on screen and the campaign's target sponsor, as the sponsor rules treat them (display only). */
+  sponsorship: SponsorshipSchema.optional(),
   evaluatedAt: z.iso.datetime({ offset: true }),
 });
 export type Decision = z.infer<typeof DecisionSchema>;

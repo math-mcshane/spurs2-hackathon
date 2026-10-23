@@ -1,9 +1,9 @@
 import type { Evidence, Reason } from "@/lib/contracts";
 import { reasonScope } from "@/lib/rights";
-import { normalizeLabel } from "@/lib/rights/engine";
+import { isUnverifiedPerson, normalizeLabel } from "@/lib/rights/engine";
 import { events, goalRuns } from "@/lib/server/repositories";
 import { campaignEdit, editFor, intentsFor, proposedPublishAt } from "../goal-campaign";
-import { isDemo, plannedUsesLabel, preflightBasis, reasonFinding, reasonTopic } from "../goal-view";
+import { isDemo, plannedUsesLabel, preflightBasis, reasonFinding, reasonTopic, subjectName, unverifiedPeopleText } from "../goal-view";
 import { OpportunityPreflightSchema, type OpportunityPreflight, type PreflightFinding } from "../types";
 import { licenceGapOf, momentOf, runPolicies, type GoalDeps } from "./goal-service";
 
@@ -53,10 +53,14 @@ export async function preflightOpportunity(input: { id: string; key: string }, d
   const territories = [...new Set(perIntent.map((p) => p.intent.territory))];
   const blockedTerritories = territories.filter((t) => !perIntent.some((p) => p.intent.territory === t && p.decision.verdict === "ALLOWED"));
 
-  // One finding per (what was found, rule), across every use it applies to.
+  // One finding per (what was found, rule), across every use it applies to. People named only by AI that ScorePlay
+  // can't confirm share ONE finding ("4 people named by AI couldn't be verified…").
   const byKey = new Map<string, PreflightFinding>();
+  const unverified = open.filter(({ r }) => isUnverifiedPerson(r));
+  const people = [...new Set(unverified.map(({ r }) => r.ruleId))];
   for (const { r, p } of open) {
-    const f = reasonFinding(r, { evidence: evidenceFor(r, p.decision.evidence), fictional: p.decision.policyFictional, plannedUse: plannedUses });
+    if (people.length > 1 && isUnverifiedPerson(r)) continue;
+    const f = reasonFinding(r, { evidence: evidenceFor(r, p.decision.evidence), fictional: p.decision.policyFictional, plannedUse: plannedUses, sponsorship: p.decision.sponsorship });
     if (!f) continue;
     const found = f.found[0];
     const key = JSON.stringify([found.text, r.ruleId]);
@@ -75,6 +79,19 @@ export async function preflightOpportunity(input: { id: string; key: string }, d
       ...(r.ruleId ? { ruleId: r.ruleId } : {}),
       rule: r.explanation,
       territories: [p.intent.territory],
+    });
+  }
+  if (people.length > 1) {
+    const evidence = unverified.flatMap(({ p }) => p.decision.evidence);
+    const names = people.map((ruleId) => subjectName({ ruleId }, evidence));
+    byKey.set("identity:unverified-people", {
+      topic: reasonTopic("people"),
+      outcome: "MISSING",
+      found: `AI named ${names.join(", ")}`,
+      source: "Video analysis · TwelveLabs",
+      ruleId: "identity:unverified-people",
+      rule: unverifiedPeopleText(names),
+      territories: [...new Set(unverified.map(({ p }) => p.intent.territory))],
     });
   }
   const findings = [...byKey.values()].sort((a, b) => Number(b.outcome === "DENY") - Number(a.outcome === "DENY")).slice(0, MAX_FINDINGS);

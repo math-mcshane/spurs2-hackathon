@@ -12,11 +12,14 @@ import { describeError } from "@/lib/api-client";
 import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
 import { pulseApi } from "../client";
+import { CLUBS } from "../clubs";
 import type { Club, GoalAction, GoalView, RecommendationView } from "../types";
 import { CampaignBrief, MediaStage } from "./CampaignStudio";
-import { ObjectiveBar, StepNav, VIEWS, type View } from "./Chrome";
+import { ObjectiveBar, StepNav, parseStep, type View } from "./Chrome";
+import { ClubSwitcher } from "./ClubSwitcher";
 import { Diagnostics, deskHref } from "./Diagnostics";
 import { GoalComposer } from "./GoalComposer";
+import { OpportunityPanel, PANEL_ID } from "./OpportunityPanel";
 import { OpportunityStudio } from "./OpportunityStudio";
 import { Notice, type Stage } from "./parts";
 import { ReviewView } from "./Review";
@@ -62,16 +65,19 @@ const PROGRESS: Partial<Record<string, { stages: Stage[]; note?: string }>> = {
   submit: { stages: [{ after: 0, text: "Creating the audit receipt" }, { after: 1, text: "Recording the audit event" }] },
 };
 
-/** Where each action's result is shown. */
+/**
+ * Where each action's result is shown. Selecting, checking, correcting and submitting all stay on Opportunities &
+ * Rights; Review & Audit is opened by the user ("Continue to Review & Audit").
+ */
 const VIEW_AFTER: Record<GoalAction["action"], View> = {
-  run: "discover",
-  select: "campaign",
-  draft: "campaign",
-  checkRights: "campaign",
-  findRecovery: "campaign",
-  applyRecovery: "campaign",
-  setPolicy: "campaign",
-  submitForReview: "review",
+  run: "opportunities",
+  select: "opportunities",
+  draft: "opportunities",
+  checkRights: "opportunities",
+  findRecovery: "opportunities",
+  applyRecovery: "opportunities",
+  setPolicy: "opportunities",
+  submitForReview: "opportunities",
 };
 
 /** Optimistic-concurrency rejection: the run changed elsewhere (another tab/reviewer). Retrying would fail again. */
@@ -81,20 +87,23 @@ function isConflict(error: unknown): boolean {
 }
 
 function reachedViews(g: GoalView | null): Record<View, boolean> {
-  return { goal: true, discover: !!g, campaign: !!g?.campaign, review: !!g?.receiptId && g.reviewStatus !== "NOT_SUBMITTED" };
+  return { goal: true, opportunities: !!g, review: !!g?.receiptId && g.reviewStatus !== "NOT_SUBMITTED" };
 }
 
 /** The step a restored run opens on: wherever the user's work last was. */
 function defaultView(g: GoalView): View {
-  if (reachedViews(g).review) return "review";
-  if (g.campaign && (g.rights.state !== "NOT_CHECKED" || g.campaign.origin !== "PROPOSAL")) return "campaign";
-  return "discover";
+  return reachedViews(g).review ? "review" : "opportunities";
+}
+
+/** The campaign shown in the Step 2 detail panel: selected (or adopted) and not just the run's untouched proposal. */
+function openCampaignKey(g: GoalView): string | null {
+  const c = g.campaign;
+  return c && (c.origin !== "PROPOSAL" || g.rights.state !== "NOT_CHECKED") ? c.key : null;
 }
 
 function urlState(): { run: string | null; step: View | null } {
   const q = new URLSearchParams(window.location.search);
-  const step = q.get("step");
-  return { run: q.get("run"), step: VIEWS.includes(step as View) ? (step as View) : null };
+  return { run: q.get("run"), step: parseStep(q.get("step")) };
 }
 
 function writeUrl(run: string | null, step: View, mode: "push" | "replace") {
@@ -104,10 +113,21 @@ function writeUrl(run: string | null, step: View, mode: "push" | "replace") {
   else window.history.replaceState(null, "", href);
 }
 
+/** Brings the Step 2 detail panel (or a part of it) into view when it is off screen, e.g. below the cards on phones. */
+function reveal(id: string, always = false) {
+  window.setTimeout(() => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    if (always || top < 56 || top > window.innerHeight * 0.6) el.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, 150);
+}
+
 /**
- * PULSE: Goal → Media → Campaign → Compliance → Resolution → Review. One business goal becomes three real moments, a campaign
- * draft, a rights decision for every channel × market (with "Find a way to use it" when restricted), a human review
- * and an audit receipt. The run id and step live in the URL (`?run=…&step=…`): a reload restores the exact state.
+ * PULSE in three steps: Goal → Opportunities & Rights → Review & Audit. One business goal becomes three real moments;
+ * selecting one opens its campaign draft and a rights decision for every channel × market (with "Find a way to use
+ * it" when restricted) beside the cards, then a human review and an audit receipt. The run id and step live in the
+ * URL (`?run=…&step=…`, legacy `discover|campaign` = opportunities): a reload restores the exact state.
  */
 export function PulseStudio() {
   const [goal, setGoal] = useState<GoalView | null>(null);
@@ -139,7 +159,10 @@ export function PulseStudio() {
       if (g) {
         setText(g.run.objective.raw);
         setClub(g.run.club);
-        setView(step && reachedViews(g)[step] ? step : defaultView(g));
+        const next = step && reachedViews(g)[step] ? step : defaultView(g);
+        setView(next);
+        // Legacy (`discover`/`campaign`) or unreachable steps are rewritten to the step actually shown.
+        writeUrl(g.run.id, next, "replace");
       }
     } catch (error) {
       setFailure({ error, retry: () => void load(id, step) });
@@ -191,10 +214,11 @@ export function PulseStudio() {
   }
 
   /**
-   * Opens an opportunity card in the campaign step: select its moment (new campaign version) and, when its selection-time
-   * preflight produced a verdict, record the real check right away (same engine, persisted and audited). `explore`
-   * (restricted card) continues into the existing Recovery Engine ("Find a way to use it") and lands on Resolution.
-   * Each step runs on the version the previous one returned; nothing is reused from the preflight but the decision to proceed.
+   * Opens an opportunity card in the Step 2 detail panel without leaving the step: select its moment (new campaign
+   * version) unless it already is the campaign, then record the real rights check when the run has no current one
+   * (same engine, persisted and audited — no separate "Check rights" screen). `explore` (restricted card) continues
+   * into the existing Recovery Engine ("Find a way to use it") and scrolls to the resolution. Each step runs on the
+   * version the previous one returned; nothing is reused from the preflight.
    */
   async function openOpportunity(rec: RecommendationView, explore: boolean) {
     if (inflight.current || !goal) return;
@@ -207,15 +231,14 @@ export function PulseStudio() {
       setGoal(g);
     };
     try {
-      const preflighted = preflight.get(rec)?.status === "done";
       if (g.campaign?.key !== rec.key) await step({ action: "select", id: g.run.id, expectedVersion: g.version, key: rec.key }, `select:${rec.key}`);
-      go("campaign", g.run.id);
+      reveal(PANEL_ID);
       const checked = g.rights.current && g.rights.state !== "NOT_CHECKED";
-      if (!checked && (explore || preflighted)) await step({ action: "checkRights", id: g.run.id, expectedVersion: g.version }, "rights");
+      if (!checked) await step({ action: "checkRights", id: g.run.id, expectedVersion: g.version }, "rights");
       const restricted = g.rights.current && (g.rights.state === "BLOCKED" || g.rights.state === "NEEDS_REVIEW");
       const planned = g.recovery?.forEvaluationId === g.rights.evaluationId;
       if (explore && restricted && !planned) await step({ action: "findRecovery", id: g.run.id, expectedVersion: g.version }, "recovery");
-      if (explore && restricted) window.setTimeout(() => document.getElementById("resolution")?.scrollIntoView({ block: "start", behavior: "smooth" }), 150);
+      if (explore && restricted) reveal("resolution", true);
     } catch (error) {
       if (isConflict(error)) setConflict(true);
       else {
@@ -239,29 +262,36 @@ export function PulseStudio() {
     go("goal", null, "push");
   }
 
+  /** The header club switch: a loaded campaign belongs to its club, so switching clears it and starts a new goal. */
+  function switchClub(next: Club) {
+    if (inflight.current || next === club) return;
+    const hadRun = !!goal;
+    setClub(next);
+    if (hadRun) {
+      startOver();
+      toast(`Switched to ${CLUBS[next].label} — campaign cleared`);
+    } else toast(`Switched to ${CLUBS[next].label}`);
+  }
+
   const id = goal?.run.id;
   /** Run version the user is looking at; every action on the run sends it back (stale → CONFLICT). */
   const v = goal?.version ?? 0;
   const reached = reachedViews(goal);
   const shown: View = goal && !reached[view] ? defaultView(goal) : view;
   // Selection-time rights checks of the opportunity cards, only while the cards are on screen (cached per input basis).
-  const preflight = usePreflight(goal, { enabled: shown === "discover" && busy !== "run" && busy !== "load" });
+  const preflight = usePreflight(goal, { enabled: shown === "opportunities" && busy !== "run" && busy !== "load" });
   const locked = busy !== null;
   const progress = busy ? PROGRESS[busy.startsWith("apply:") ? "apply" : busy] : undefined;
   const lensBusy: LensBusy =
     busy === "rights" || busy === "recovery" || busy === "policy" || busy === "submit" || busy?.startsWith("apply:") ? (busy as LensBusy) : null;
   const runGoal = () => void act({ action: "run", goal: text, club }, "run", (g) => !g.recommendations.length && toast.warning("No moment found for this goal"));
-  /** Header journey: Campaign, Compliance and Resolution share the campaign screen; an anchor scrolls to its part. */
-  const goPhase = (next: View, anchor?: string) => {
-    const target = anchor && next === shown ? document.getElementById(anchor) : null;
-    if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });
-    else go(next, id ?? null);
-  };
+  const openKey = goal ? openCampaignKey(goal) : null;
+  const openingKey = busy?.startsWith("select:") ? busy.slice(7) : null;
 
   return (
     <div className="flex min-h-dvh flex-col">
       <PulseHeader
-        nav={goal ? <StepNav goal={goal} view={shown} reached={reached} onView={goPhase} /> : undefined}
+        nav={goal ? <StepNav view={shown} reached={reached} onView={(next) => go(next, id ?? null)} /> : undefined}
         actions={
           <>
             <Link
@@ -271,6 +301,7 @@ export function PulseStudio() {
               <ScaleIcon className="size-4" aria-hidden /> Policies
             </Link>
             <ReviewerControl session={session} onSignIn={() => setSignInOpen(true)} onSignedOut={setSession} />
+            <ClubSwitcher club={club} disabled={locked} onChange={switchClub} />
             {goal && (
               <Button size="sm" variant="outline" className="bg-transparent" onClick={startOver}>
                 <PlusIcon /> New goal
@@ -339,7 +370,6 @@ export function PulseStudio() {
             text={text}
             onText={setText}
             club={club}
-            onClub={setClub}
             busy={busy === "run"}
             progress={progress}
             onSubmit={runGoal}
@@ -355,60 +385,79 @@ export function PulseStudio() {
           <>
             <ObjectiveBar goal={goal} onEdit={() => go("goal", id)} />
             <Swap id={shown} className={cn(CONTAINER, "flex-1 py-8 lg:py-10")}>
-              {shown === "discover" && (
+              {shown === "opportunities" && (
                 <OpportunityStudio
                   goal={goal}
                   preflight={preflight}
                   busy={locked}
-                  loadingKey={busy?.startsWith("select:") ? busy.slice(7) : null}
-                  onBuild={(rec) => void openOpportunity(rec, false)}
+                  loadingKey={openingKey}
+                  openKey={openKey}
+                  onSelect={(rec) => void openOpportunity(rec, false)}
                   onExplore={(rec) => void openOpportunity(rec, true)}
+                  onShow={() => reveal(PANEL_ID, true)}
                   onSearchAgain={() => void act({ action: "run", goal: goal.run.objective.raw, club: goal.run.club }, "run")}
                   onEditGoal={() => go("goal", id)}
-                />
-              )}
-
-              {shown === "campaign" && goal.campaign && (
-                <div className="grid grid-cols-1 gap-x-12 gap-y-10 lg:grid-cols-12 lg:grid-rows-[auto_1fr]">
-                  <div className="min-w-0 lg:col-span-7 lg:row-start-1">
-                    <MediaStage goal={goal} campaign={goal.campaign} onChangeMoment={() => go("discover", id)} />
-                  </div>
-                  <aside className="min-w-0 lg:col-span-5 lg:col-start-8 lg:row-span-2 lg:row-start-1">
-                    <div className="lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-xl [scrollbar-width:thin]">
-                      <RightsLens
-                        goal={goal}
-                        busy={lensBusy}
-                        disabled={locked}
-                        progress={lensBusy ? progress : undefined}
-                        deskHref={deskHref(goal)}
-                        onCheck={() => void act({ action: "checkRights", id, expectedVersion: v }, "rights")}
-                        onFindRecovery={() => void act({ action: "findRecovery", id, expectedVersion: v }, "recovery")}
-                        onApplyRecovery={(optionId) =>
-                          void act({ action: "applyRecovery", id, expectedVersion: v, optionId }, `apply:${optionId}`, (g) =>
-                            g.rights.current ? toast.success("Revised plan saved and re-checked — same goal") : toast("Revised plan saved — check rights again"),
-                          )
-                        }
-                        onSetPolicy={(packageId) => {
-                          if (packageId !== goal.policy?.packageId)
-                            void act({ action: "setPolicy", id, expectedVersion: v, packageId }, "policy", () => toast("Rules changed — check rights again"));
-                        }}
-                        onSubmit={() => void act({ action: "submitForReview", id, expectedVersion: v }, "submit", () => toast.success("Submitted — audit receipt created"))}
-                        onOpenReview={() => go("review", id)}
-                        onChooseAsset={() => go("discover", id)}
-                        onEditGoal={() => go("goal", id)}
-                      />
-                    </div>
-                  </aside>
-                  <div className="min-w-0 lg:col-span-7 lg:row-start-2">
-                    <CampaignBrief
+                  detail={
+                    <OpportunityPanel
                       goal={goal}
-                      campaign={goal.campaign}
+                      open={openKey !== null}
+                      opening={openingKey ? goal.recommendations.find((r) => r.key === openingKey) : undefined}
+                      lead={goal.recommendations[0]}
                       busy={locked}
-                      saving={busy === "draft"}
-                      onSetDestination={(url) => void act({ action: "draft", id, expectedVersion: v, commerceUrl: url }, "draft", () => toast.success("Destination link saved as a new version"))}
+                      onSelectLead={() => goal.recommendations[0] && void openOpportunity(goal.recommendations[0], false)}
+                      onContinue={() => go("review", id)}
+                      media={goal.campaign && <MediaStage goal={goal} campaign={goal.campaign} onChangeMoment={() => reveal("opportunity-rail", true)} />}
+                      lens={
+                        <RightsLens
+                          goal={goal}
+                          busy={lensBusy}
+                          disabled={locked}
+                          progress={lensBusy ? progress : undefined}
+                          deskHref={deskHref(goal)}
+                          onCheck={() => void act({ action: "checkRights", id, expectedVersion: v }, "rights")}
+                          onFindRecovery={() =>
+                            void act({ action: "findRecovery", id, expectedVersion: v }, "recovery", (g) => g.recovery && reveal("resolution", true))
+                          }
+                          onApplyRecovery={(optionId) =>
+                            void act({ action: "applyRecovery", id, expectedVersion: v, optionId }, `apply:${optionId}`, (g) =>
+                              !g.rights.current
+                                ? toast("Revised plan saved — check rights again")
+                                : g.rights.state === "ALLOWED"
+                                  ? toast.success("Revised plan saved and re-checked — same goal")
+                                  : toast(`Revised plan saved — re-check: ${g.rights.headline}`),
+                            )
+                          }
+                          onSetPolicy={(packageId) => {
+                            if (packageId !== goal.policy?.packageId)
+                              void act({ action: "setPolicy", id, expectedVersion: v, packageId }, "policy", () => toast("Rules changed — check rights again"));
+                          }}
+                          onSubmit={() =>
+                            void act({ action: "submitForReview", id, expectedVersion: v }, "submit", () => {
+                              toast.success("Submitted — audit receipt created");
+                              reveal(PANEL_ID, true);
+                            })
+                          }
+                          onOpenReview={() => go("review", id)}
+                          onChooseAsset={() => reveal("opportunity-rail", true)}
+                          onEditGoal={() => go("goal", id)}
+                        />
+                      }
+                      brief={
+                        goal.campaign && (
+                          <CampaignBrief
+                            goal={goal}
+                            campaign={goal.campaign}
+                            busy={locked}
+                            saving={busy === "draft"}
+                            onSetDestination={(url) =>
+                              void act({ action: "draft", id, expectedVersion: v, commerceUrl: url }, "draft", () => toast.success("Destination link saved as a new version"))
+                            }
+                          />
+                        )
+                      }
                     />
-                  </div>
-                </div>
+                  }
+                />
               )}
 
               {shown === "review" && goal.receiptId && (

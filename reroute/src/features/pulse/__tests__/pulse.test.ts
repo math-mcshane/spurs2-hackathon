@@ -350,6 +350,22 @@ describe("objective parser", () => {
     expect(vague.missing).toEqual(["market", "product", "deadline"]);
     expect(parseObjective("Tottenham shirts in the US", NOW)).toMatchObject({ club: "tottenham", market: { code: "US" } });
   });
+
+  it("makes a sponsor objective explicit: the partner the goal names is the target sponsor, never a search term", () => {
+    expect(parseObjective("Promote our partner AIA with Solanke's late goal for UK fans", NOW)).toMatchObject({
+      summary: "Promote AIA in United Kingdom",
+      product: { key: "sponsor", label: "Sponsor activation" },
+      targetSponsor: "AIA",
+      market: { code: "GB" },
+    });
+    // Named without the word "sponsor": still a sponsor activation (Kraken is a partner only in another package).
+    expect(parseObjective("Promote Kraken with fans in the UK", NOW)).toMatchObject({ summary: "Promote Kraken in United Kingdom", product: { key: "sponsor" }, targetSponsor: "Kraken" });
+    expect(parseObjective("Feature our partner Heineken for UK fans", NOW).targetSponsor).toBe("Heineken");
+    // No partner named: an explicit activation without a target — the brand rules apply literally.
+    expect(parseObjective("Activate our sponsor with Solanke's late goal for UK fans", NOW)).toMatchObject({ summary: "Run a sponsor activation in United Kingdom", targetSponsor: null });
+    expect(parseObjective("Promote Tottenham merchandise to UK supporters", NOW)).toMatchObject({ product: { key: "merch" }, targetSponsor: null });
+    expect(parseObjective("Promote Solanke's goal to UK fans", NOW).targetSponsor).toBeNull();
+  });
 });
 
 describe("market signal analyzer", () => {

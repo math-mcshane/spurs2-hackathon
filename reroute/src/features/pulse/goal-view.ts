@@ -1,4 +1,5 @@
-import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type Evidence, type PublishIntent, type Reason, type RightsReceipt } from "@/lib/contracts";
+import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type Evidence, type PublishIntent, type Reason, type RightsReceipt, type Sponsorship } from "@/lib/contracts";
+import { isUnverifiedPerson, normalizeLabel, TARGET_SPONSOR_RULE_PREFIX } from "@/lib/rights/engine";
 import { EDL_EXECUTION_LABEL, type Edl } from "@/lib/rights/recovery/edl";
 import { analysisRunLabel } from "@/lib/twelvelabs/runs";
 import { withPreview } from "./moment-ranking";
@@ -120,13 +121,51 @@ export function goalKpi(objective: GoalRun["objective"]): GoalView["kpi"] {
   };
 }
 
+/** "A, B and C". */
+const andList = (xs: readonly string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : (xs[0] ?? ""));
+
+/** Who a `subject:<label>` reason is about: the name the observation used, else the label in words. */
+export function subjectName(r: Pick<Reason, "ruleId">, evidence: readonly Evidence[]): string {
+  const label = r.ruleId.slice("subject:".length);
+  const seen = evidence.find((e) => e.label && normalizeLabel(e.label) === label);
+  const fromSeen = seen?.observation.split(":")[0]?.trim();
+  if (fromSeen) return fromSeen;
+  return label
+    .slice(label.indexOf(":") + 1)
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** One line for several people named only by AI: an unconfirmed identification, never "no image rights". */
+export function unverifiedPeopleText(names: readonly string[]): string {
+  const unique = [...new Set(names)];
+  return unique.length === 1
+    ? `AI named ${unique[0]}; ScorePlay identity data can't confirm it — a reviewer must verify who it is.`
+    : `${unique.length} people named by AI couldn't be verified against ScorePlay: ${andList(unique)} — a reviewer must verify who they are.`;
+}
+
 /**
  * REROUTE reasons as plain-English topics: dimensions REROUTE explained with the same sentence are
- * one topic (e.g. all licence terms), and each topic lists REROUTE's explanations verbatim.
+ * one topic (e.g. all licence terms), and each topic lists REROUTE's explanations verbatim — except several people
+ * named only by AI, who share one sentence (`evidence` names them).
  */
-export function rightsIssues(reasons: readonly Pick<Reason, "dimension" | "outcome" | "explanation">[]): RightsIssue[] {
+export function rightsIssues(
+  reasons: readonly (Pick<Reason, "dimension" | "outcome" | "explanation"> & Partial<Pick<Reason, "ruleId" | "basis">>)[],
+  evidence: readonly Evidence[] = [],
+): RightsIssue[] {
+  const unverified = reasons.filter((r) => r.outcome !== "PERMIT" && r.ruleId !== undefined && isUnverifiedPerson({ ruleId: r.ruleId, basis: r.basis }));
+  const people = new Set(unverified.map((r) => r.ruleId!));
+  const merged =
+    people.size > 1
+      ? [
+          ...reasons.filter((r) => !unverified.includes(r)),
+          { dimension: "people", outcome: "MISSING" as const, explanation: unverifiedPeopleText([...people].map((ruleId) => subjectName({ ruleId }, evidence))) },
+        ]
+      : reasons;
   const byExplanation = new Map<string, { outcome: "DENY" | "MISSING"; dimensions: string[] }>();
-  for (const r of reasons) {
+  for (const r of merged) {
     if (r.outcome === "PERMIT") continue;
     const g = byExplanation.get(r.explanation) ?? { outcome: r.outcome, dimensions: [] };
     if (r.outcome === "DENY") g.outcome = "DENY";
@@ -145,6 +184,20 @@ export function rightsIssues(reasons: readonly Pick<Reason, "dimension" | "outco
   return [...byTopic.values()].sort((a, b) => Number(b.outcome === "DENY") - Number(a.outcome === "DENY"));
 }
 
+/**
+ * Brand labels a sponsor reason is about: its own subject, the target sponsor, or the brands the restriction rule
+ * names (so a partner logo seen in the same seconds is never shown as the conflict). Undefined = not a sponsor reason.
+ */
+function sponsorLabels(r: Partial<Pick<Reason, "ruleId">> & Pick<Reason, "dimension">, sponsorship?: Sponsorship): Set<string> | undefined {
+  if (r.dimension.toLowerCase() !== "sponsor" || !sponsorship || !r.ruleId) return undefined;
+  const id = r.ruleId;
+  if (id.startsWith("subject:")) return new Set([id.slice("subject:".length)]);
+  const brands = id.startsWith(TARGET_SPONSOR_RULE_PREFIX)
+    ? sponsorship.brands.filter((b) => b.role === "TARGET")
+    : sponsorship.brands.filter((b) => b.ruleId === id && b.role === "COMPETING_RESTRICTED");
+  return new Set(brands.map((b) => b.label));
+}
+
 /** Evidence labels that can back a reason, per dimension (labels set by the TwelveLabs parser / reviewers). */
 const EVIDENCE_PREFIX: Record<string, string> = { sponsor: "brand:", people: "person:" };
 const secs = (n: number) => `${Math.round(n * 10) / 10}`;
@@ -156,24 +209,29 @@ const secs = (n: number) => `${Math.round(n * 10) / 10}`;
  */
 export function reasonFinding(
   r: Pick<Reason, "dimension" | "outcome" | "explanation"> & Partial<Pick<Reason, "ruleId" | "basis" | "scoreplayMediaId" | "start" | "end">>,
-  ctx: { evidence?: readonly Evidence[]; fictional: boolean; plannedUse?: string },
+  ctx: { evidence?: readonly Evidence[]; fictional: boolean; plannedUse?: string; sponsorship?: Sponsorship },
 ): ReasonFinding | null {
   if (r.outcome === "PERMIT") return null;
   const prefix = EVIDENCE_PREFIX[r.dimension.toLowerCase()];
-  const seen = prefix
+  const brands = sponsorLabels(r, ctx.sponsorship);
+  const inSpan = prefix
     ? (ctx.evidence ?? []).filter(
         (e) =>
           e.label?.toLowerCase().startsWith(prefix) &&
+          (!brands || brands.has(normalizeLabel(e.label))) &&
           (!r.scoreplayMediaId || e.scoreplayMediaId === r.scoreplayMediaId) &&
           (r.start === undefined || r.end === undefined || e.start === undefined || ((e.end ?? e.start) >= r.start && e.start <= r.end)),
       )
     : [];
+  // A per-subject reason is backed by that subject's own observation when there is one.
+  const own = r.ruleId?.startsWith("subject:") ? inSpan.filter((e) => normalizeLabel(e.label!) === r.ruleId!.slice("subject:".length)) : [];
+  const seen = own.length ? own : inSpan;
   const found = seen.length
     ? [...new Map(seen.map((e) => [`${e.source}|${e.analysisRun}|${e.observation}|${e.start}|${e.end}`, e])).values()].map((e) => ({
         text: e.start === undefined ? e.observation : `${e.observation} (${secs(e.start)}–${secs(e.end ?? e.start)} s)`,
         source: evidenceSource(e),
       }))
-    : [fallbackFinding(r, ctx.plannedUse)];
+    : [fallbackFinding(r, ctx.plannedUse, ctx.sponsorship)];
   return {
     dimension: r.dimension,
     outcome: r.outcome,
@@ -182,12 +240,43 @@ export function reasonFinding(
   };
 }
 
-function fallbackFinding(r: Pick<Reason, "dimension"> & Partial<Pick<Reason, "basis" | "scoreplayMediaId">>, plannedUse?: string): ReasonFinding["found"][number] {
+function fallbackFinding(
+  r: Pick<Reason, "dimension"> & Partial<Pick<Reason, "basis" | "scoreplayMediaId" | "ruleId">>,
+  plannedUse?: string,
+  sponsorship?: Sponsorship,
+): ReasonFinding["found"][number] {
   const asset = r.scoreplayMediaId ? ` (asset ${r.scoreplayMediaId})` : "";
+  if (r.ruleId?.startsWith(TARGET_SPONSOR_RULE_PREFIX)) {
+    return { text: `Your goal names ${sponsorship?.target?.name ?? "a partner"} as the partner this post promotes.`, source: "Your goal" };
+  }
   if (r.basis === "TECHNICAL_OBSERVATION") return { text: `No video analysis is available for this clip${asset}.`, source: "Video analysis · TwelveLabs" };
   if (r.basis === "MEDIA_IDENTITY") return { text: `This clip${asset} could not be matched to exactly one analysed video.`, source: "ScorePlay ↔ TwelveLabs link" };
   if (LICENCE[r.dimension.toLowerCase()]) return { text: plannedUse ? `Planned use: ${plannedUse}.` : "The campaign's planned channel, country, use and date.", source: "Your campaign plan" };
   return { text: `What ScorePlay records about this clip${asset}.`, source: "ScorePlay data" };
+}
+
+/**
+ * Every non-permitting reason of one decision as a finding; several people named only by AI become ONE finding
+ * ("4 people named by AI couldn't be verified…") whose observations still list each person.
+ */
+export function decisionFindings(d: Decision, plannedUse?: string): ReasonFinding[] {
+  const ctx = { evidence: d.evidence, fictional: d.policyFictional, plannedUse, sponsorship: d.sponsorship };
+  const people = d.reasons.filter((r) => r.outcome !== "PERMIT" && isUnverifiedPerson(r));
+  if (people.length < 2) return d.reasons.flatMap((r) => reasonFinding(r, ctx) ?? []);
+  const each = people.flatMap((r) => reasonFinding(r, ctx) ?? []);
+  return [
+    ...d.reasons.filter((r) => !people.includes(r)).flatMap((r) => reasonFinding(r, ctx) ?? []),
+    {
+      dimension: "people",
+      outcome: "MISSING",
+      found: [...new Map(each.flatMap((f) => f.found).map((f) => [`${f.text}|${f.source}`, f])).values()],
+      rule: {
+        id: "identity:unverified-people",
+        text: unverifiedPeopleText(people.map((r) => subjectName(r, d.evidence))),
+        tag: d.policyFictional ? "Demo policy · fictional" : "Verified policy",
+      },
+    },
+  ];
 }
 
 /** "all 3 planned uses (Instagram, Facebook, X · GB · commercial)": the uses a re-check actually covered. */
@@ -231,8 +320,8 @@ function channelRights(intent: PublishIntent, d: Decision): ChannelRights {
     policyFictional: d.policyFictional,
     policySelection: d.policySelection,
     reasons: d.reasons,
-    issues: rightsIssues(d.reasons),
-    findings: d.reasons.flatMap((r) => reasonFinding(r, { evidence: d.evidence, fictional: d.policyFictional, plannedUse: describeUse(intent) }) ?? []),
+    issues: rightsIssues(d.reasons, d.evidence),
+    findings: decisionFindings(d, describeUse(intent)),
     missingFacts: d.missingFacts,
   };
 }
@@ -267,7 +356,10 @@ export function presentRights(run: GoalRun): RightsView {
   const counts = { ALLOWED: 0, NEEDS_REVIEW: 0, BLOCKED: 0 };
   for (const p of perIntent) counts[p.verdict]++;
   const tally = `${perIntent.length} use${perIntent.length === 1 ? "" : "s"} checked: ${counts.ALLOWED} allowed, ${counts.NEEDS_REVIEW} need review, ${counts.BLOCKED} blocked.`;
-  const issues = rightsIssues(e.perIntent.flatMap((p) => p.decision.reasons));
+  const issues = rightsIssues(
+    e.perIntent.flatMap((p) => p.decision.reasons),
+    e.perIntent.flatMap((p) => p.decision.evidence),
+  );
   const copy: Record<Decision["verdict"], { headline: string; detail: string }> = {
     ALLOWED: demo
       ? { headline: "Allowed under a demo policy", detail: `${DEMO_CLEARANCE_LABEL}. ${tally} This can go to review for the demo, but it can never authorize publication.` }
@@ -299,6 +391,21 @@ function recommendationView(run: GoalRun, rec: Recommendation, previews: Readonl
     rights: e ? { state: e.overall.verdict, clearance: e.overall.clearance } : { state: "NOT_CHECKED" },
     preflightBasis: preflightBasis(run, rec),
   };
+}
+
+/**
+ * Sponsored/sales plans: the partner the goal promotes and every brand the latest check saw, as the sponsor rules
+ * treat them (merged across uses). Target null = no partner named — the rules applied literally.
+ */
+function sponsorContextOf(plan: GoalRun["plan"], e: GoalEvaluation): Sponsorship | undefined {
+  if (plan.usage !== "SPONSORED" && plan.usage !== "COMMERCIAL") return undefined;
+  const all = e.perIntent.flatMap((p) => (p.intent.usage === plan.usage && p.decision.sponsorship ? [p.decision.sponsorship] : []));
+  const brands = new Map<string, Sponsorship["brands"][number]>();
+  for (const b of all.flatMap((s) => s.brands)) {
+    const prev = brands.get(b.label);
+    brands.set(b.label, prev ? { ...prev, spans: [...new Set([...prev.spans, ...b.spans])] } : b);
+  }
+  return { target: all.find((s) => s.target)?.target ?? null, brands: [...brands.values()] };
 }
 
 const PREVIEW_UNAVAILABLE = "No browser-playable stream is available for this video.";
@@ -410,6 +517,7 @@ export function buildGoalView(
   const lastWrite = liveReceipt?.writeback.at(-1);
 
   const recovery = recoveryView(run, latest, rights.current);
+  const sponsorContext = rights.current && latest ? sponsorContextOf(draft?.plan ?? run.plan, latest) : undefined;
   // A reviewer cannot grant a missing licence: a licence gap is never submittable.
   const gap = rights.current ? latest?.licenceGap : undefined;
   const canSubmit = !!latest && rights.current && latest.overall.verdict !== "BLOCKED" && !submitted && !gap;
@@ -448,7 +556,9 @@ export function buildGoalView(
             {
               item: "Partner credit",
               status: "MISSING" as const,
-              note: "PULSE never names a sponsor: add the partner credit exactly as contracted. Only ScorePlay sponsor data or the rights policy's partner list can name one — neither designates which partner this activation is for.",
+              note: run.objective.targetSponsor
+                ? `Your goal names ${run.objective.targetSponsor} as the partner to promote: add its credit exactly as contracted. PULSE writes no partner claim — whether these rules describe ${run.objective.targetSponsor} as a partner is shown in the rights check.`
+                : "No partner is named in the goal: add the partner credit exactly as contracted. PULSE never picks a sponsor — the rights check applies the brand rules as written.",
             },
           ]
         : []),
@@ -489,6 +599,7 @@ export function buildGoalView(
     campaign,
     rights,
     recovery,
+    ...(sponsorContext ? { sponsorContext } : {}),
     ...(draft?.edl ? { edit: timelineOf(draft.edl, draft.mediaRef.match?.scoreplayDurationSec) } : {}),
     beforeAfter: beforeAfterView(run),
     ...(run.policy ? { policy: run.policy } : {}),

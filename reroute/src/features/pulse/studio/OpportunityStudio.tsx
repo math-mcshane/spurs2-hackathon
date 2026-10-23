@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightIcon, ChevronRightIcon, Loader2Icon, PencilLineIcon, RefreshCwIcon, RotateCwIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, Loader2Icon, PencilLineIcon, RefreshCwIcon, RotateCwIcon, RouteIcon } from "lucide-react";
 import { Reveal } from "@/components/pulse/motion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,55 +27,40 @@ type Props = {
   preflight: PreflightApi;
   /** Any Studio action running (disables CTAs). */
   busy: boolean;
-  /** Card whose action is running (spinner on its CTA). */
+  /** Card whose selection is running (spinner on its CTA). */
   loadingKey: string | null;
-  /** ALLOWED / NEEDS_REVIEW / unavailable / not yet checked → campaign. */
-  onBuild: (rec: RecommendationView) => void;
-  /** BLOCKED → existing Recovery Engine, context preserved. */
+  /** Card whose campaign is open in the detail panel. */
+  openKey: string | null;
+  /** Open the card in the detail panel (select + rights check). */
+  onSelect: (rec: RecommendationView) => void;
+  /** Restricted card: open it and continue into "Find a way to use it". */
   onExplore: (rec: RecommendationView) => void;
+  /** Bring the detail panel into view (the selected card is already open). */
+  onShow: () => void;
   onSearchAgain: () => void;
   onEditGoal: () => void;
+  /** The focused detail panel of the open opportunity, beside the cards. */
+  detail: React.ReactNode;
 };
 
 /**
- * Step 2 · Opportunity Studio: the strongest real moments for the objective as commercial opportunities — one
- * featured, two supporting. Each card leads with the media, then the angle and proposed post (from the objective,
- * plan and match evidence only), why PULSE recommends it, and REROUTE's selection-time preflight with the single
- * best next action. A restricted opportunity stays on the page with "Explore resolution". Retrieval ranks and scores
- * live in each card's collapsed detail.
+ * Step 2 · Opportunities & Rights: the strongest real moments for the objective as a compact rail of cards — media,
+ * angle, why it fits, ScorePlay/TwelveLabs evidence and REROUTE's selection-time preflight — beside one detail panel
+ * for the selected opportunity (its preview, full rights decision, "Find a way to use it" and the campaign draft).
+ * Every card stays visible and selectable; switching never leaves the step.
  */
-export function OpportunityStudio({ goal, preflight, busy, loadingKey, onBuild, onExplore, onSearchAgain, onEditGoal }: Props) {
+export function OpportunityStudio({ goal, preflight, busy, loadingKey, openKey, onSelect, onExplore, onShow, onSearchAgain, onEditGoal, detail }: Props) {
   const recs = goal.recommendations;
-  const [lead, ...rest] = recs;
   const states = recs.map((r) => preflight.get(r));
   const checking = states.some((s) => s !== undefined);
   const illustrative = goal.policy ? !goal.policy.verified : states.some((s) => s?.status === "done" && s.result.illustrative);
 
-  const card = (rec: RecommendationView, featured: boolean) => {
-    const state = preflight.get(rec);
-    const blocked = state?.status === "done" && state.result.verdict === "BLOCKED";
-    const inCampaign = goal.campaign?.key === rec.key && (goal.campaign.origin !== "PROPOSAL" || goal.rights.state !== "NOT_CHECKED");
-    return (
-      <Opportunity
-        goal={goal}
-        rec={rec}
-        featured={featured}
-        state={state}
-        inCampaign={inCampaign}
-        busy={busy}
-        loading={loadingKey === rec.key}
-        onAct={() => (blocked ? onExplore(rec) : onBuild(rec))}
-        onRetry={() => preflight.retry(rec)}
-      />
-    );
-  };
-
-  if (!lead) {
+  if (!recs.length) {
     const photosOnly = goal.photos.length > 0;
     return (
       <section aria-labelledby="discover-title" className="space-y-6">
         <div>
-          <Eyebrow>Opportunity Studio</Eyebrow>
+          <Eyebrow>Opportunities &amp; Rights</Eyebrow>
           <h1 id="discover-title" className="mt-3 font-display text-title font-medium text-ink">
             {photosOnly ? "Photo opportunities for this goal" : "No moment found for this goal"}
           </h1>
@@ -101,6 +86,7 @@ export function OpportunityStudio({ goal, preflight, busy, loadingKey, onBuild, 
               : "Try a different product, market or match."}{" "}
           {photosOnly ? "The club photos below fit the goal on ScorePlay metadata alone." : "PULSE never fills the gap with invented clips."}
         </Notice>
+        {openKey && detail}
         <PhotoSuggestions photos={goal.photos} note={goal.photosNote} standalone={photosOnly} />
       </section>
     );
@@ -111,7 +97,7 @@ export function OpportunityStudio({ goal, preflight, busy, loadingKey, onBuild, 
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div>
           <Eyebrow>
-            Opportunity Studio · {recs.length} of {goal.run.library.videos} club videos
+            Opportunities &amp; Rights · {recs.length} of {goal.run.library.videos} club videos
           </Eyebrow>
           <h1 id="discover-title" className="mt-3 font-display text-title font-medium text-balance text-ink">
             {recs.length === 1 ? "One opportunity for this goal" : `${recs.length === 2 ? "Two" : "Three"} opportunities for this goal`}
@@ -124,28 +110,45 @@ export function OpportunityStudio({ goal, preflight, busy, loadingKey, onBuild, 
                 Searched only the {goal.run.playerFilter.videos} videos ScorePlay tags with <span className="text-ink">{goal.run.playerFilter.requested}</span>.{" "}
               </>
             ) : null}
-            Real club footage, located to the second{checking ? ", each checked against the rules as it appears" : ""}.
+            Real club footage, located to the second. Select one to see its full rights decision beside the list.
           </p>
           {checking && (
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta">
-              <span>Rights: early check — not final. The campaign is checked again before review.</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta">
+              <span>Card rights: early check — the selected campaign gets the full, recorded check.</span>
               {illustrative && <PolicyContext verified={false} sourceType={goal.policy?.sourceType} />}
-            </p>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-14 lg:grid-cols-12">
-        <Reveal className="lg:col-span-7">{card(lead, true)}</Reveal>
-        {rest.length > 0 && (
-          <div className="flex flex-col gap-12 lg:col-span-5 lg:border-l lg:border-line lg:pl-10">
-            {rest.map((rec, i) => (
-              <Reveal key={rec.key} delay={0.08 * (i + 1)}>
-                {card(rec, false)}
-              </Reveal>
-            ))}
+      <div className="mt-8 grid grid-cols-1 gap-x-8 gap-y-10 lg:grid-cols-12">
+        <div id="opportunity-rail" className="min-w-0 scroll-mt-24 lg:col-span-4 xl:col-span-3">
+          <div className="lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-0.5 lg:pr-1.5 [scrollbar-width:thin]">
+            <ol aria-label="Opportunities" className="space-y-4">
+              {recs.map((rec, i) => (
+                <li key={rec.key}>
+                  <Reveal delay={0.06 * i}>
+                    <Opportunity
+                      goal={goal}
+                      rec={rec}
+                      rank={i}
+                      state={preflight.get(rec)}
+                      open={openKey === rec.key}
+                      emphasize={i === 0 && !openKey}
+                      busy={busy}
+                      loading={loadingKey === rec.key}
+                      onSelect={() => onSelect(rec)}
+                      onExplore={() => onExplore(rec)}
+                      onShow={onShow}
+                      onRetry={() => preflight.retry(rec)}
+                    />
+                  </Reveal>
+                </li>
+              ))}
+            </ol>
           </div>
-        )}
+        </div>
+        <div className="min-w-0 lg:col-span-8 xl:col-span-9">{detail}</div>
       </div>
 
       <PhotoSuggestions photos={goal.photos} note={goal.photosNote} />
@@ -156,92 +159,136 @@ export function OpportunityStudio({ goal, preflight, busy, loadingKey, onBuild, 
 function Opportunity({
   goal,
   rec,
-  featured,
+  rank,
   state,
-  inCampaign,
+  open,
+  emphasize,
   busy,
   loading,
-  onAct,
+  onSelect,
+  onExplore,
+  onShow,
   onRetry,
 }: {
   goal: GoalView;
   rec: RecommendationView;
-  featured: boolean;
+  rank: number;
   state: PreflightState | undefined;
-  inCampaign: boolean;
+  /** Its campaign is open in the detail panel. */
+  open: boolean;
+  /** Nothing is open yet: the top match carries the primary action. */
+  emphasize: boolean;
   busy: boolean;
   loading: boolean;
-  onAct: () => void;
+  onSelect: () => void;
+  onExplore: () => void;
+  onShow: () => void;
   onRetry: () => void;
 }) {
   const c = rec.candidate;
   const title = displayTitle(c.title);
-  const headline = opportunityHeadline(goal, rec);
-  const concept = postConcept(goal, rec);
   const headingId = `opportunity-${rec.key.replace(/[^a-z0-9]+/gi, "-")}`;
   const blocked = state?.status === "done" && state.result.verdict === "BLOCKED";
-  const action = blocked ? "Explore resolution" : inCampaign ? "Continue campaign" : "Build campaign";
+  const context = scorePlayContext(goal, rec);
+  const concept = postConcept(goal, rec);
+  const btn = "h-9 rounded-lg px-3.5 font-semibold";
   return (
-    <article aria-labelledby={headingId} className={cn("flex flex-col", featured ? "gap-5" : "gap-4")}>
-      <MomentPreview key={rec.key} source={recommendationSource(rec)} size={featured ? "lead" : "compact"} label={featured ? "Featured opportunity" : undefined} />
+    <article
+      aria-labelledby={headingId}
+      aria-current={open ? "true" : undefined}
+      className={cn(
+        "flex flex-col gap-3.5 rounded-xl p-3.5 transition-[box-shadow,background-color] duration-200 ring-inset",
+        open ? "bg-surface ring-2 ring-signal/80" : "ring-1 ring-line hover:ring-line-strong",
+      )}
+    >
+      <MomentPreview key={rec.key} source={recommendationSource(rec)} size="compact" label={rank === 0 ? "Top match" : undefined} />
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Eyebrow>{angleKicker(goal)}</Eyebrow>
-          {inCampaign && <span className="rounded-full border border-line-strong px-2 py-0.5 text-meta text-ink-soft">In your campaign</span>}
+          {open && <span className="rounded-full bg-signal/15 px-2 py-0.5 text-meta font-medium text-signal">Selected</span>}
         </div>
-        <h2 id={headingId} className={cn("font-display font-medium text-balance text-ink", featured ? "text-headline" : "text-[1.0625rem] leading-snug")}>
-          {headline}
+        <h2 id={headingId} className="font-display text-[1.0625rem] leading-snug font-medium text-balance text-ink">
+          {opportunityHeadline(goal, rec)}
         </h2>
-        <p className="tabular text-small text-ink-muted">
+        <p className="tabular text-meta text-ink-muted">
           <span className="text-ink-soft" title={c.title}>
             {title}
           </span>
           <span className="px-1.5">·</span>
           {segmentLabel(c.startSeconds ?? 0, c.endSeconds, c.durationSec)}
-          {scorePlayContext(goal, rec) && (
+          {context && (
             <>
               <span className="px-1.5">·</span>
-              {scorePlayContext(goal, rec)}
+              {context}
             </>
           )}
         </p>
       </div>
 
-      <div className={cn("space-y-1.5", featured ? "text-body" : "text-small")}>
-        <p className="text-ink-soft">
+      <div className="space-y-1">
+        <p className="line-clamp-4 text-small text-ink-soft">
           <span className="text-ink">Proposed post. </span>
-          {concept.cut} {featured && concept.action}
+          {concept.cut} {concept.action}
         </p>
         <p className="text-small text-ink-muted">
-          <span className="text-ink-soft">Why PULSE recommends it: </span>
+          <span className="text-ink-soft">Why it fits the goal: </span>
           {recommendationReason(goal, rec)}
         </p>
-        {featured && (
-          <p className="tabular text-meta text-ink-muted">
-            {evidenceSource(rec)} · {matchEvidence(rec)}
-          </p>
-        )}
+        <p className="tabular text-meta text-ink-muted">
+          {evidenceSource(rec)}
+          {rec.matches.length > 0 && <> · {matchEvidence(rec)}</>}
+        </p>
       </div>
 
-      <Compliance state={state} rec={rec} featured={featured} onRetry={onRetry} />
+      {open && goal.rights.current && goal.rights.state !== "NOT_CHECKED" ? <Recorded goal={goal} /> : <Compliance state={state} rec={rec} featured={false} onRetry={onRetry} />}
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <Button
-          size="lg"
-          variant={featured || inCampaign ? "default" : "outline"}
-          disabled={busy}
-          onClick={onAct}
-          aria-label={`${action}: ${title}`}
-          className={cn("h-10 rounded-lg px-4 font-semibold", !featured && !inCampaign && "bg-transparent")}
-        >
-          {loading && <Loader2Icon className="animate-spin" aria-hidden />}
-          {action}
-          {!loading && <ArrowRightIcon aria-hidden />}
-        </Button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {open ? (
+          <Button size="sm" variant="ghost" className="-ml-2 text-ink-soft" onClick={onShow} aria-label={`Show details: ${title}`}>
+            Details in the panel <ArrowRightIcon aria-hidden />
+          </Button>
+        ) : (
+          <>
+            {blocked && (
+              <Button size="sm" disabled={busy} onClick={onExplore} aria-label={`Find a way to use it: ${title}`} className={btn}>
+                {loading ? <Loader2Icon className="animate-spin" aria-hidden /> : <RouteIcon aria-hidden />}
+                Find a way to use it
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant={emphasize && !blocked ? "default" : "outline"}
+              disabled={busy}
+              onClick={onSelect}
+              aria-label={`Select: ${title}`}
+              className={cn(btn, !(emphasize && !blocked) && "bg-transparent")}
+            >
+              {loading && !blocked && <Loader2Icon className="animate-spin" aria-hidden />}
+              Select
+            </Button>
+          </>
+        )}
         <SearchDetail rec={rec} />
       </div>
     </article>
+  );
+}
+
+/** The open card's line: the recorded rights check shown in full in the panel (not the early preflight). */
+function Recorded({ goal }: { goal: GoalView }) {
+  const r = goal.rights;
+  const allowed = r.perIntent.filter((p) => p.verdict === "ALLOWED").length;
+  const status = rightsStatus(r.state, r.clearance);
+  return (
+    <div aria-live="polite" aria-atomic="true" className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-line pt-3">
+      <StatusPill status={status} label={`Rights check · ${STATUS[status].label}`} />
+      {r.perIntent.length > 0 && (
+        <span className="tabular text-meta text-ink-muted">
+          {allowed} of {r.perIntent.length} uses allowed
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -267,7 +314,7 @@ function Compliance({ state, rec, featured, onRetry }: { state: PreflightState |
               <RotateCwIcon className="size-3" aria-hidden /> Retry check
             </button>
           </div>
-          <p className="text-meta text-ink-muted">{state.message} Rights are still checked when you build the campaign.</p>
+          <p className="text-meta text-ink-muted">{state.message} Rights are still checked in full when you select it.</p>
         </div>
       ) : (
         <Verdict result={state.result} featured={featured} />
@@ -279,7 +326,7 @@ function Compliance({ state, rec, featured, onRetry }: { state: PreflightState |
 function NotChecked({ rec }: { rec: RecommendationView }) {
   const recorded = rightsStatus(rec.rights.state, rec.rights.clearance);
   if (recorded !== "idle") return <StatusPill status={recorded} label={`Last check · ${STATUS[recorded].label}`} />;
-  return <p className="text-meta text-ink-muted">Rights are checked when you build the campaign.</p>;
+  return <p className="text-meta text-ink-muted">Rights are checked in full when you select it.</p>;
 }
 
 const VERDICT: Record<OpportunityPreflight["verdict"], { status: (p: OpportunityPreflight) => Status; label: (p: OpportunityPreflight) => string }> = {

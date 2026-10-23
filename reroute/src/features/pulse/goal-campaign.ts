@@ -56,11 +56,15 @@ export function campaignEdit(runId: string, rec: Recommendation, edl?: Edl): Edi
   return edl ? edlToEditPlan(edl, `PULSE · ${rec.headline} · ${edl.sourceTitle} (edited cut)`.slice(0, 140)) : editFor(runId, rec);
 }
 
-/** Every channel × territory of the plan, as REROUTE publish intents (club set for policy selection). */
+/**
+ * Every channel × territory of the plan, as REROUTE publish intents (club set for policy selection; a partner post
+ * names the partner it promotes — a recovery that turns it organic drops it).
+ */
 export function intentsFor(plan: GoalPlan, rec: Recommendation, publishAt: string): PublishIntent[] {
   const competition = rec.candidate.competition ?? plan.competition;
+  const target = plan.usage === "SPONSORED" && plan.targetSponsor ? { targetSponsor: plan.targetSponsor } : {};
   return plan.channels.flatMap((platform) =>
-    plan.territories.map((territory) => ({ territory, platform, usage: plan.usage, competition, publishAt, club: plan.club })),
+    plan.territories.map((territory) => ({ territory, platform, usage: plan.usage, competition, publishAt, club: plan.club, ...target })),
   );
 }
 

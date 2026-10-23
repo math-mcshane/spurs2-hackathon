@@ -16,6 +16,13 @@ describe("goalTerms", () => {
     expect(goalTerms("Activate our sponsor with Solanke's late goal for UK fans", ["Tottenham Hotspur", "uk", "sponsor"])).toEqual(["solanke", "late", "goal"]);
     expect(goalTerms("Promote Tottenham merchandise to UK supporters", ["Tottenham Hotspur", "uk", "merchandise"])).toEqual([]);
   });
+
+  it("never searches for the target sponsor: the flagship sponsor goal keeps the same terms", () => {
+    const o = parseObjective("Promote our partner AIA with Solanke's late goal for UK fans");
+    expect(goalTerms(o.raw, ["Tottenham Hotspur", o.market!.matched, o.product!.matched, o.targetSponsor!])).toEqual(["solanke", "late", "goal"]);
+    const k = parseObjective("Promote Kraken with fans in the UK");
+    expect(goalTerms(k.raw, ["Tottenham Hotspur", k.market!.matched, k.product!.matched, k.targetSponsor!])).toEqual([]);
+  });
 });
 
 describe("rankMoments — the club's own title naming the goal", () => {

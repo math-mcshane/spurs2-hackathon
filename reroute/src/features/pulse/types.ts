@@ -13,6 +13,7 @@ import {
   PublishIntentSchema,
   ReasonSchema,
   SegmentSchema,
+  SponsorshipSchema,
   UsageSchema,
   VerdictSchema,
 } from "@/lib/contracts";
@@ -333,6 +334,8 @@ export const ParsedObjectiveSchema = z.object({
   scope: z.enum(["MARKET", "GLOBAL", "UNSPECIFIED"]),
   market: z.object({ code: MarketCodeSchema, label: z.string(), matched: z.string() }).optional(),
   product: z.object({ key: ProductSchema, label: z.string(), matched: z.string() }).optional(),
+  /** The partner the goal names ("AIA"); null = no partner named. Never a search term. Absent on older runs. */
+  targetSponsor: z.string().nullable().optional(),
   kpi: z.string(),
   deadline: z.object({ text: z.string(), iso: z.iso.datetime({ offset: true }).optional() }).optional(),
   missing: z.array(z.enum(["market", "product", "deadline"])),
@@ -705,6 +708,8 @@ export const GoalPlanSchema = z.object({
   territoryBasis: z.string(),
   /** COMMERCIAL/EDITORIAL from the objective; a REROUTE remedy may switch it to another licensed usage. */
   usage: UsageSchema,
+  /** SPONSORED plans: the partner the goal promotes (carried to every publish intent as `targetSponsor`). */
+  targetSponsor: z.string().optional(),
   channels: z.array(ChannelSchema).min(1),
   competition: z.string(),
 });
@@ -733,21 +738,39 @@ export type RecoveryKind = z.infer<typeof RecoveryKindSchema>;
 const SpanSchema = z.object({ start: z.number(), end: z.number() });
 
 /** A finding in plain language with where it came from ("ScorePlay", "TwelveLabs video analysis", "Demo policy …"). */
-export const SourcedLineSchema = z.object({ text: z.string(), source: z.string(), at: SpanSchema.optional() });
+const SourcedFactSchema = z.object({ text: z.string(), source: z.string(), at: SpanSchema.optional() });
+/** `details`: the individual findings a consolidated line stands for (e.g. each person AI named), still inspectable. */
+export const SourcedLineSchema = SourcedFactSchema.extend({ details: z.array(SourcedFactSchema).optional() });
 export type SourcedLine = z.infer<typeof SourcedLineSchema>;
 
+/** Older stored re-checks only counted allowed uses: the rest is unresolved unless the verdict was BLOCKED. */
+const withUseCounts = (v: unknown) => {
+  if (!v || typeof v !== "object" || "unresolvedUses" in v) return v;
+  const r = v as { verdict?: string; allowedUses?: number; totalUses?: number };
+  const open = Math.max(0, (r.totalUses ?? 0) - (r.allowedUses ?? 0));
+  return { ...r, restrictedUses: r.verdict === "BLOCKED" ? open : 0, unresolvedUses: r.verdict === "BLOCKED" ? 0 : open };
+};
+
 /** An independent REROUTE re-evaluation of the proposed change, for every use of the campaign. */
-export const RecheckSchema = z.object({
-  verdict: VerdictSchema,
-  clearance: ClearanceSchema,
-  allowedUses: z.number().int().nonnegative(),
-  totalUses: z.number().int().positive(),
-  /** What still stands between the changed usage and ALLOWED (empty when ALLOWED). */
-  remaining: z.array(SourcedLineSchema),
-  policyId: z.string(),
-  policyVersion: z.string(),
-  evaluatedAt: iso,
-});
+export const RecheckSchema = z.preprocess(
+  withUseCounts,
+  z.object({
+    verdict: VerdictSchema,
+    clearance: ClearanceSchema,
+    /** allowed + restricted + unresolved = total: an unknown is never counted as allowed. */
+    allowedUses: z.number().int().nonnegative(),
+    /** Uses a rule blocks. */
+    restrictedUses: z.number().int().nonnegative(),
+    /** Uses that need a reviewer (unknown or unconfirmed). */
+    unresolvedUses: z.number().int().nonnegative(),
+    totalUses: z.number().int().positive(),
+    /** What still stands between the changed usage and ALLOWED (empty when ALLOWED). */
+    remaining: z.array(SourcedLineSchema),
+    policyId: z.string(),
+    policyVersion: z.string(),
+    evaluatedAt: iso,
+  }),
+);
 export type Recheck = z.infer<typeof RecheckSchema>;
 
 /** Before/after of a derived cut (source seconds). An edit PLAN: no file exists unless `execution` says otherwise. */
@@ -1175,6 +1198,11 @@ export const GoalViewSchema = z.object({
   rights: RightsViewSchema,
   /** "Find a way to use it" for the LATEST evaluation: ranked, independently re-checked recovery options. */
   recovery: RecoveryViewSchema.optional(),
+  /**
+   * Sponsored/sales plans with a current rights check: the partner the goal promotes and every brand the check saw,
+   * as the sponsor rules treat them (target null = no partner named: the rules apply literally).
+   */
+  sponsorContext: SponsorshipSchema.optional(),
   /** The current campaign version is a derived cut of its source (edit plan, not rendered). */
   edit: EditTimelineSchema.optional(),
   /** Latest applied recovery: what changed and REROUTE's verdict before and after. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { canPublish, type Asset, type Evidence, type PublishIntent } from "@/lib/contracts";
 import { BUNDLED_POLICIES, type AnalysisStatus } from "../index";
 import { buildEdl, buildTimeline, edlToEditPlan, mergeIntervals, remapEvidence, subtractIntervals } from "./edl";
+import { isUnverifiedPerson } from "../engine";
 import { evaluateUses, locateProblems, planRecovery, summarizeUses, type RecoveryEvalContext, type ReplacementInput } from "./plan";
 
 const now = new Date("2026-10-22T12:00:00Z");
@@ -223,7 +224,8 @@ describe("Recovery engine — planRecovery", () => {
     const trim = plan.options.find((o) => o.kind === "TRIM")!;
     expect(trim.outcome).toBe("STILL_BLOCKED");
     expect(trim.recheck?.remaining.map((r) => r.ruleId)).toContain("THFC-6-no-broadcast-footage-in-ads");
-    expect(trim.notViableBecause).toMatch(/still isn't cleared/);
+    expect(trim.notViableBecause).toMatch(/^Still restricted after this change: /);
+    expect(trim.recheck).toMatchObject({ allowedUses: 0, restrictedUses: SALES.length, unresolvedUses: 0, totalUses: SALES.length });
   });
 
   it("CAMPAIGN restriction: adapts the markets (smallest change) and re-checks only the licensed uses", () => {
@@ -324,6 +326,54 @@ describe("Recovery engine — planRecovery", () => {
     expect(plan.options.find((o) => o.kind === "CHANGE_USAGE")).toMatchObject({ changesGoal: true, outcome: "RESOLVES_DEMO" });
     expect(plan.recommendedId).toBeUndefined();
     expect(plan.noPathMessage).toMatch(/clearance request/);
+  });
+
+  it("flagship: promoting partner AIA, the DHL boards are cut (★ TRIM 0:14.5–0:17.5) and the re-check clears every use", () => {
+    const asset = thfc("solanke");
+    const ctx = ctxOf([asset], [ev("solanke", "brand:aia", 10, 19, { observation: "AIA: on the shirt" }), ev("solanke", "brand:dhl", 15, 17, { observation: "DHL: on the boards" })]);
+    const intents = SALES.map((i) => ({ ...i, usage: "SPONSORED" as const, targetSponsor: "AIA" }));
+    const plan = planRecovery({ ctx, source: { assetId: "solanke", title: asset.title, range: { start: 9.07, end: 19.73 } }, intents, idPrefix: "c" });
+    expect(plan.current).toMatchObject({ verdict: "BLOCKED", allowedUses: 0, restrictedUses: 3, unresolvedUses: 0 });
+    expect(plan.problems.map((p) => p.ruleIds)).toEqual([["THFC-13-partner-exclusivity"]]);
+    expect(plan.headline).toMatch(/DHL/);
+    expect(plan.headline).not.toMatch(/AIA/);
+    const best = plan.options.find((o) => o.id === plan.recommendedId)!;
+    expect(best).toMatchObject({ kind: "TRIM", title: "Remove 0:14.5–0:17.5", outcome: "RESOLVES_DEMO" });
+    expect(best.recheck).toMatchObject({ verdict: "ALLOWED", allowedUses: 3, restrictedUses: 0, unresolvedUses: 0, totalUses: 3 });
+  });
+
+  it("a replacement whose re-check needs review (people named only by AI) is a candidate, never the recommendation", () => {
+    const source = thfc("src16");
+    const keyHighlights = thfc("kh", { people: ["Dominic Solanke-Mitchell"] }, 200);
+    const named = ["pedro-porro", "giovani-lo-celso", "angelo-stiller", "ange-postecoglou"];
+    const ctx = ctxOf([source, keyHighlights], [ev("src16", "brand:kraken", 0, 30), ...named.map((p) => ev("kh", `person:${p}`, 115, 118))]);
+    const intents = SALES.map((i) => ({ ...i, usage: "SPONSORED" as const }));
+    const segment = { scoreplayMediaId: "kh", start: 114.7, end: 120.1 };
+    const plan = planRecovery({
+      ctx,
+      source: { assetId: "src16", title: source.title, range: { start: 14.8, end: 20.2 } },
+      intents,
+      replacements: [{ key: "kh", title: keyHighlights.title, segment, query: "celebration", rank: 1, evaluations: evaluateUses(ctx, { id: "kh", title: "kh", segments: [segment], derived: true }, intents) }],
+      idPrefix: "c",
+    });
+    const rep = plan.options.find((o) => o.kind === "REPLACE")!;
+    expect(rep.outcome).toBe("NEEDS_REVIEW");
+    expect(rep.recheck).toMatchObject({ verdict: "NEEDS_REVIEW", allowedUses: 0, restrictedUses: 0, unresolvedUses: 3, totalUses: 3 });
+    // Unverified identifications, not a rights verdict on the people.
+    expect(rep.recheck!.remaining).toHaveLength(4);
+    expect(rep.recheck!.remaining.every((r) => isUnverifiedPerson(r) && r.outcome === "MISSING" && /^AI named/.test(r.explanation))).toBe(true);
+    expect(plan.recommendedId).toBeUndefined();
+    expect(plan.noPathMessage).toMatch(/^No verified correction: .*One candidate still needs a reviewer — not a fix\./);
+    // Ranked: what clears every use (here only by changing the goal) before what still needs a reviewer.
+    expect(plan.options.map((o) => o.outcome)).toEqual(["RESOLVES_DEMO", "NEEDS_REVIEW", "NOT_VIABLE", "NEXT_STEP"]);
+  });
+
+  it("recommended is only ever an option that clears every use and keeps the goal", () => {
+    const asset = thfc("any");
+    const ctx = ctxOf([asset], [ev("any", "brand:dhl", 4, 6), ev("any", "person:unknown-player", 12, 14)]);
+    const plan = planRecovery({ ctx, source: { assetId: "any", title: asset.title, range: { start: 2, end: 16 } }, intents: SALES, idPrefix: "c" });
+    for (const o of plan.options) if (o.outcome !== "RESOLVES_DEMO" || o.changesGoal) expect(o.id).not.toBe(plan.recommendedId);
+    for (const o of plan.options) if (o.recheck) expect(o.recheck.allowedUses + o.recheck.restrictedUses + o.recheck.unresolvedUses).toBe(o.recheck.totalUses);
   });
 
   it("a demo-policy ALLOWED re-check can never authorize publication, even after approval", () => {

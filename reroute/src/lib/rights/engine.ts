@@ -9,8 +9,12 @@
  *            affirmatively and currently covers the use (absence of a deny is never permission).
  * - PERMIT:  at least one PERMIT applies, nothing is unknown, and (people/sponsor) every person and
  *            brand in the segment is covered — or a wildcard covers everyone.
- * Every reason carries a `basis`: a missing TECHNICAL_OBSERVATION (video not analysed) is never reported
- * as a missing LEGAL_ENTITLEMENT, and an unproven ScorePlay↔TwelveLabs link is MEDIA_IDENTITY.
+ * Every reason carries a `basis`: a missing TECHNICAL_OBSERVATION (video not analysed, or a person named only by
+ * AI that ScorePlay identity data can't confirm) is never reported as a missing LEGAL_ENTITLEMENT, and an
+ * unproven ScorePlay↔TwelveLabs link is MEDIA_IDENTITY.
+ * Sponsors: a brand on screen is never a conflict just for being detected — only the configured rules decide. A
+ * target sponsor (`intent.targetSponsor`, paid/partner posts only) that a partner rule names is permitted like any
+ * partner; one the rules don't describe is MISSING ("a reviewer must confirm"), never DENY and never PERMIT.
  * Verdict: any DENY → BLOCKED, else any MISSING → NEEDS_REVIEW, else ALLOWED.
  */
 import {
@@ -28,6 +32,7 @@ import {
   type ReasonBasis,
   type Segment,
   type SegmentDecision,
+  type Sponsorship,
   type Verdict,
 } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
@@ -75,6 +80,14 @@ function slug(value: string): string {
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    // Letters NFKD does not decompose ("Højbjerg", "Łukasz", "Großkreutz") fold to their usual ASCII spelling.
+    .replace(/[øØ]/g, "o")
+    .replace(/[æÆ]/g, "ae")
+    .replace(/[œŒ]/g, "oe")
+    .replace(/ß/g, "ss")
+    .replace(/[łŁ]/g, "l")
+    .replace(/[đĐ]/g, "d")
+    .replace(/ı/g, "i")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -110,7 +123,17 @@ interface Subject {
   /** People only: club per ScorePlay squad registration. */
   club: "OWN" | "OTHER" | "UNKNOWN";
   clubs: string[];
+  /** Listed by ScorePlay tags on the asset (people/sponsors), not only observed. */
+  tagged: boolean;
   evidence: Evidence[];
+}
+
+/** The partner a paid/partner post promotes, and whether a partner rule of the policy names it. */
+interface Target {
+  name: string;
+  label: string;
+  relationship: "PARTNER" | "UNKNOWN";
+  ruleId?: string;
 }
 
 interface SegmentContext {
@@ -124,6 +147,7 @@ interface SegmentContext {
   now: Date;
   people: Subject[];
   brands: Subject[];
+  target?: Target;
   /** Evidence that triggered or was covered by a rule (reported in the Decision). */
   used: Set<Evidence>;
 }
@@ -168,40 +192,80 @@ function analysisGap(analysis: AnalysisStatus, asset: Pick<Asset, "kind">): Unkn
   }
 }
 
+const nameTokens = (label: string) => new Set(label.slice(label.indexOf(":") + 1).split("-").filter(Boolean));
+
 function buildSubjects(asset: Asset, evidence: Evidence[], policy: Policy): { people: Subject[]; brands: Subject[] } {
   const clubNames = policy.applicability.clubNames;
   const people: Subject[] = (asset.facts.people ?? []).map((name) => {
     const clubs = asset.facts.peopleTeams?.[name] ?? [];
     const own = clubs.some((c) => clubNames.some((n) => sameClub(c, n)));
-    return { label: `person:${slug(name)}`, display: name, club: own ? "OWN" : clubs.length ? "OTHER" : "UNKNOWN", clubs, evidence: [] };
+    return { label: `person:${slug(name)}`, display: name, club: own ? "OWN" : clubs.length ? "OTHER" : "UNKNOWN", clubs, tagged: true, evidence: [] };
   });
+  const listed = people.slice();
   for (const ev of evidence) {
     const label = ev.label ? normalizeLabel(ev.label) : "";
     if (!label.startsWith("person:")) continue;
-    // A label identifies a listed person only when its name tokens match exactly one of them.
-    const tokens = label.slice("person:".length).split("-").filter(Boolean);
-    const matches = people.filter((p) => {
-      const nameTokens = new Set(p.label.slice("person:".length).split("-"));
-      return tokens.length > 0 && tokens.every((t) => nameTokens.has(t));
-    });
+    // A label identifies a listed person only when its name tokens match exactly one of them (accents folded:
+    // "Tonalí" is Sandro Tonali; "Solanke" is Dominic Ayodele Solanke-Mitchell).
+    const tokens = [...nameTokens(label)];
+    let matches = people.filter((p) => tokens.length > 0 && tokens.every((t) => nameTokens(p.label).has(t)));
+    const surname = tokens.slice(1);
+    if (matches.length === 0 && surname.join("").length >= 4) {
+      // Tolerant: the surname alone (given name spelled differently, "Mickey van de Ven"), when exactly one
+      // ScorePlay-listed person carries it.
+      matches = listed.filter((p) => surname.every((t) => nameTokens(p.label).has(t)));
+    }
     const existing = matches.length === 1 ? matches[0] : people.find((p) => p.label === label);
     if (existing) existing.evidence.push(ev);
-    else people.push({ label, display: entityOf(ev), club: "UNKNOWN", clubs: [], evidence: [ev] });
+    else people.push({ label, display: entityOf(ev), club: "UNKNOWN", clubs: [], tagged: false, evidence: [ev] });
   }
   const brands = new Map<string, Subject>();
   for (const name of asset.facts.sponsors ?? []) {
     const label = `brand:${slug(name)}`;
-    brands.set(label, { label, display: name, club: "UNKNOWN", clubs: [], evidence: [] });
+    brands.set(label, { label, display: name, club: "UNKNOWN", clubs: [], tagged: true, evidence: [] });
   }
   for (const ev of evidence) {
     const label = ev.label ? normalizeLabel(ev.label) : "";
     if (!label.startsWith("brand:")) continue;
-    const s = brands.get(label) ?? { label, display: entityOf(ev), club: "UNKNOWN" as const, clubs: [], evidence: [] };
+    const s = brands.get(label) ?? { label, display: entityOf(ev), club: "UNKNOWN" as const, clubs: [], tagged: false, evidence: [] };
     s.evidence.push(ev);
     brands.set(label, s);
   }
   return { people, brands: [...brands.values()] };
 }
+
+/** Uses that promote a partner: the only ones where a target sponsor means anything. */
+const PARTNER_USAGES: Partial<Record<PublishIntent["usage"], true>> = { SPONSORED: true, COMMERCIAL: true };
+
+/** "brand:*" covers every brand: it allows incidental branding, it never describes a relationship with one. */
+const everyBrand = (pattern: string) => normalizeLabel(pattern.replace(/\*$/, "")) === "brand:";
+
+/** A brand label is the target's ("brand:aia" / "brand:aia-group" for "AIA"). */
+function isTarget(t: Target, label: string): boolean {
+  const l = normalizeLabel(label);
+  return l === t.label || l.startsWith(`${t.label}-`) || t.label.startsWith(`${l}-`);
+}
+
+function targetOf(intent: PublishIntent, policy: Policy): Target | undefined {
+  const name = intent.targetSponsor?.trim();
+  if (!name || !PARTNER_USAGES[intent.usage]) return undefined;
+  const label = `brand:${slug(name)}`;
+  // A relationship is described only by a partner rule that names the brand, for this use.
+  const rule = policy.rules.find(
+    (r) =>
+      r.effect === "PERMIT" &&
+      r.dimensions.includes("sponsor") &&
+      (!r.intent?.usage || r.intent.usage.includes(intent.usage)) &&
+      (r.covers ?? []).some((p) => !everyBrand(p) && matchesPattern(label, p)),
+  );
+  return rule ? { name, label, relationship: "PARTNER", ruleId: rule.id } : { name, label, relationship: "UNKNOWN" };
+}
+
+/** AI-named person ScorePlay identity data can't confirm (unverified identification, not a missing licence). */
+export const isUnverifiedPerson = (r: Pick<Reason, "ruleId" | "basis">) => r.ruleId.startsWith("subject:person:") && r.basis === "TECHNICAL_OBSERVATION";
+
+/** Reason id of the target-sponsor check ("target-sponsor:kraken"): about the planned use, not the footage. */
+export const TARGET_SPONSOR_RULE_PREFIX = "target-sponsor:";
 
 // ---------- Rule applicability ----------
 
@@ -239,8 +303,14 @@ function checkRule(rule: Rule, ctx: SegmentContext): RuleCheck {
   if (match.otherClubPeople) parts.push(ctx.people.some((p) => p.club === "OTHER") ? "YES" : "NO");
   if (match.evidenceLabels) {
     const except = match.evidenceLabelsExcept ?? [];
+    // The target sponsor the rules don't describe is a question for a reviewer, never this rule's conflict.
+    const undescribed = rule.dimensions.includes("sponsor") && ctx.target?.relationship === "UNKNOWN" ? ctx.target : undefined;
     triggering = evidence.filter(
-      (ev) => ev.label !== undefined && match.evidenceLabels!.some((p) => matchesPattern(ev.label!, p)) && !except.some((p) => matchesPattern(ev.label!, p)),
+      (ev) =>
+        ev.label !== undefined &&
+        match.evidenceLabels!.some((p) => matchesPattern(ev.label!, p)) &&
+        !except.some((p) => matchesPattern(ev.label!, p)) &&
+        !(undescribed && isTarget(undescribed, ev.label)),
     );
     const gap = analysisGap(analysis, asset);
     if (triggering.length > 0) parts.push("YES");
@@ -352,23 +422,27 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
       ),
     );
   }
+  const club = ctx.policy.applicability.clubNames[0];
+  const post = usage === "COMMERCIAL" ? "a sales post" : usage === "SPONSORED" ? "a sponsored post" : `${usage.toLowerCase()} use`;
   for (const s of subjects) {
     if (permits.some((c) => covers(c.rule, s))) {
       s.evidence.forEach((e) => ctx.used.add(e));
       continue;
     }
-    const club = ctx.policy.applicability.clubNames[0];
-    const post = usage === "COMMERCIAL" ? "a sales post" : usage === "SPONSORED" ? "a sponsored post" : `${usage.toLowerCase()} use`;
-    const aiOnly = s.evidence.length > 0 && s.evidence.every((e) => e.source === "TWELVELABS");
-    const text =
+    // The undescribed target sponsor has its own reason (evaluateDimension): one question, asked once.
+    if (dim === "sponsor" && ctx.target?.relationship === "UNKNOWN" && isTarget(ctx.target, s.label)) continue;
+    const aiOnly = !s.tagged && s.evidence.length > 0 && s.evidence.every((e) => e.source === "TWELVELABS");
+    // Never asserts what isn't known: an unconfirmed identification is a question for a reviewer, not a verdict on
+    // the person's rights; a brand no rule mentions is uncovered, not "forbidden".
+    const [basis, text]: [ReasonBasis, string] =
       dim === "sponsor"
-        ? `${s.display} isn't an official partner in ${ctx.policy.title}, so it can't appear in ${post}.`
+        ? ["LEGAL_ENTITLEMENT", `${s.display} is on screen (${aiOnly ? "AI observation" : "ScorePlay tag"}), but no rule in ${ctx.policy.title} covers it for ${post} — a reviewer must confirm it may appear.`]
         : s.club === "OTHER"
-          ? `${s.display} plays for ${s.clubs.join(", ")} (per ScorePlay), so ${club}'s image rights can't cover them in ${post}.`
+          ? ["LEGAL_ENTITLEMENT", `${s.display} plays for ${s.clubs.join(", ")} (per ScorePlay), so ${club}'s image rights can't cover them in ${post}.`]
           : aiOnly
-            ? `Video analysis identified “${s.display}”, who can't be matched to ${club}'s registered squad in ScorePlay, so the club's image rights can't be confirmed for ${post}. AI identifications can be wrong — a reviewer must confirm who it is.`
-            : `${s.display} isn't on ${club}'s registered squad in ScorePlay, so the club's image rights can't cover them in ${post}.`;
-    out.push(reason(ctx, `subject:${s.label}`, dim, "MISSING", "LEGAL_ENTITLEMENT", text, s.evidence));
+            ? ["TECHNICAL_OBSERVATION", `AI named “${s.display}”; ScorePlay identity data can't confirm it, so image rights for ${post} can't be checked — a reviewer must verify who it is.`]
+            : ["LEGAL_ENTITLEMENT", `ScorePlay tags ${s.display} but doesn't list them in ${club}'s registered squad, so the club's image rights can't be confirmed for ${post} — a reviewer must verify.`];
+    out.push(reason(ctx, `subject:${s.label}`, dim, "MISSING", basis, text, s.evidence));
   }
   if (dim === "people" && !gap && ctx.people.length === 0) {
     const focus = ctx.evidence.find((e) => e.label && normalizeLabel(e.label).startsWith("rubric:player-focus:"));
@@ -404,7 +478,40 @@ function coverageGaps(dim: "people" | "sponsor", permits: RuleCheck[], ctx: Segm
   return out;
 }
 
+/**
+ * The target sponsor's place in the sponsor dimension: a partner rule naming it → PERMIT ("campaign partner"); no rule
+ * describing it → MISSING for a reviewer (its on-screen evidence never triggers a restriction, see `checkRule`).
+ * Untimed on purpose: it is about the planned use, so a cut can never "remove" it.
+ */
+function targetReasons(ctx: SegmentContext, reasons: Reason[]): Reason[] {
+  const t = ctx.target;
+  if (!t) return reasons;
+  const id = `${TARGET_SPONSOR_RULE_PREFIX}${t.label.slice("brand:".length)}`;
+  ctx.brands.filter((s) => isTarget(t, s.label)).forEach((s) => s.evidence.forEach((e) => ctx.used.add(e)));
+  if (t.relationship === "PARTNER") {
+    if (reasons.some((r) => r.outcome !== "PERMIT")) return reasons;
+    return [...reasons, reason(ctx, id, "sponsor", "PERMIT", "LEGAL_ENTITLEMENT", `${t.name}, the partner this post promotes, is an official partner under ${t.ruleId} (illustrative rules).`)];
+  }
+  const post = ctx.intent.usage === "COMMERCIAL" ? "this sales post" : "this sponsored post";
+  return [
+    ...reasons.filter((r) => r.outcome !== "PERMIT"),
+    reason(
+      ctx,
+      id,
+      "sponsor",
+      "MISSING",
+      "LEGAL_ENTITLEMENT",
+      `This post promotes ${t.name}, but ${ctx.policy.title} doesn't describe a relationship with ${t.name} (illustrative rules) — a reviewer must confirm it before ${post}.`,
+    ),
+  ];
+}
+
 function evaluateDimension(dim: Dimension, ctx: SegmentContext, all: RuleCheck[]): Reason[] {
+  const reasons = dimensionReasons(dim, ctx, all);
+  return dim === "sponsor" ? targetReasons(ctx, reasons) : reasons;
+}
+
+function dimensionReasons(dim: Dimension, ctx: SegmentContext, all: RuleCheck[]): Reason[] {
   const checks = all.filter((c) => c.rule.dimensions.includes(dim));
 
   const denies = checks.filter((c) => c.rule.effect === "DENY" && c.selector === "YES" && applies(c));
@@ -532,6 +639,56 @@ function uniqueBy<T>(items: readonly T[], key: (t: T) => string): T[] {
 const reasonKey = (r: Reason) => JSON.stringify([r.ruleId, r.dimension, r.outcome, r.scoreplayMediaId, r.start, r.end, r.explanation]);
 const evidenceKey = (e: Evidence) => JSON.stringify([e.scoreplayMediaId, e.start, e.end, e.label, e.observation, e.source]);
 
+/** Merges per-segment sponsorship summaries (target from the first that names one; brands by label, spans joined). */
+function mergeSponsorship(list: readonly (Sponsorship | undefined)[]): Sponsorship | undefined {
+  const present = list.filter((s): s is Sponsorship => s !== undefined);
+  if (present.length === 0) return undefined;
+  const brands = new Map<string, Sponsorship["brands"][number]>();
+  for (const b of present.flatMap((s) => s.brands)) {
+    const prev = brands.get(b.label);
+    brands.set(b.label, prev ? { ...prev, spans: [...new Set([...prev.spans, ...b.spans])] } : b);
+  }
+  return { target: present.find((s) => s.target)?.target ?? null, brands: [...brands.values()] };
+}
+
+/** How the sponsor rules treat the target and every brand on screen (display only: the reasons decide). */
+function sponsorshipOf(ctx: SegmentContext, checks: RuleCheck[]): Sponsorship | undefined {
+  const { target } = ctx;
+  if (!target && ctx.brands.length === 0) return undefined;
+  const rules = checks.filter((c) => c.rule.dimensions.includes("sponsor") && applies(c)).map((c) => c.rule);
+  const tenth = (x: number) => Math.round(x * 10) / 10;
+  return {
+    target: target ? { name: target.name, label: target.label, relationship: target.relationship, ...(target.ruleId ? { ruleId: target.ruleId } : {}) } : null,
+    brands: ctx.brands.map((s) => {
+      const partner = rules.find((r) => r.effect === "PERMIT" && (r.covers ?? []).some((p) => !everyBrand(p) && matchesPattern(s.label, p)));
+      const restricted = rules.find(
+        (r) =>
+          r.effect === "DENY" &&
+          (r.match.evidenceLabels ?? []).some((p) => matchesPattern(s.label, p)) &&
+          !(r.match.evidenceLabelsExcept ?? []).some((p) => matchesPattern(s.label, p)),
+      );
+      const incidental = rules.find((r) => r.effect === "PERMIT" && (r.covers ?? []).some(everyBrand));
+      const [role, rule] =
+        target && isTarget(target, s.label)
+          ? (["TARGET", partner] as const)
+          : partner
+            ? (["OTHER_PARTNER", partner] as const)
+            : restricted
+              ? (["COMPETING_RESTRICTED", restricted] as const)
+              : incidental
+                ? (["INCIDENTAL", incidental] as const)
+                : (["UNKNOWN", undefined] as const);
+      const certainty = s.evidence.some((e) => e.source === "HUMAN")
+        ? "REVIEWER"
+        : s.tagged || s.evidence.some((e) => e.source === "SCOREPLAY")
+          ? "SCOREPLAY_TAG"
+          : "AI_OBSERVATION";
+      const spans = [...new Set(s.evidence.filter((e) => e.start !== undefined).map((e) => `${tenth(e.start!)}–${tenth(e.end ?? e.start!)} s`))];
+      return { name: role === "TARGET" && target ? target.name : s.display, label: s.label, role, ...(rule ? { ruleId: rule.id } : {}), certainty, spans };
+    }),
+  };
+}
+
 /** Assemble a Decision. `policies` = every policy that took part (none ⇒ policyId "none"). */
 export function buildDecision(input: {
   verdict?: Verdict;
@@ -539,6 +696,7 @@ export function buildDecision(input: {
   evidence: Evidence[];
   policies: readonly Pick<Policy, "id" | "version" | "kind">[];
   policySelection?: PolicySelection;
+  sponsorship?: Sponsorship;
   now: Date;
 }): Decision {
   const reasons = uniqueBy(input.reasons, reasonKey);
@@ -554,6 +712,7 @@ export function buildDecision(input: {
     policyFictional: policies.some((p) => p.kind === "DEMO"),
     clearance: clearanceOf(verdict, policies.map((p) => p.kind)),
     ...(input.policySelection ? { policySelection: input.policySelection } : {}),
+    ...(input.sponsorship ? { sponsorship: input.sponsorship } : {}),
     evaluatedAt: input.now.toISOString(),
   };
 }
@@ -582,11 +741,12 @@ export function evaluateSegment({ segment, asset, observations, analysis, intent
     publishAt,
     now,
     ...buildSubjects(asset, evidence, policy),
+    target: targetOf(intent, policy),
     used: new Set(),
   };
   const checks = policy.rules.map((rule) => checkRule(rule, ctx));
   const reasons = [...policyReasons(ctx), ...MANDATORY_DIMENSIONS.flatMap((dim) => evaluateDimension(dim, ctx, checks))];
-  return buildDecision({ reasons, evidence: [...ctx.used], policies: [policy], now });
+  return buildDecision({ reasons, evidence: [...ctx.used], policies: [policy], sponsorship: sponsorshipOf(ctx, checks), now });
 }
 
 /** A segment whose ScorePlay asset could not be loaded: nothing about it is known. */
@@ -642,6 +802,7 @@ export function evaluateEdit({ edit, assets, observations, analysis, intent, now
     evidence: segments.flatMap((s) => s.decision.evidence),
     policies: used,
     policySelection: selectPolicy(intent, uniqueBy(loaded, (a) => a.id), policies).selection,
+    sponsorship: mergeSponsorship(segments.map((s) => s.decision.sponsorship)),
     now,
   });
   return { edit, decision, segments };

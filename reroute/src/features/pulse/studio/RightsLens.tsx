@@ -91,7 +91,10 @@ export function RightsLens(props: Props) {
           {recheck && progress ? (
             <StagedProgress stages={progress.stages} note={progress.note} className="py-2" />
           ) : (
-            <Decision goal={goal} status={status} issues={issues} />
+            <div className="space-y-5">
+              <Decision goal={goal} status={status} issues={issues} />
+              {goal.sponsorContext && <SponsorCheck goal={goal} sponsor={goal.sponsorContext} />}
+            </div>
           )}
         </Swap>
       </div>
@@ -187,6 +190,92 @@ function PolicyRow({ goal, disabled, onSetPolicy }: { goal: GoalView; disabled: 
       </div>
       <PolicyPicker club={goal.run.club} value={p?.packageId} disabled={disabled} triggerLabel="Change rules" runId={goal.run.id} onChange={onSetPolicy} />
     </div>
+  );
+}
+
+type Sponsor = NonNullable<GoalView["sponsorContext"]>;
+
+const ROLE: Record<Sponsor["brands"][number]["role"], { text: string; tone: string }> = {
+  TARGET: { text: "the partner this post promotes", tone: "text-ink-soft" },
+  OTHER_PARTNER: { text: "official partner — allowed", tone: "text-ink-soft" },
+  COMPETING_RESTRICTED: { text: "not a partner — restricted", tone: "text-status-blocked" },
+  INCIDENTAL: { text: "incidental — allowed for this use", tone: "text-ink-soft" },
+  UNKNOWN: { text: "no rule covers it — reviewer must confirm", tone: "text-status-review" },
+};
+
+const CERTAINTY: Record<Sponsor["brands"][number]["certainty"], string> = {
+  AI_OBSERVATION: "AI observation",
+  SCOREPLAY_TAG: "ScorePlay tag",
+  REVIEWER: "Reviewer",
+};
+
+/**
+ * Who the post promotes and every brand the check saw, as the rules treat each. A brand on screen is not a conflict
+ * by itself: only the rule shown decides; partners are partners under the illustrative rules, never a real agreement.
+ */
+function SponsorCheck({ goal, sponsor }: { goal: GoalView; sponsor: Sponsor }) {
+  const sponsored = (goal.campaign?.plan ?? goal.run.plan).usage === "SPONSORED";
+  const t = sponsor.target;
+  const others = sponsor.brands.filter((b) => b.role !== "TARGET");
+  const onScreen = sponsor.brands.find((b) => b.role === "TARGET");
+  const rules = [...new Set([t?.ruleId, ...sponsor.brands.map((b) => b.ruleId)].filter((x): x is string => !!x))];
+  const evidence = [...new Set(sponsor.brands.map((b) => CERTAINTY[b.certainty]))];
+  if (!sponsored && !t && others.length === 0) return null;
+  return (
+    <dl aria-label="Sponsor check" className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-lg bg-obsidian/60 px-4 py-3.5 text-small ring-1 ring-line ring-inset">
+      {(sponsored || t) && (
+        <>
+          <dt className="text-ink-muted">Target sponsor</dt>
+          <dd className="min-w-0">
+            {!t ? (
+              <span className="text-ink-soft">Not named in the goal — brand rules applied as written</span>
+            ) : t.relationship === "PARTNER" ? (
+              <span className="text-ink">
+                {t.name} <span className="text-ink-soft">— partner under {t.ruleId} (illustrative rules), not a conflict</span>
+              </span>
+            ) : (
+              <span className="text-status-review">
+                {t.name} — relationship not described by these illustrative rules · a reviewer must confirm
+              </span>
+            )}
+            {onScreen && (
+              <span className="block text-meta text-ink-muted">
+                On screen{onScreen.spans.length ? ` ${onScreen.spans.join(", ")}` : ""} · {CERTAINTY[onScreen.certainty]}
+              </span>
+            )}
+          </dd>
+        </>
+      )}
+      <dt className="text-ink-muted">Other brands on screen</dt>
+      <dd className="min-w-0 space-y-1">
+        {others.length === 0 ? (
+          <span className="text-ink-soft">None seen</span>
+        ) : (
+          others.map((b) => (
+            <p key={b.label}>
+              <span className="text-ink">{b.name}</span> <span className={ROLE[b.role].tone}>— {ROLE[b.role].text}</span>
+              <span className="block text-meta text-ink-muted">
+                {b.spans.length ? `${b.spans.join(", ")} · ` : ""}
+                {CERTAINTY[b.certainty]}
+                {b.ruleId ? ` · ${b.ruleId}` : ""}
+              </span>
+            </p>
+          ))
+        )}
+      </dd>
+      {rules.length > 0 && (
+        <>
+          <dt className="text-ink-muted">Applicable rule</dt>
+          <dd className="min-w-0 break-words text-ink-soft">{rules.join(", ")}</dd>
+        </>
+      )}
+      {evidence.length > 0 && (
+        <>
+          <dt className="text-ink-muted">Evidence</dt>
+          <dd className="min-w-0 text-ink-soft">{evidence.join(" · ")}</dd>
+        </>
+      )}
+    </dl>
   );
 }
 

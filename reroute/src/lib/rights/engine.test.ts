@@ -10,6 +10,7 @@ import {
   type PublishIntent,
 } from "@/lib/contracts";
 import demoSpurs from "./policies/demo-spurs-fr-sponsored.json";
+import demoTottenhamCommercial from "./policies/demo-tottenham-commercial.json";
 import demoTottenham from "./policies/demo-tottenham-pl.json";
 import {
   PolicySchema,
@@ -201,13 +202,15 @@ describe("Tottenham demo policy", () => {
     expect(d.clearance).toBe("DEMO");
   });
 
-  it("COMMERCIAL: an identified person whose club ScorePlay does not verify ⇒ MISSING legal entitlement", () => {
+  it("COMMERCIAL: a person named only by AI, unknown to ScorePlay ⇒ MISSING unverified identification (never DENY, no rights claim)", () => {
     const obs = [rubric("goal", "group"), ev("goal", "person:bruno-fernandes")];
     const d = decide(playerClip, commercial, { observations: obs });
     expect(d.verdict).toBe("NEEDS_REVIEW");
     expect(open(d)).toEqual([
-      expect.objectContaining({ dimension: "people", basis: "LEGAL_ENTITLEMENT", ruleId: "subject:person:bruno-fernandes" }),
+      expect.objectContaining({ dimension: "people", outcome: "MISSING", basis: "TECHNICAL_OBSERVATION", ruleId: "subject:person:bruno-fernandes" }),
     ]);
+    expect(open(d)[0].explanation).toMatch(/^AI named .*ScorePlay identity data can't confirm it.* a reviewer must verify/);
+    expect(open(d)[0].explanation).not.toMatch(/isn't on|can't cover|not a club player/);
   });
 
   it("COMMERCIAL: a player registered to another club is not covered by the image-rights pool", () => {
@@ -308,6 +311,83 @@ describe("Tottenham demo policy", () => {
     const r = evaluateEdit({ edit, assets: {}, observations: {}, analysis: {}, intent: base, now });
     expect(r.decision.verdict).toBe("NEEDS_REVIEW");
     expect(r.decision.reasons[0].basis).toBe("MEDIA_IDENTITY");
+  });
+});
+
+describe("sponsor intent (target sponsor vs other brands on screen)", () => {
+  const sponsored: PublishIntent = { ...base, usage: "SPONSORED" };
+  const promoting = (targetSponsor: string): PublishIntent => ({ ...sponsored, targetSponsor });
+  const aia = ev("goal", "brand:aia", { start: 1, end: 9, observation: "AIA: logo on the shirt" });
+  const dhl = ev("goal", "brand:dhl", { start: 5, end: 7, observation: "DHL: logo on the boards" });
+  const kraken = ev("goal", "brand:kraken", { start: 2, end: 8, observation: "Kraken: logo on the sleeve" });
+  const sponsor = (d: Decision) => d.reasons.filter((r) => r.dimension === "sponsor");
+
+  it("target partner (AIA under THFC-12) is permitted; a competing brand (DHL) is denied by THFC-13 alone", () => {
+    const d = decide(playerClip, promoting("AIA"), { observations: [aia, dhl] });
+    expect(d.verdict).toBe("BLOCKED");
+    expect(open(d)).toEqual([expect.objectContaining({ ruleId: "THFC-13-partner-exclusivity", outcome: "DENY" })]);
+    expect(open(d)[0].explanation).toMatch(/DHL/);
+    expect(open(d)[0].explanation).not.toMatch(/AIA/);
+    expect(d.sponsorship).toEqual({
+      target: { name: "AIA", label: "brand:aia", relationship: "PARTNER", ruleId: "THFC-12-official-partners" },
+      brands: [
+        { name: "AIA", label: "brand:aia", role: "TARGET", ruleId: "THFC-12-official-partners", certainty: "AI_OBSERVATION", spans: ["1–9 s"] },
+        { name: "DHL", label: "brand:dhl", role: "COMPETING_RESTRICTED", ruleId: "THFC-13-partner-exclusivity", certainty: "AI_OBSERVATION", spans: ["5–7 s"] },
+      ],
+    });
+  });
+
+  it("target partner alone on screen ⇒ ALLOWED (DEMO), with the campaign-partner permission recorded", () => {
+    const d = decide(playerClip, promoting("AIA"), { observations: [aia] });
+    expect(d.verdict).toBe("ALLOWED");
+    expect(sponsor(d).map((r) => [r.ruleId, r.outcome])).toContainEqual(["target-sponsor:aia", "PERMIT"]);
+  });
+
+  it("a target the rules don't describe (Kraken under demo-tottenham-pl) ⇒ NEEDS_REVIEW — never DENY, never PERMIT", () => {
+    for (const observations of [[kraken], []]) {
+      const d = decide(playerClip, promoting("Kraken"), { observations });
+      expect(d.verdict).toBe("NEEDS_REVIEW");
+      expect(sponsor(d).map((r) => [r.ruleId, r.outcome])).toEqual([["target-sponsor:kraken", "MISSING"]]);
+      expect(sponsor(d)[0].explanation).toMatch(/doesn't describe a relationship with Kraken .* a reviewer must confirm/);
+      expect(d.sponsorship!.target).toMatchObject({ name: "Kraken", relationship: "UNKNOWN" });
+      expect(blockerOf(d, promoting("Kraken")).scope).toBe("CAMPAIGN");
+    }
+  });
+
+  it("an undescribed target never shields other brands: DHL is still denied", () => {
+    const d = decide(playerClip, promoting("Kraken"), { observations: [kraken, dhl] });
+    expect(d.verdict).toBe("BLOCKED");
+    expect(open(d).map((r) => [r.ruleId, r.outcome])).toEqual([
+      ["THFC-13-partner-exclusivity", "DENY"],
+      ["target-sponsor:kraken", "MISSING"],
+    ]);
+    expect(open(d)[0].explanation).not.toMatch(/Kraken/);
+  });
+
+  it("no target named ⇒ the rules apply literally (Kraken on screen is a non-partner under THFC-13)", () => {
+    const d = decide(playerClip, sponsored, { observations: [kraken] });
+    expect(d.verdict).toBe("BLOCKED");
+    expect(d.sponsorship).toMatchObject({ target: null, brands: [{ label: "brand:kraken", role: "COMPETING_RESTRICTED" }] });
+  });
+
+  it("the same target is a partner where the package names it (Kraken under demo-tottenham-commercial)", () => {
+    const policy = PolicySchema.parse(demoTottenhamCommercial);
+    const edit: EditPlan = { id: "e", title: "t", derived: false, segments: [{ scoreplayMediaId: "goal", start: 0, end: 10 }] };
+    const r = evaluateEdit({ edit, assets: { goal: playerClip }, observations: { goal: [kraken] }, analysis: { goal: ANALYSED }, intent: promoting("Kraken"), now, policies: [policy] });
+    expect(r.decision.verdict).toBe("ALLOWED");
+    expect(r.decision.sponsorship!.target).toMatchObject({ relationship: "PARTNER", ruleId: "THFC-C15-official-partners" });
+  });
+
+  it("a target means nothing for an organic post: the incidental-branding rule applies", () => {
+    const d = decide(playerClip, { ...base, usage: "ORGANIC", targetSponsor: "Kraken" }, { observations: [kraken] });
+    expect(d.verdict).toBe("ALLOWED");
+    expect(d.sponsorship).toMatchObject({ target: null, brands: [{ role: "INCIDENTAL", ruleId: "THFC-11-incidental-branding" }] });
+  });
+
+  it("AI names are reconciled with ScorePlay tags tolerantly (accents, surnames) before anyone is flagged", () => {
+    const tagged = thfc("goal", { people: ["Pierre-Emile Højbjerg", "Micky van de Ven"], peopleTeams: { "Pierre-Emile Højbjerg": ["Tottenham Hotspur FC"], "Micky van de Ven": ["Tottenham Hotspur FC"] } });
+    const d = decide(tagged, commercial, { observations: [ev("goal", "person:hojbjerg"), ev("goal", "person:mickey-van-de-ven")] });
+    expect(d.verdict).toBe("ALLOWED");
   });
 });
 

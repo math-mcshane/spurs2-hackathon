@@ -213,6 +213,44 @@ export function EditTimelineView({ timeline: t, compact = false, className }: { 
 
 // ---------- Re-check ----------
 
+type Recheck = NonNullable<RecoveryOption["recheck"]>;
+
+/** "2 allowed · 0 restricted · 1 unresolved": every use counted once — an unknown is never counted as allowed. */
+const countsLine = (rc: Recheck) => `${rc.allowedUses} allowed · ${rc.restrictedUses} restricted · ${rc.unresolvedUses} unresolved`;
+
+/** What still stands in the way; a consolidated line (several people named by AI) keeps each finding one click away. */
+function RemainingList({ items }: { items: Recheck["remaining"] }) {
+  return (
+    <ul className="space-y-1.5 text-small">
+      {items.map((x, i) => (
+        <li key={i} className="flex gap-2">
+          <XIcon className="mt-1 size-3 shrink-0 text-status-review" aria-hidden />
+          <span className="min-w-0 text-ink-soft">
+            {x.text}
+            {x.at && <span className="tabular text-ink-muted"> · {spanText(x.at)}</span>}
+            <span className="block text-meta text-ink-muted">{x.source}</span>
+            {x.details && x.details.length > 0 && (
+              <details className="group/d mt-1">
+                <summary className="flex cursor-pointer list-none items-center gap-1 text-meta text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+                  <ChevronRightIcon className="size-3 transition-transform group-open/d:rotate-90" aria-hidden /> Each finding · {x.details.length}
+                </summary>
+                <ul className="mt-1 space-y-1 text-meta text-ink-muted">
+                  {x.details.map((d, j) => (
+                    <li key={j}>
+                      {d.text}
+                      {d.at && <span className="tabular"> · {spanText(d.at)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function RecheckBlock({ option, progress }: { option: RecoveryOption; progress?: { stages: Stage[]; note?: string } }) {
   if (progress)
     return (
@@ -230,25 +268,9 @@ function RecheckBlock({ option, progress }: { option: RecoveryOption; progress?:
         <StatusPill status={status} />
       </div>
       <p className="text-small text-ink">
-        <span className="tabular font-medium">
-          {rc.allowedUses} of {rc.totalUses}
-        </span>{" "}
-        uses allowed after this change
+        <span className="tabular font-medium">{countsLine(rc)}</span> <span className="text-ink-muted">· {rc.totalUses} uses checked after this change</span>
       </p>
-      {rc.remaining.length > 0 && (
-        <ul className="space-y-1.5 text-small">
-          {rc.remaining.map((x, i) => (
-            <li key={i} className="flex gap-2">
-              <XIcon className="mt-1 size-3 shrink-0 text-status-blocked" aria-hidden />
-              <span className="text-ink-soft">
-                {x.text}
-                {x.at && <span className="tabular text-ink-muted"> · {spanText(x.at)}</span>}
-                <span className="block text-meta text-ink-muted">{x.source}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {rc.remaining.length > 0 && <RemainingList items={rc.remaining} />}
     </div>
   );
 }
@@ -430,26 +452,36 @@ function FeaturedOption({
   );
 }
 
-/** A compact row for every other option: workable ones can be selected, rejected ones say why. */
+type RowKind = "verified" | "review" | "rejected" | "next";
+
+/**
+ * A compact row for every other option. Verified ones (re-check clears every use) can be compared; review-required
+ * candidates say plainly they are not a fix and list what a reviewer must clear; rejected ones say why and have no
+ * action at all.
+ */
 function OptionRow({
   option,
   plan,
   chosen,
-  selectable,
+  kind,
   disabled,
+  applying,
   onSelect,
+  onApply,
 }: {
   option: RecoveryOption;
   plan: GoalView["run"]["plan"];
   chosen?: { start: number; end: number };
-  selectable: boolean;
+  kind: RowKind;
   disabled: boolean;
-  onSelect: () => void;
+  applying?: boolean;
+  onSelect?: () => void;
+  onApply?: () => void;
 }) {
   const k = KIND[option.kind];
-  const rejected = option.outcome === "NOT_VIABLE";
-  const next = option.outcome === "NEXT_STEP";
-  const status = option.recheck ? rightsStatus(option.recheck.verdict, option.recheck.clearance) : null;
+  const rc = option.recheck;
+  const status = rc ? rightsStatus(rc.verdict, rc.clearance) : null;
+  const rejected = kind === "rejected";
   return (
     <div className="flex gap-3 py-4">
       <k.Icon className={cn("mt-0.5 size-4 shrink-0", rejected ? "text-ink-muted" : "text-ink-soft")} aria-hidden />
@@ -458,34 +490,51 @@ function OptionRow({
           <p className={cn("text-small font-medium", rejected ? "text-ink-soft" : "text-ink")}>{option.title}</p>
           {rejected ? (
             <span className="inline-flex items-center gap-1 text-meta text-ink-muted">
-              <BanIcon className="size-3.5" aria-hidden /> Considered · rejected
+              <BanIcon className="size-3.5" aria-hidden /> Rejected · not a fix
             </span>
-          ) : next ? (
+          ) : kind === "next" ? (
             <span className="inline-flex items-center gap-1 text-meta text-ink-muted">
               <ArrowRightIcon className="size-3.5" aria-hidden /> Next step
             </span>
           ) : (
-            status && (
-              <StatusPill
-                status={status}
-                label={option.recheck && `${status === "provisional" ? "Allowed · illustrative" : verdictWords(status)} · ${option.recheck.allowedUses} of ${option.recheck.totalUses}`}
-              />
-            )
+            status &&
+            rc && <StatusPill status={status} label={`${status === "provisional" ? "Allowed · illustrative" : verdictWords(status)} · ${rc.allowedUses} of ${rc.totalUses} allowed`} />
           )}
         </div>
-        {rejected && option.notViableBecause && <p className="text-small text-ink-soft">{option.notViableBecause}</p>}
+        {rejected && (
+          <p className="text-small text-ink-soft">
+            {option.notViableBecause ?? "It doesn't clear the restriction."}
+            {rc && <span className="tabular block text-meta text-ink-muted">Re-check: {countsLine(rc)}</span>}
+          </p>
+        )}
+        {kind === "review" && rc && (
+          <>
+            <p className="flex items-start gap-1.5 text-meta text-status-review">
+              <TriangleAlertIcon className="mt-px size-3.5 shrink-0" aria-hidden />
+              <span>
+                Not a correction — re-check: <span className="tabular">{countsLine(rc)}</span>. A reviewer must clear what is listed.
+              </span>
+            </p>
+            {rc.remaining.length > 0 && <RemainingList items={rc.remaining} />}
+          </>
+        )}
         {option.timeline && <EditPlanView timeline={option.timeline} chosen={chosen} compact />}
         <ReplacementLine option={option} />
         <MarketsChange option={option} plan={plan} />
-        {next ? (
+        {kind === "next" ? (
           <p className="text-small text-ink-soft">{option.summary}</p>
         ) : (
           !rejected && !option.changesGoal && <p className="text-meta text-ink-muted">{option.tradeoff}</p>
         )}
         <GoalChange option={option} />
-        {selectable && (
+        {kind === "verified" && onSelect && (
           <Button variant="outline" size="sm" className="h-8 bg-transparent px-3" disabled={disabled} onClick={onSelect} aria-label={`Compare: ${option.title}`}>
             Compare
+          </Button>
+        )}
+        {kind === "review" && option.applicable && onApply && (
+          <Button variant="ghost" size="sm" className="h-8 px-3 text-ink-muted" disabled={disabled} onClick={onApply} aria-label={`Use anyway, still needs review: ${option.title}`}>
+            {applying && <Loader2Icon className="animate-spin" />} Use it anyway — still needs review
           </Button>
         )}
       </div>
@@ -541,26 +590,35 @@ type EditorProps = {
 };
 
 /**
- * Media Compliance Recovery — "Find a way to use it". The original moment with the restricted seconds marked,
- * the suggested correction (recommended first, large) with its before/after cut and its independent re-check,
- * every other option as a compact row (rejected ones say why), and one decision. Nothing here is legal
- * clearance: a demo-policy ALLOWED is labelled as such, a cut is an edit plan, not a file.
+ * Media Compliance Recovery — "Find a way to use it". The original moment with the restricted seconds marked, the
+ * recommended correction (only one whose independent re-check clears every use) with its before/after cut, then the
+ * other options in honest groups: other verified options, candidates a reviewer still has to clear (never styled as a
+ * fix), rejected options (no action) and next steps. Nothing here is legal clearance: a demo-policy ALLOWED is labelled
+ * as such, a cut is an edit plan, not a file.
  */
 export function ComplianceEditor({ goal, recovery, disabled, applyingId, applyProgress, onApply, onChooseAsset, onChangeSettings, onSubmit }: EditorProps) {
   const uid = useId();
   const plan = goal.campaign?.plan ?? goal.run.plan;
   const options = recovery.options;
-  const recommended = options.find((o) => o.id === recovery.recommendedId && o.applicable) ?? options.find((o) => o.recommended && o.applicable);
-  const [chosenId, setChosenId] = useState(() => recommended?.id ?? options.find((o) => o.applicable)?.id);
-  const featured = options.find((o) => o.id === chosenId && o.applicable);
+  /** Re-checked ALLOWED for every use: the only options that may be featured as a correction. */
+  const verified = options.filter((o) => o.outcome === "RESOLVES_DEMO" && o.applicable);
+  const recommended = verified.find((o) => o.id === recovery.recommendedId) ?? verified.find((o) => o.recommended);
+  const [chosenId, setChosenId] = useState(() => recommended?.id);
+  const featured = verified.find((o) => o.id === chosenId);
   /** The cut PULSE tried first and rejected: told once, as the reason the suggestion is something else. */
   const tried = recommended?.kind === "TRIM" ? undefined : options.find((o) => o.kind === "TRIM" && (o.outcome === "NOT_VIABLE" || o.outcome === "STILL_BLOCKED"));
-  const rest = options.filter((o) => o !== featured && o !== tried);
+  const groups: { key: RowKind; title: string; items: RecoveryOption[] }[] = [
+    { key: "verified", title: featured ? "Other options that clear the re-check" : "Options that clear the re-check", items: verified.filter((o) => o !== featured) },
+    { key: "review", title: "Other candidates — review required", items: options.filter((o) => o.outcome === "NEEDS_REVIEW") },
+    { key: "rejected", title: "Rejected", items: options.filter((o) => (o.outcome === "NOT_VIABLE" || o.outcome === "STILL_BLOCKED") && o !== tried) },
+    { key: "next", title: "Next steps", items: options.filter((o) => o.outcome === "NEXT_STEP") },
+  ];
   const media = goal.campaign?.media;
   /** The campaign's selected range (a SAFE_SECTION timeline spans its own section, not the original). */
   const span = media ? { start: media.startSeconds, end: media.endSeconds } : options.find((o) => o.kind === "TRIM" && o.timeline)?.timeline?.original;
   const timed = recovery.problem.items.flatMap((x, i) => (x.at ? [{ n: i + 1, ...x.at }] : []));
   const noPath = !featured;
+  const replacements = options.some((o) => o.kind === "REPLACE");
 
   return (
     <div id="resolution" className="scroll-mt-24 space-y-8">
@@ -620,11 +678,11 @@ export function ComplianceEditor({ goal, recovery, disabled, applyingId, applyPr
 
       {tried && <TriedFirst option={tried} chosen={span} />}
 
-      {/* Suggested correction */}
+      {/* Recommended correction */}
       <section aria-labelledby={`${uid}-fix`} aria-busy={applyingId !== null} className="space-y-4 border-t border-line pt-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 id={`${uid}-fix`} className="scroll-mt-28 text-small font-medium text-ink-muted">
-            {noPath ? "No correction clears it" : featured.recommended ? "Suggested correction" : "Selected correction"}
+            {noPath ? (replacements ? "No verified replacement available" : "No verified correction available") : featured.recommended ? "Recommended correction" : "Selected option"}
           </h4>
           {featured?.recommended && (
             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-meta text-ink ring-1 ring-line-strong ring-inset">
@@ -635,7 +693,7 @@ export function ComplianceEditor({ goal, recovery, disabled, applyingId, applyPr
         {noPath ? (
           <p role="status" className="flex items-start gap-3 rounded-lg bg-obsidian px-4 py-4 text-body text-ink ring-1 ring-status-review/40 ring-inset">
             <TriangleAlertIcon className="mt-1 size-4 shrink-0 text-status-review" aria-hidden />
-            <span>{recovery.noPathMessage ?? "None of the corrections clears every use under these rules. The options below explain why."}</span>
+            <span>{recovery.noPathMessage ?? "No option keeps the goal and clears every use under these rules. The options below explain why."}</span>
           </p>
         ) : (
           <Swap id={featured.id}>
@@ -644,33 +702,37 @@ export function ComplianceEditor({ goal, recovery, disabled, applyingId, applyPr
         )}
       </section>
 
-      {/* Other options */}
-      {rest.length > 0 && (
-        <section aria-labelledby={`${uid}-other`} className="border-t border-line pt-6">
-          <h4 id={`${uid}-other`} className="text-small font-medium text-ink-muted">
-            {noPath ? "What PULSE tried" : "Other ways"} · {rest.length}
-          </h4>
-          <ul className="divide-y divide-line">
-            {rest.map((o, i) => (
-              <li key={o.id}>
-                <Reveal delay={0.06 * i}>
-                  <OptionRow
-                    option={o}
-                    plan={plan}
-                    chosen={span}
-                    selectable={o.applicable}
-                    disabled={disabled}
-                    onSelect={() => {
-                      setChosenId(o.id);
-                      document.getElementById(`${uid}-fix`)?.scrollIntoView({ block: "start", behavior: "smooth" });
-                    }}
-                  />
-                </Reveal>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* Every other option, grouped by what its independent re-check said */}
+      {groups
+        .filter((g) => g.items.length > 0)
+        .map((g) => (
+          <section key={g.key} aria-labelledby={`${uid}-${g.key}`} className="border-t border-line pt-6">
+            <h4 id={`${uid}-${g.key}`} className={cn("text-small font-medium", g.key === "review" ? "text-status-review" : "text-ink-muted")}>
+              {g.title} · {g.items.length}
+            </h4>
+            <ul className="divide-y divide-line">
+              {g.items.map((o, i) => (
+                <li key={o.id}>
+                  <Reveal delay={0.06 * i}>
+                    <OptionRow
+                      option={o}
+                      plan={plan}
+                      chosen={span}
+                      kind={g.key}
+                      disabled={disabled}
+                      applying={applyingId === o.id}
+                      onSelect={() => {
+                        setChosenId(o.id);
+                        document.getElementById(`${uid}-fix`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+                      }}
+                      onApply={() => onApply(o.id)}
+                    />
+                  </Reveal>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
 
       <EvidenceDetails goal={goal} recovery={recovery} />
 

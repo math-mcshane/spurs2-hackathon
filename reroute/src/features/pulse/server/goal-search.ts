@@ -114,7 +114,8 @@ export async function searchGoal(
   }
   const before = videos.length;
   try {
-    const player = await filterByPlayer(deps.scoreplay, videos, input.objective.raw, [club.label, ...terms, ...(input.match ? [input.match] : [])]);
+    // The partner the goal promotes is never a search term: it names who the post is for, not what the footage shows.
+    const player = await filterByPlayer(deps.scoreplay, videos, input.objective.raw, [club.label, ...terms, ...(input.match ? [input.match] : []), input.objective.targetSponsor ?? ""]);
     if (player.filter) {
       videos = player.videos;
       playerFilter = player.filter;
@@ -185,7 +186,15 @@ export async function searchGoal(
     }
 
     const o = input.objective;
-    const exclude = [club.label, ...terms, ...(input.match ? [input.match, ...(OPPONENT_ALIASES[input.match.toLowerCase()] ?? [])] : []), o.market?.matched ?? "", o.market?.label ?? "", o.product?.matched ?? ""];
+    const exclude = [
+      club.label,
+      ...terms,
+      ...(input.match ? [input.match, ...(OPPONENT_ALIASES[input.match.toLowerCase()] ?? [])] : []),
+      o.market?.matched ?? "",
+      o.market?.label ?? "",
+      o.product?.matched ?? "",
+      o.targetSponsor ?? "",
+    ];
     const pool = rankMoments(results, byVideo, { objective: o, match: input.match, latestSeason: library.latestSeason, goalTerms: goalTerms(o.raw, exclude) });
     const moments = results.reduce((n, r) => n + r.moments.length, 0);
     return {

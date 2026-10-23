@@ -1,6 +1,6 @@
 # Demo script — 3 minutes, Studio (`/`)
 
-Validated end to end in Chromium, signed in as reviewer, on the Vercel preview **https://spurs2-hackathon-inpdx7om5-merlins-projects-2b20d832.vercel.app** (commit `e3c5a2b`), 2026-10-23 ≈ 12:55 UTC — all three use cases from goal to dry-run writeback, no console errors. Fallback preview (previous build, same data): https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app.
+Validated end to end in Chromium, signed in as reviewer, on the Vercel preview **https://spurs2-hackathon-o85fcxpxk-merlins-projects-2b20d832.vercel.app** (commit `2152135`, 2026-10-23 ≈ 14:05 UTC: Policy beat + use case 1 regression; the three use cases were validated ≈ 12:55 UTC on `inpdx7om5`, same code for those flows). Fallback preview: https://spurs2-hackathon-inpdx7om5-merlins-projects-2b20d832.vercel.app (no Policies link in the header, no sample mapping).
 
 ## What is real, what is illustrative (say it once, at 0:40)
 
@@ -39,6 +39,17 @@ ScorePlay asset **130851421** "Goal Slo Mo Man United 9x16 (A) v1.mp4" 0:00–0:
 | **Find a way to use it** | Recommended **Limit to licensed markets: GB, US** (kept / dropped chips) | "Another clip would hit the same wall, so PULSE changes the plan, not the footage." |
 | **Use revised plan** | "Allowed under these rules · 6 of 6 uses · 2 markets"; audience "Tottenham Hotspur supporters in United Kingdom and United States" | "Smallest valid change, re-checked." |
 
+### Optional — Policy beat (replaces "Use revised plan" in use case 2, ~25 s)
+
+From use case 2 at Compliance ("6 of 21 uses allowed"):
+
+| Click | Screen | Say |
+|---|---|---|
+| Header **Policies** | Policy Center, "Back to your campaign", **Upload policy** drop zone | "The rules are data. A club can bring its own package." |
+| **Use the example file** (or drop `tottenham-international-window.sample.json`) | "Tottenham International Window — Demo is in the library · Sample mapping" — "the example file's rules were mapped to PULSE's rule format in advance and validated. PULSE does not extract rules from legal documents." | "This is a sample mapping prepared in advance — we don't read contracts automatically." |
+| **Use for my campaign** | Back in the campaign: rules "Tottenham International Window — Demo · Sample mapping", "Needs a fresh check" | "The old verdict is never reused." |
+| **Check rights again** | "15 of 21 uses allowed" — only India and Nigeria remain | "Different rules, different answer — computed by the same engine." |
+
 ## Close (2:30–3:00)
 
 > "Other tools tell you what you can't publish. PULSE finds a way to reach the goal anyway — a cut, a different market, or different footage — and shows exactly why, with every limit labelled. Plug in the club's real agreements and the same flow becomes a working rights desk."
@@ -57,4 +68,5 @@ ScorePlay asset **130851320** "Fans clap Man United A 9x16.mp4" 0:06.9–0:14.7 
 
 - Say "allowed under these rules" / "illustrative rules" — never "cleared", "legal", "approved for publication".
 - Say "edit plan" for cuts, "dry run" for ScorePlay, "machine-observed" for TwelveLabs analysis.
+- Say "sample mapping" for the imported example — never "PULSE read the contract".
 - No revenue, conversion or time-saved numbers.

@@ -1,0 +1,45 @@
+{
+  "recordedAt": "2026-10-23T14:51:22.774Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "Ledger"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [],
+    "sponsors": [
+      {
+        "ID": 74166,
+        "CreatedAt": "2026-10-17T09:01:52.152675Z",
+        "UpdatedAt": "2026-10-17T09:01:52.247702Z",
+        "DeletedAt": null,
+        "name": "ledger",
+        "label": "Ledger",
+        "company_id": 5369,
+        "terms_and_conditions_url": "",
+        "run_ai": true,
+        "auto_share": false,
+        "only_shared_content": false,
+        "active": true,
+        "accounts": null,
+        "access_tags": null,
+        "user_type_id": 26234,
+        "user_type": null,
+        "distribution_format": "",
+        "distribution_path": "",
+        "distribution_rule_raw": "",
+        "distribution_rule": null,
+        "rule_events": null,
+        "rule_tag_options": null,
+        "rule_players": null,
+        "rule_sponsors": null,
+        "count": 0
+      }
+    ],
+    "tags": []
+  }
+}

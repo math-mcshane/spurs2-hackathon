@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2Icon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import { Loader2Icon, PlusIcon, RotateCcwIcon, XIcon } from "lucide-react";
 import type { EditPlan, Evidence } from "@/lib/contracts";
 import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,14 @@ export function SegmentEditor({
   edit,
   maxSec,
   onChange,
+  onRemove,
   onReset,
 }: {
   edit: EditPlan;
   maxSec?: number;
   onChange: (index: number, patch: { start?: number; end?: number }) => void;
+  /** Drops one segment (an edit keeps at least one). */
+  onRemove: (index: number) => void;
   onReset: () => void;
 }) {
   return (
@@ -53,7 +56,20 @@ export function SegmentEditor({
                 onChange={(e) => onChange(i, { end: Number(e.target.value) })}
                 className="h-7 font-mono text-xs"
               />
-              <span className="w-24 truncate font-mono text-[10px] text-zinc-500">{s.label ?? ""}</span>
+              <span className="flex w-28 items-center justify-end gap-1">
+                <span className="truncate font-mono text-[10px] text-zinc-500">{s.label ?? ""}</span>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  disabled={edit.segments.length < 2}
+                  onClick={() => onRemove(i)}
+                  aria-label={`Remove segment ${i + 1}`}
+                  className="text-zinc-500"
+                >
+                  <XIcon />
+                </Button>
+              </span>
             </div>
           );
         })}

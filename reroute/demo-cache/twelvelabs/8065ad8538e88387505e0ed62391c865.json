@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-23T12:15:19.474Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "analyze",
+    "modelKey": "pegasus1.6:d98df822a16038614d116aa864379da5",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911fb500e82756f2eb574"
+  },
+  "value": {
+    "data": "{\"observations\":[{\"category\":\"sponsor_brand\",\"confidence\":0.95,\"description\":\"Prominent stadium signage reading 'STRETFORD END' visible on the upper tier roof structure of the stand.\",\"end_time\":7.5,\"entity\":\"STRETFORD END\",\"start_time\":0.0},{\"category\":\"onscreen_graphic\",\"confidence\":0.98,\"description\":\"Text overlay in the bottom left corner reading 'OLD TRAFFORD'.\",\"end_time\":7.5,\"entity\":\"OLD TRAFFORD\",\"start_time\":0.0},{\"category\":\"broadcaster\",\"confidence\":0.90,\"description\":\"Small Tottenham Hotspur cockerel logo watermark visible in the bottom right corner of the frame.\",\"end_time\":7.5,\"entity\":\"Tottenham Hotspur\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.85,\"description\":\"A player wearing a red jersey with the number 55 visible on the back, walking near the sideline.\",\"end_time\":7.5,\"entity\":\"Player #55\",\"start_time\":0.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"group\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"This 7.5-second clip shows a wide static shot of the Stretford End stand at Old Trafford stadium during a night match. The footage contains no active game action or scorebug, presenting a clean feed of the crowd and pitch area. Visible elements include the stadium signage 'STRETFORD END', a text overlay 'OLD TRAFFORD' in the bottom left, and a Tottenham Hotspur logo watermark in the bottom right. A player wearing jersey number 55 is visible walking on the pitch. No gambling brands are present. Rights questions may arise regarding the use of the Tottenham Hotspur watermark and the 'OLD TRAFFORD' graphic overlay, as well as the stadium signage.\"}",
+    "finishReason": "stop"
+  }
+}

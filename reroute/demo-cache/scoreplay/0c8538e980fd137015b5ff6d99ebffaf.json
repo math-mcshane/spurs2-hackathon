@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-10-23T14:51:26.637Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/team-seasons",
+    "query": {
+      "page": 1,
+      "limit": 100
+    },
+    "body": null
+  },
+  "value": {
+    "items": [
+      {
+        "id": 72216,
+        "team_id": 57899,
+        "season_id": 16541,
+        "team_name": "San Antonio Spurs (SAS)",
+        "season_name": "2026-27"
+      },
+      {
+        "id": 72215,
+        "team_id": 57900,
+        "season_id": 16541,
+        "team_name": "Tottenham Hotspur FC",
+        "season_name": "2026-27"
+      }
+    ],
+    "total": 2,
+    "page": 1,
+    "limit": 100
+  }
+}

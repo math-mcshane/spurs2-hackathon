@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-10-23T12:15:19.473Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "analyze",
+    "modelKey": "pegasus1.6:d98df822a16038614d116aa864379da5",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "videoId": "6ad911f765b4aff96dc7bb5e"
+  },
+  "value": {
+    "data": "{\"observations\":[{\"category\":\"person\",\"confidence\":0.95,\"description\":\"A football player wearing a dark blue jersey with the number 17 visible on the back is seen in the huddle on the left side of the split screen.\",\"end_time\":13.8,\"entity\":\"Player #17\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.95,\"description\":\"A football player wearing a dark blue jersey with the number 3 visible on the back is seen in the huddle on the left side of the split screen.\",\"end_time\":13.8,\"entity\":\"Player #3\",\"start_time\":0.0},{\"category\":\"person\",\"confidence\":0.9,\"description\":\"A football player wearing a dark blue jersey with the number 8 visible on the back is seen in the huddle on the left side of the split screen.\",\"end_time\":13.8,\"entity\":\"Player #8\",\"start_time\":0.0},{\"category\":\"onscreen_graphic\",\"confidence\":0.98,\"description\":\"Text reading 'COYS' appears in the bottom left corner of the frame as a watermark overlay.\",\"end_time\":13.8,\"entity\":\"COYS watermark\",\"start_time\":0.0},{\"category\":\"onscreen_graphic\",\"confidence\":0.98,\"description\":\"A small Tottenham Hotspur cockerel logo icon appears in the bottom right corner of the frame as an overlay.\",\"end_time\":13.8,\"entity\":\"Spurs logo icon\",\"start_time\":0.0}],\"rubric\":{\"broadcast_source\":\"unknown\",\"gambling_brand\":\"none\",\"player_focus\":\"group\",\"scorebug_watermark\":\"clean_feed\"},\"summary\":\"This 13.8-second clip shows a split-screen view of a football match. On the left, a group of players in dark blue kits are huddled together on the pitch; jersey numbers 17, 3, and 8 are visible. On the right, a crowd of spectators is shown in the stands. The footage lacks any broadcast network bug, scorebug, or live game action overlay, indicating a clean feed. Two static watermarks are present throughout: 'COYS' in the bottom left and a small Spurs logo icon in the bottom right. No gambling brands or specific player endorsements are visible. Rights questions may arise regarding the use of the 'COYS' and Spurs logo overlays, as well as the depiction of identifiable players by jersey number.\"}",
+    "finishReason": "stop"
+  }
+}

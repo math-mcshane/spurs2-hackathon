@@ -1,0 +1,141 @@
+{
+  "label": "SIMULATED FAN SIGNALS — DEMO",
+  "disclaimer": "Posts below are written by the REROUTE team to replay a plausible reaction to hackathon-provided games. They are not real public posts, not live sentiment and not a sample of all fans.",
+  "replayClock": "2026-10-17T22:00:00Z",
+  "topics": [
+    {
+      "key": "spurs-bench-dunk",
+      "club": "spurs",
+      "game": "Spurs vs Sacramento Kings · 16 Oct 2026 (hackathon footage)",
+      "focus": "Wembanyama Q1 dunk and the bench reaction",
+      "headline": "The bench went wild",
+      "angle": "12–15 s vertical cut of the Q1 dunk, held on the bench erupting behind it.",
+      "interestSummary": "Simulated posts keep pointing at the bench's reaction to the Q1 dunk rather than the dunk alone.",
+      "cohort": "Fans discussing the bench reaction",
+      "desiredFormat": "vertical_short",
+      "scoreplay": {"terms": ["Wembanyama"], "filenameHints": ["VicDunkCompQ1"]},
+      "semanticQuery": "Spurs bench players jumping and celebrating after a dunk",
+      "topicTags": ["matchday", "bench", "dunk", "celebration"],
+      "contentTraits": ["highlight", "matchday", "celebration", "player-spotlight"],
+      "hooks": {
+        "en": "The Q1 dunk — and the bench that erupted behind it.",
+        "es": "El clavado del primer cuarto… y la banca que explotó detrás.",
+        "fr": "Le dunk du premier quart-temps… et le banc qui explose derrière."
+      }
+    },
+    {
+      "key": "spurs-drops-sabonis",
+      "club": "spurs",
+      "game": "Spurs vs Sacramento Kings · 16 Oct 2026 (hackathon footage)",
+      "focus": "Wembanyama's move on Sabonis",
+      "headline": "The move fans keep replaying",
+      "angle": "Slow-motion breakdown of the move on Sabonis as a skill-focused short.",
+      "interestSummary": "Simulated posts ask for a slowed-down replay of the move on Sabonis.",
+      "cohort": "Fans discussing player skill moves",
+      "desiredFormat": "video_short",
+      "scoreplay": {"terms": ["Wembanyama"], "filenameHints": ["VicDropsSabonis"]},
+      "semanticQuery": "Wembanyama dribble move past Sabonis",
+      "topicTags": ["skill", "player"],
+      "contentTraits": ["player-spotlight", "skill", "highlight"],
+      "hooks": {
+        "en": "The move on Sabonis, slowed down.",
+        "es": "La jugada sobre Sabonis, en cámara lenta.",
+        "fr": "Le geste sur Sabonis, au ralenti."
+      }
+    },
+    {
+      "key": "spurs-team-win",
+      "club": "spurs",
+      "game": "Spurs vs Sacramento Kings · 16 Oct 2026 (hackathon footage)",
+      "focus": "Team celebration after the win",
+      "headline": "Inside the win",
+      "angle": "Team-win montage for organic channels; no partner tie-in proposed.",
+      "interestSummary": "One simulated post asks for more of the team celebrating together.",
+      "cohort": "Fans discussing the team win",
+      "desiredFormat": "vertical_short",
+      "scoreplay": {"terms": [], "filenameHints": ["TeamWin"]},
+      "semanticQuery": "Spurs players celebrating a win together",
+      "topicTags": ["win", "team"],
+      "contentTraits": ["team", "celebration"],
+      "hooks": {
+        "en": "Inside the win, together.",
+        "es": "Así se celebró la victoria, en equipo.",
+        "fr": "Dans les coulisses de la victoire, ensemble."
+      }
+    },
+    {
+      "key": "tottenham-defensive-wall",
+      "club": "tottenham",
+      "game": "Manchester United vs Tottenham Hotspur · Premier League week 6 (hackathon footage)",
+      "focus": "Defensive actions vs Manchester United",
+      "headline": "The defensive wall at Old Trafford",
+      "angle": "Short-form defensive-actions cut, pitched as a partner-compatible concept for sales review.",
+      "interestSummary": "Simulated posts credit the defensive blocks for the away point.",
+      "cohort": "Fans discussing the defensive performance",
+      "desiredFormat": "vertical_short",
+      "scoreplay": {"terms": ["Tottenham Hotspur"], "filenameHints": ["DEF_ACTIONS"]},
+      "semanticQuery": "Tottenham defender blocking a shot against Manchester United",
+      "topicTags": ["defence", "match"],
+      "contentTraits": ["team", "highlight"],
+      "hooks": {
+        "en": "The defensive wall at Old Trafford.",
+        "es": "La muralla defensiva en Old Trafford.",
+        "fr": "Le mur défensif à Old Trafford."
+      }
+    },
+    {
+      "key": "tottenham-rdz-fernandes",
+      "club": "tottenham",
+      "game": "Manchester United vs Tottenham Hotspur · Premier League week 6 (hackathon footage)",
+      "focus": "De Zerbi press conference on Fernandes",
+      "headline": "What De Zerbi said about Fernandes",
+      "angle": "Interview clip as an alternative to match footage — usable only if REROUTE confirms interview permissions.",
+      "interestSummary": "One simulated post quotes the pre-match press conference remarks on Fernandes.",
+      "cohort": "Fans discussing the pre-match press conference",
+      "desiredFormat": "vertical_short",
+      "scoreplay": {"terms": ["Tottenham Hotspur"], "filenameHints": ["RDZ_ON_FERNANDES"]},
+      "semanticQuery": "Tottenham head coach press conference talking about Bruno Fernandes",
+      "topicTags": ["interview"],
+      "contentTraits": ["interview"],
+      "hooks": {
+        "en": "De Zerbi on Fernandes, before the trip.",
+        "es": "De Zerbi habla de Fernandes antes del viaje.",
+        "fr": "De Zerbi sur Fernandes, avant le déplacement."
+      }
+    },
+    {
+      "key": "spurs-harper-run",
+      "club": "spurs",
+      "game": "Spurs vs Sacramento Kings · 16 Oct 2026 (hackathon footage)",
+      "focus": "Harper's 14-point run",
+      "headline": "Harper's 14-point run",
+      "angle": "15 s vertical cut of Harper's scoring run, captioned for the target market.",
+      "interestSummary": "Simulated posts single out Harper's scoring stretch as the moment that turned the game.",
+      "cohort": "Fans discussing Harper's scoring run",
+      "desiredFormat": "vertical_short",
+      "scoreplay": {"terms": ["Harper"], "filenameHints": ["Harper"]},
+      "semanticQuery": "Harper scoring several baskets in a row",
+      "topicTags": ["player", "highlight"],
+      "contentTraits": ["player-spotlight", "highlight"],
+      "hooks": {
+        "en": "Harper's 14-point run, every bucket.",
+        "es": "La racha de 14 puntos de Harper, canasta por canasta.",
+        "fr": "La série de 14 points de Harper, panier après panier."
+      }
+    }
+  ],
+  "posts": [
+    { "id": "sim-01", "topic": "spurs-bench-dunk", "postedAt": "2026-10-17T03:12:00Z", "text": "[SIMULATED] Forget the dunk, watch the bench behind it 😂" },
+    { "id": "sim-02", "topic": "spurs-bench-dunk", "postedAt": "2026-10-17T03:20:00Z", "text": "[SIMULATED] Whole bench was on their feet after that Q1 slam. Need that angle." },
+    { "id": "sim-03", "topic": "spurs-bench-dunk", "postedAt": "2026-10-17T04:05:00Z", "text": "[SIMULATED] Someone clip the bench reaction to the first-quarter dunk please" },
+    { "id": "sim-04", "topic": "spurs-bench-dunk", "postedAt": "2026-10-17T05:40:00Z", "text": "[SIMULATED] Bench energy > everything last night" },
+    { "id": "sim-05", "topic": "spurs-drops-sabonis", "postedAt": "2026-10-17T02:55:00Z", "text": "[SIMULATED] That move on Sabonis needs a slow-mo replay" },
+    { "id": "sim-06", "topic": "spurs-drops-sabonis", "postedAt": "2026-10-17T06:30:00Z", "text": "[SIMULATED] Still thinking about the Sabonis possession" },
+    { "id": "sim-07", "topic": "spurs-team-win", "postedAt": "2026-10-17T01:30:00Z", "text": "[SIMULATED] Love seeing the whole team celebrate together after the W" },
+    { "id": "sim-08", "topic": "tottenham-defensive-wall", "postedAt": "2026-10-17T19:10:00Z", "text": "[SIMULATED] Those blocks in the second half earned us that point" },
+    { "id": "sim-09", "topic": "tottenham-defensive-wall", "postedAt": "2026-10-17T20:45:00Z", "text": "[SIMULATED] Defensive wall at Old Trafford, give me a compilation" },
+    { "id": "sim-10", "topic": "tottenham-rdz-fernandes", "postedAt": "2026-10-17T12:00:00Z", "text": "[SIMULATED] De Zerbi's comments on Fernandes before the trip were interesting" },
+    { "id": "sim-11", "topic": "spurs-harper-run", "postedAt": "2026-10-17T04:30:00Z", "text": "[SIMULATED] Harper's 14-point stretch is what flipped that game" },
+    { "id": "sim-12", "topic": "spurs-harper-run", "postedAt": "2026-10-17T09:15:00Z", "text": "[SIMULATED] Need the full Harper run cut, every bucket" }
+  ]
+}

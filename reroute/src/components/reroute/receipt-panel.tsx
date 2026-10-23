@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CheckIcon, ClapperboardIcon, DatabaseIcon, FileCheck2Icon, Loader2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ClapperboardIcon, FileCheck2Icon, Loader2Icon, LogInIcon, XIcon } from "lucide-react";
 import type { EditPlan, PublishIntent } from "@/lib/contracts";
 import type { ReceiptView } from "@/lib/api-client";
 import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { ErrorState, FictionalTag, VerdictBadge, tcRange } from "./shared";
+import { reviewApi, type ReviewerSession } from "./reviewer";
+import { ErrorState, FictionalTag, VerdictBadge, tcRange, utc } from "./shared";
+import { WritebackAction, WritebackLog } from "./writeback-plan";
 
 const REVIEW_STYLE: Record<ReceiptView["humanReviewStatus"], string> = {
   PENDING: "border-amber-500/50 bg-amber-500/10 text-amber-200",
@@ -25,7 +25,7 @@ function ReceiptSummary({ receipt, title }: { receipt: ReceiptView; title: strin
         <FileCheck2Icon className="size-3.5 text-zinc-300" aria-hidden />
         <span className="text-[11px] text-zinc-100">{title}</span>
         <span>#{receipt.id}</span>
-        <VerdictBadge verdict={d.verdict} />
+        <VerdictBadge verdict={d.verdict} clearance={d.clearance} />
         <span className={cn("rounded-sm border px-1.5 py-px tracking-wider", REVIEW_STYLE[receipt.humanReviewStatus])}>
           REVIEW {receipt.humanReviewStatus}
         </span>
@@ -51,7 +51,7 @@ function ReceiptSummary({ receipt, title }: { receipt: ReceiptView; title: strin
         <dt>intent</dt>
         <dd className="text-zinc-200">
           {receipt.intent.territory} / {receipt.intent.platform} / {receipt.intent.usage} / {receipt.intent.competition} /{" "}
-          {new Date(receipt.intent.publishAt).toLocaleString()}
+          {utc(receipt.intent.publishAt)}
         </dd>
         <dt>policy</dt>
         <dd className="text-zinc-200">
@@ -67,12 +67,12 @@ function ReceiptSummary({ receipt, title }: { receipt: ReceiptView; title: strin
         <dt>evidence</dt>
         <dd className="text-zinc-300">{d.evidence.length} timecoded item{d.evidence.length === 1 ? "" : "s"}</dd>
         <dt>created</dt>
-        <dd className="text-zinc-300">{new Date(receipt.createdAt).toLocaleString()}</dd>
+        <dd className="text-zinc-300">{utc(receipt.createdAt)}</dd>
         <dt>human review</dt>
         <dd className="text-zinc-300">
           {receipt.reviews.length === 0
             ? "no reviewer action yet"
-            : receipt.reviews.map((r) => `${r.status} by ${r.reviewer} @ ${new Date(r.at).toLocaleTimeString()}`).join(" · ")}
+            : receipt.reviews.map((r) => `${r.status} by ${r.reviewer} @ ${utc(r.at)}`).join(" · ")}
         </dd>
       </dl>
     </div>
@@ -83,18 +83,21 @@ export function ReceiptPanel({
   edit,
   intent,
   receipt,
+  session,
+  onSignIn,
   onReceipt,
 }: {
   edit: EditPlan | null;
   intent: PublishIntent | null;
   receipt: ReceiptView | null;
+  session: ReviewerSession | null;
+  onSignIn: () => void;
   onReceipt: (r: ReceiptView) => void;
 }) {
-  const [busy, setBusy] = useState<null | "create" | "review" | "writeback" | "render">(null);
+  const [busy, setBusy] = useState<null | "create" | "review" | "render">(null);
   const [error, setError] = useState<{ op: string; err: unknown } | null>(null);
-  const [reviewer, setReviewer] = useState("");
-  const [readBack, setReadBack] = useState<Record<string, unknown> | null>(null);
   const [render, setRender] = useState<{ receipt: ReceiptView; outputUrl?: string } | null>(null);
+  const reviewer = session?.reviewer;
 
   async function run<T>(op: NonNullable<typeof busy>, fn: () => Promise<T>): Promise<T | undefined> {
     setBusy(op);
@@ -122,10 +125,7 @@ export function ReceiptPanel({
           disabled={!canCreate || busy !== null}
           onClick={async () => {
             const r = await run("create", () => api.createReceipt({ edit: edit!, intent: intent! }));
-            if (r) {
-              setReadBack(null);
-              onReceipt(r);
-            }
+            if (r) onReceipt(r);
           }}
         >
           {busy === "create" ? <Loader2Icon className="animate-spin" /> : <FileCheck2Icon />}
@@ -160,92 +160,46 @@ export function ReceiptPanel({
         <>
           <ReceiptSummary receipt={receipt} title="Rights Receipt" />
 
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-0.5">
-              <Label htmlFor="reviewer" className="text-[10px] tracking-widest text-zinc-500 uppercase">Reviewer</Label>
-              <Input
-                id="reviewer"
-                value={reviewer}
-                onChange={(e) => setReviewer(e.target.value)}
-                placeholder="your name"
-                className="h-7 w-36 text-xs"
-              />
-            </div>
-            {(["APPROVED", "REJECTED"] as const).map((status) => (
-              <Button
-                key={status}
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!reviewer.trim() || busy !== null}
-                className={status === "APPROVED" ? "text-emerald-300" : "text-red-300"}
-                onClick={async () => {
-                  const r = await run("review", () => api.review(receipt.id, { status, reviewer: reviewer.trim() }));
-                  if (r) onReceipt(r);
-                }}
-              >
-                {status === "APPROVED" ? <CheckIcon /> : <XIcon />}
-                {status === "APPROVED" ? "Approve" : "Reject"}
+          <div className="flex flex-wrap items-center gap-2">
+            {reviewer ? (
+              <>
+                <span className="text-[11px] text-zinc-400">
+                  Reviewing as <strong className="text-zinc-200">{reviewer.name}</strong>
+                </span>
+                {(["APPROVED", "REJECTED"] as const).map((status) => (
+                  <Button
+                    key={status}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy !== null}
+                    className={status === "APPROVED" ? "text-emerald-300" : "text-red-300"}
+                    onClick={async () => {
+                      const r = await run("review", () => reviewApi.review(receipt.id, status));
+                      if (r) onReceipt(r);
+                    }}
+                  >
+                    {status === "APPROVED" ? <CheckIcon /> : <XIcon />}
+                    {status === "APPROVED" ? "Approve" : "Reject"}
+                  </Button>
+                ))}
+              </>
+            ) : (
+              <Button type="button" size="sm" variant="outline" disabled={session?.enabled === false} onClick={onSignIn}>
+                <LogInIcon /> {session?.enabled === false ? "Reviewer sign-in not configured" : "Sign in to review"}
               </Button>
-            ))}
-            <Button
-              type="button"
-              size="sm"
-              className="ml-auto bg-teal-500 text-teal-950 hover:bg-teal-400"
-              disabled={busy !== null}
-              onClick={async () => {
-                const r = await run("writeback", () => api.writeback(receipt.id));
-                if (r) {
-                  onReceipt(r.receipt);
-                  setReadBack(r.readBack);
-                }
-              }}
-            >
-              {busy === "writeback" ? <Loader2Icon className="animate-spin" /> : <DatabaseIcon />}
-              Write to ScorePlay
-            </Button>
+            )}
           </div>
           {error?.op === "review" && <ErrorState error={error.err} />}
-          {error?.op === "writeback" && <ErrorState error={error.err} service="ScorePlay" />}
 
+          <div className="space-y-1 border-t border-white/5 pt-2">
+            <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase">ScorePlay writeback</h3>
+            <WritebackAction receiptId={receipt.id} session={session} onSignIn={onSignIn} onDone={(r) => onReceipt(r.receipt)} />
+          </div>
           {receipt.writeback.length > 0 && (
             <div className="space-y-1">
-              <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase">ScorePlay writeback</h3>
-              <ul className="space-y-0.5 font-mono text-[10px]">
-                {receipt.writeback.map((w, i) => (
-                  <li key={i} className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        "rounded-sm border px-1 tracking-wider",
-                        w.status === "VERIFIED"
-                          ? "border-emerald-500/50 text-emerald-300"
-                          : w.status === "WRITTEN"
-                            ? "border-sky-500/50 text-sky-300"
-                            : "border-red-500/50 text-red-300",
-                      )}
-                    >
-                      {w.status}
-                    </span>
-                    <span className="text-zinc-300">{w.scoreplayMediaId}</span>
-                    <span className="text-zinc-500">{new Date(w.at).toLocaleTimeString()}</span>
-                    {w.detail && <span className="text-zinc-400">{w.detail}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {readBack && (
-            <div className="space-y-1">
-              <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase">Read back from ScorePlay (persistence proof)</h3>
-              <dl className="grid max-h-40 grid-cols-[minmax(6rem,auto)_1fr] gap-x-2 gap-y-0.5 overflow-auto rounded border border-white/5 bg-zinc-950 p-2 font-mono text-[10px]">
-                {Object.entries(readBack).map(([k, v]) => (
-                  <div key={k} className="contents">
-                    <dt className="text-zinc-500">{k}</dt>
-                    <dd className="break-all text-zinc-200">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
-                  </div>
-                ))}
-              </dl>
+              <h3 className="text-[10px] tracking-widest text-zinc-500 uppercase">ScorePlay writeback attempts</h3>
+              <WritebackLog entries={receipt.writeback} />
             </div>
           )}
         </>

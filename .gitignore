@@ -49,3 +49,6 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 .env*.local
+
+# Vercel CLI link (local only)
+.vercel

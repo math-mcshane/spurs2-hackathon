@@ -11,16 +11,18 @@ import {
   AssetsResponseSchema,
   DecideResponseSchema,
   EvidenceSchema,
+  MediaRefSchema,
   RenderResponseSchema,
-  ResolveResponseSchema,
   RightsReceiptSchema,
   WritebackResponseSchema,
   type AccessActionSchema,
+  type RecoverRequestSchema,
   type ApiError,
   type EditPlan,
   type Evidence,
   type PublishIntent,
 } from "@/lib/contracts";
+import { PolicyContextSchema, RecoveryViewSchema } from "@/features/pulse/types";
 
 export class ApiClientError extends Error {
   constructor(
@@ -33,28 +35,37 @@ export class ApiClientError extends Error {
   }
 }
 
-/** GET /api/policies */
+/** GET /api/policies — no global "active" policy: decisions select one per asset + publish intent. */
 export const PolicySummarySchema = z.object({
   id: z.string(),
   version: z.string(),
+  title: z.string(),
+  kind: z.enum(["VERIFIED", "DEMO"]),
+  /** = kind === "DEMO". */
   fictional: z.boolean(),
-  title: z.string().optional(),
-  source: z.string().optional(),
-  disclaimer: z.string().optional(),
+  club: z.string(),
+  competitions: z.array(z.string()),
+  provenance: z.string().optional(),
+  validFrom: z.string(),
+  validUntil: z.string(),
+  source: z.string(),
+  disclaimer: z.string(),
 });
 export type PolicySummary = z.infer<typeof PolicySummarySchema>;
 export const PoliciesResponseSchema = z.object({
   policies: z.array(PolicySummarySchema),
-  activeId: z.string(),
 });
 export type PoliciesResponse = z.infer<typeof PoliciesResponseSchema>;
 
-/** GET /api/assets/[id] */
+/** GET /api/assets/[id]?club= */
 export const AssetDetailResponseSchema = z.object({
   asset: AssetSchema,
   observations: z.array(EvidenceSchema),
-  analysis: z.enum(["AVAILABLE", "NOT_CONFIGURED", "FAILED"]),
+  /** UNLINKABLE = the ScorePlay ↔ TwelveLabs identity is not proven, so no analysis is attached. */
+  analysis: z.enum(["AVAILABLE", "NOT_CONFIGURED", "FAILED", "UNLINKABLE"]),
   analysisDetail: z.string().optional(),
+  media: MediaRefSchema.optional(),
+  notes: z.array(z.string()).default([]),
 });
 export type AssetDetailResponse = z.infer<typeof AssetDetailResponseSchema>;
 
@@ -69,6 +80,15 @@ const WritebackViewSchema = WritebackResponseSchema.extend({ receipt: ReceiptVie
 const RenderViewSchema = RenderResponseSchema.extend({ receipt: ReceiptViewSchema });
 
 const ObservationResponseSchema = z.object({ evidence: EvidenceSchema });
+
+/** POST /api/recover: the recovery plan (read-only, nothing stored) and the rule package it used. */
+export const RecoverResponseSchema = z.object({
+  recovery: RecoveryViewSchema,
+  media: z.array(MediaRefSchema),
+  notes: z.array(z.string()),
+  policy: PolicyContextSchema.nullable(),
+});
+export type RecoverResponse = z.infer<typeof RecoverResponseSchema>;
 
 async function request<S extends z.ZodType>(
   schema: S,
@@ -116,8 +136,8 @@ export const api = {
     }),
   decide: (body: { edit: EditPlan; intent: PublishIntent }, o?: Sig) =>
     request(DecideResponseSchema, "/api/decide", { method: "POST", body, ...o }),
-  resolve: (body: { edit: EditPlan; intent: PublishIntent; segmentIndex: number; query?: string; limit?: number }) =>
-    request(ResolveResponseSchema, "/api/resolve", { method: "POST", body }),
+  recover: (body: z.input<typeof RecoverRequestSchema>, o?: Sig) =>
+    request(RecoverResponseSchema, "/api/recover", { method: "POST", body, ...o }),
   access: (body: { edit: EditPlan; intent: PublishIntent; action: z.infer<typeof AccessActionSchema> }, o?: Sig) =>
     request(AccessResponseSchema, "/api/access", { method: "POST", body, ...o }),
   createReceipt: (body: { edit: EditPlan; intent: PublishIntent }) =>
@@ -144,6 +164,8 @@ export function describeError(err: unknown): { title: string; detail: string; co
       BAD_REQUEST: "Invalid request",
       NOT_FOUND: "Not found",
       UPSTREAM: "Upstream service error",
+      CONFLICT: "Changed elsewhere",
+      RATE_LIMITED: "Too many requests",
       INTERNAL: "Server error",
       NETWORK: "Network error",
       BAD_RESPONSE: "Unexpected response",

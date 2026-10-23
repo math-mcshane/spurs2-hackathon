@@ -6,7 +6,7 @@ import type { AccessResponseSchema } from "@/lib/contracts";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ErrorState, FictionalTag, OriginBadge, VERDICT_STYLE, evidenceOrigin, tcRange } from "./shared";
+import { ErrorState, FictionalTag, OriginBadge, VERDICT_STYLE, evidenceOrigin, tcRange, utc } from "./shared";
 
 export type AccessResult = z.infer<typeof AccessResponseSchema>;
 export type AccessState =
@@ -32,6 +32,7 @@ function ReasonRow({ r }: { r: Reason }) {
         <div className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10px]">
           <span className="text-zinc-200">{r.ruleId}</span>
           <span className="text-zinc-500">dimension: {r.dimension}</span>
+          {r.basis && <span className="text-zinc-500">basis: {r.basis}</span>}
           {(r.start !== undefined || r.end !== undefined) && (
             <span className="text-zinc-400">
               {r.scoreplayMediaId ? `${r.scoreplayMediaId} · ` : ""}
@@ -82,7 +83,9 @@ export function VerdictCard({
   }
 
   const d = decision.decision;
-  const vs = VERDICT_STYLE[d.verdict];
+  // ALLOWED under a demo policy is never presented as a green clearance.
+  const demo = d.verdict === "ALLOWED" && d.clearance === "DEMO";
+  const vs = demo ? { ...VERDICT_STYLE.ALLOWED, label: "ALLOWED · DEMO", text: "text-amber-200", bg: "bg-amber-500/15", border: "border-amber-500/50" } : VERDICT_STYLE[d.verdict];
   const reasons = [...d.reasons].sort((a, b) => ORDER[a.outcome] - ORDER[b.outcome]);
   const decisive = reasons.filter((r) => r.outcome !== "PERMIT");
   const permits = reasons.filter((r) => r.outcome === "PERMIT");
@@ -114,11 +117,23 @@ export function VerdictCard({
 
       <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] text-zinc-400">
         <span>
-          policy <span className="text-zinc-200">{d.policyId}</span> · v{d.policyVersion}
+          policy <span className="text-zinc-200">{d.policyId}</span> · v{d.policyVersion} · clearance {d.clearance}
         </span>
         {d.policyFictional && <FictionalTag />}
-        <span className="text-zinc-500">evaluated {new Date(d.evaluatedAt).toLocaleTimeString()}</span>
+        <span className="text-zinc-500">evaluated {utc(d.evaluatedAt)}</span>
       </div>
+      {d.policySelection && (
+        <details className="text-[10px] text-zinc-500">
+          <summary className="cursor-pointer">Policy selection · {d.policySelection.considered.length} considered</summary>
+          <ul className="mt-1 space-y-0.5">
+            {d.policySelection.considered.map((p) => (
+              <li key={p.policyId}>
+                <span className={p.applicable ? "text-emerald-300" : "text-zinc-500"}>{p.applicable ? "applicable" : "not applicable"}</span> {p.policyId}: {p.reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       {error !== null && <ErrorState error={error} service="Policy" />}
 

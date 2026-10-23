@@ -6,27 +6,34 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { z } from "zod";
-import type { Asset, RightsReceipt, ScorePlayClient } from "@/lib/contracts";
+import { DEMO_CLEARANCE_LABEL, canPublish, type Asset, type RightsReceipt, type ScorePlayClient } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
-import { mapMediaToAsset } from "./map";
+import { trackProvenance } from "@/lib/media/provenance";
+import { ReplayMissError } from "@/lib/media/replay";
+import { ScorePlayHttpError, ScorePlayInvalidResponseError, readScorePlayJson, scorePlayReadMessage } from "@/lib/media/scoreplay-read";
+import { mapMediaToAsset, toSquad, type ScorePlaySquad } from "./map";
 import {
   DeleteVideoLogsResultSchema,
   MediaSchema,
   MediaSearchResultSchema,
+  PlayerListSchema,
   TagFilterListSchema,
   TagOptionListSchema,
   TagOptionSchema,
   TagSearchResultSchema,
+  TeamSeasonListSchema,
   UploadInitSchema,
   VideoLogListSchema,
   WhoamiSchema,
   type ScorePlayMedia,
   type ScorePlayTagFilter,
+  type ScorePlayTagOption,
   type ScorePlayVideoLog,
+  type ScorePlayTeamSeason,
   type ScorePlayWhoami,
 } from "./schemas";
-import { SCOREPLAY_TAXONOMY, managedTagNames } from "./taxonomy";
-import { desiredTagNames, planActions, receiptMarker, writebackTargets, type MediaReadBack, type PlannedAction } from "./writeback";
+import { SCOREPLAY_TAXONOMY } from "./taxonomy";
+import type { PlannedLog } from "./writeback";
 
 if (typeof window !== "undefined") throw new Error("src/lib/scoreplay is server-only");
 
@@ -40,9 +47,11 @@ const TAG_FILTER_TTL_MS = 5 * 60_000;
 const TAG_SEARCH_MAX_CHARS = 60;
 
 type Query = Record<string, string | number | boolean | undefined>;
-type RequestOptions = { query?: Query; body?: unknown };
+/** `replay`: a rights/catalog READ that may use the demo recording + 429 retry (lib/media/scoreplay-read). Never set on writeback paths. */
+type RequestOptions = { query?: Query; body?: unknown; replay?: boolean };
 
 let tagFilterCache: { at: number; filters: ScorePlayTagFilter[] } | undefined;
+let squadCache: { at: number; squads: ScorePlaySquad[] } | undefined;
 
 export class ScorePlayHttpClient implements ScorePlayClient {
   // ---------- ScorePlayClient ----------
@@ -54,6 +63,7 @@ export class ScorePlayHttpClient implements ScorePlayClient {
       // Docs pattern: resolve labels → IDs with GET /tag/search, then POST /media/search with those IDs.
       const found = await this.request("GET", "/tag/search", TagSearchResultSchema, {
         query: { query: q.slice(0, TAG_SEARCH_MAX_CHARS) },
+        replay: true,
       });
       const ids = (list: { ID: number }[] | null | undefined) => (list ?? []).map((x) => x.ID);
       Object.assign(body, {
@@ -69,43 +79,29 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     const result = await this.request("POST", "/media/search", MediaSearchResultSchema, {
       query: { page: 1, per_page: limit },
       body,
+      replay: true,
     });
-    const filters = await this.tagFilters();
-    return (result.media ?? []).slice(0, limit).map((m) => mapMediaToAsset(m, filters));
+    const [filters, squads] = await Promise.all([this.tagFilters(), this.squads()]);
+    return (result.media ?? []).slice(0, limit).map((m) => mapMediaToAsset(m, filters, squads));
   }
 
   async getAsset(id: string): Promise<Asset> {
-    const [media, filters] = await Promise.all([this.getMedia(id), this.tagFilters()]);
-    return mapMediaToAsset(media, filters);
+    const [media, filters, squads] = await Promise.all([
+      this.request("GET", `/media/${mediaIdPath(id)}`, MediaSchema, { replay: true }),
+      this.tagFilters(),
+      this.squads(),
+    ]);
+    return mapMediaToAsset(media, filters, squads);
   }
 
   /**
-   * Writes verdict tags + timecoded video logs per SCOREPLAY_TAXONOMY to every target, then re-reads.
-   * Returns `Record<mediaId, MediaReadBack>`. Throws only NOT_CONFIGURED; per-media upstream errors → FAILED.
+   * Uploads a rendered derivative as its OWN media (multipart, documented 3-step flow).
+   * Requires `canPublish(receipt)` (verified clearance + human approval) AND SCOREPLAY_UPLOAD_APPROVED=true.
    */
-  async writeDecision(receipt: RightsReceipt): Promise<Record<string, MediaReadBack>> {
-    let tagIds: Promise<Map<string, number>> | undefined;
-    const out: Record<string, MediaReadBack> = {};
-    for (const mediaId of writebackTargets(receipt)) {
-      try {
-        tagIds ??= this.ensureTagOptions(desiredTagNames(receipt));
-        out[mediaId] = await this.writeOne(mediaId, receipt, await tagIds);
-      } catch (err) {
-        if (err instanceof AppError && err.code === "NOT_CONFIGURED") throw err;
-        out[mediaId] = {
-          status: "FAILED",
-          at: new Date().toISOString(),
-          detail: err instanceof Error ? err.message : String(err),
-          tags: [],
-          actions: [],
-        };
-      }
-    }
-    return out;
-  }
-
-  /** Uploads a rendered derivative as its OWN media (multipart, documented 3-step flow). */
   async uploadDerivative(file: { path: string; title: string }, receipt: RightsReceipt): Promise<{ id: string }> {
+    if (!canPublish(receipt)) {
+      throw new AppError("FORBIDDEN", "Derivative upload requires verified clearance and human approval (canPublish)");
+    }
     if (process.env.SCOREPLAY_UPLOAD_APPROVED !== "true") {
       throw new AppError("NOT_CONFIGURED", "Derivative upload disabled: set SCOREPLAY_UPLOAD_APPROVED=true only after ScorePlay staff confirm permission");
     }
@@ -131,11 +127,11 @@ export class ScorePlayHttpClient implements ScorePlayClient {
           `receipt ${receipt.id}`,
           `edit ${receipt.edit.id}`,
           `review PENDING — distinct asset, needs its own decision`,
-          d.policyFictional ? SCOREPLAY_TAXONOMY.fictionalBanner : undefined,
+          d.policyFictional ? DEMO_CLEARANCE_LABEL : undefined,
         ]
           .filter(Boolean)
           .join(" | "),
-        raw_tags: [SCOREPLAY_TAXONOMY.derivativeTag, SCOREPLAY_TAXONOMY.reviewTags.PENDING],
+        raw_tags: [SCOREPLAY_TAXONOMY.derivativeTag],
       },
     });
 
@@ -179,118 +175,90 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     }
   }
 
+  /** Exact (case-insensitive) match for a tag-option name via `GET /tag/options?query=`. */
+  async findTagOption(name: string): Promise<ScorePlayTagOption | undefined> {
+    const list = await this.request("GET", "/tag/options", TagOptionListSchema, { query: { query: name } });
+    return list.find((o) => o.name?.toLowerCase() === name.toLowerCase());
+  }
+
+  // ---------- Writes (documented; only reachable through lib/scoreplay/writeback.ts#applyWriteback) ----------
+
+  /** `POST /tag/options` → 201 TagOption. */
+  createTagOption(name: string, type: string): Promise<ScorePlayTagOption> {
+    return this.request("POST", "/tag/options", TagOptionSchema, { body: { name, label: name, type } });
+  }
+
+  /** `POST /media/{id}/tags` (`UpdateMediaTagsPayload.tag_option_ids`) → 204. */
+  async addMediaTags(mediaId: string, tagOptionIds: number[]): Promise<void> {
+    await this.request("POST", `/media/${mediaIdPath(mediaId)}/tags`, undefined, { body: { tag_option_ids: tagOptionIds } });
+  }
+
+  /** `DELETE /media/{id}/tags` (`UpdateMediaTagsPayload.tag_option_ids`) → 204. */
+  async removeMediaTags(mediaId: string, tagOptionIds: number[]): Promise<void> {
+    await this.request("DELETE", `/media/${mediaIdPath(mediaId)}/tags`, undefined, { body: { tag_option_ids: tagOptionIds } });
+  }
+
+  /** `POST /video/logs` (`VideoLogPayload`, `ActionClip` offset-range mode) → 200 `true`. */
+  async addVideoLogs(companyId: number, mediaId: number, logs: PlannedLog[]): Promise<void> {
+    await this.request("POST", "/video/logs", undefined, {
+      body: {
+        company_id: companyId,
+        video_logs: logs.map((l) => ({
+          media_id: mediaId,
+          log: { start_offset: l.start, end_offset: l.end, comment: l.comment, raw_tags: l.rawTags },
+        })),
+      },
+    });
+  }
+
+  /** `DELETE /media/{id}/logs` `{log_ids}` → `{deleted_ids}`. */
+  deleteVideoLogs(mediaId: string, logIds: number[]): Promise<z.output<typeof DeleteVideoLogsResultSchema>> {
+    return this.request("DELETE", `/media/${mediaIdPath(mediaId)}/logs`, DeleteVideoLogsResultSchema, { body: { log_ids: logIds } });
+  }
+
   // ---------- Internals ----------
 
+  /** Cached only when read LIVE, so recorded data is re-reported to the run's provenance on every use. */
   private async tagFilters(): Promise<ScorePlayTagFilter[]> {
     if (tagFilterCache && Date.now() - tagFilterCache.at < TAG_FILTER_TTL_MS) return tagFilterCache.filters;
-    const filters: ScorePlayTagFilter[] = [];
-    for (let page = 1; ; page++) {
-      const res = await this.request("GET", "/tag/filters", TagFilterListSchema, { query: { page, limit: 250 } });
-      const items = res.items ?? [];
-      filters.push(...items);
-      if (items.length < 250 || (res.total ?? 0) <= filters.length) break;
-    }
-    tagFilterCache = { at: Date.now(), filters };
+    const { value: filters, provenance } = await trackProvenance(async () => {
+      const all: ScorePlayTagFilter[] = [];
+      for (let page = 1; ; page++) {
+        const res = await this.request("GET", "/tag/filters", TagFilterListSchema, { query: { page, limit: 250 }, replay: true });
+        const items = res.items ?? [];
+        all.push(...items);
+        if (items.length < 250 || (res.total ?? 0) <= all.length) break;
+      }
+      return all;
+    });
+    if (provenance?.origin === "LIVE") tagFilterCache = { at: Date.now(), filters };
     return filters;
   }
 
-  /** name → tag option ID, creating missing REROUTE tag options (`POST /tag/options`). */
-  private async ensureTagOptions(names: string[]): Promise<Map<string, number>> {
-    const resolved = new Map<string, number>();
-    await Promise.all(
-      names.map(async (name) => {
-        const list = await this.request("GET", "/tag/options", TagOptionListSchema, { query: { query: name } });
-        const existing = list.find((o) => o.name?.toLowerCase() === name.toLowerCase());
-        const option =
-          existing ??
-          (await this.request("POST", "/tag/options", TagOptionSchema, {
-            body: { name, label: name, type: SCOREPLAY_TAXONOMY.tagOptionType },
-          }));
-        resolved.set(name, option.ID);
-      }),
-    );
-    return resolved;
-  }
-
-  private async writeOne(mediaId: string, receipt: RightsReceipt, tagIds: Map<string, number>): Promise<MediaReadBack> {
-    const media = await this.getMedia(mediaId);
-    const desired = desiredTagNames(receipt);
-    const desiredIds = new Set(desired.map((n) => tagIds.get(n)!));
-    const managed = new Set(managedTagNames());
-    const present = (media.tags ?? []).filter((t) => t.tag_option_id);
-    const presentIds = new Set([...present.map((t) => t.tag_option_id!), ...(media.tag_option_ids ?? [])]);
-
-    // 1. Tags: remove stale REROUTE tags (e.g. previous verdict), add missing ones. Never touches other tags.
-    const stale = [
-      ...new Set(
-        present
-          .filter((t) => managed.has((t.tag_option?.name ?? t.name ?? "").toLowerCase()) && !desiredIds.has(t.tag_option_id!))
-          .map((t) => t.tag_option_id!),
-      ),
-    ];
-    if (stale.length) await this.request("DELETE", `/media/${mediaIdPath(mediaId)}/tags`, undefined, { body: { tag_option_ids: stale } });
-    const missing = [...desiredIds].filter((tid) => !presentIds.has(tid));
-    if (missing.length) await this.request("POST", `/media/${mediaIdPath(mediaId)}/tags`, undefined, { body: { tag_option_ids: missing } });
-
-    // 2. Timecoded video logs (videos only): replace this receipt's logs unless already identical.
-    const isVideo = media.type === "video";
-    const planned = isVideo ? planActions(receipt, mediaId) : [];
-    const marker = receiptMarker(receipt.id);
-    if (isVideo) {
-      const mine = (await this.listVideoLogs(mediaId)).filter((l) => l.comment?.startsWith(marker));
-      if (!sameActions(mine, planned)) {
-        if (mine.length) {
-          await this.request("DELETE", `/media/${mediaIdPath(mediaId)}/logs`, DeleteVideoLogsResultSchema, {
-            body: { log_ids: mine.map((l) => l.id) },
-          });
-        }
-        if (media.company_id == null) throw new AppError("UPSTREAM", `Media ${mediaId} has no company_id; POST /video/logs requires it`);
-        await this.request("POST", "/video/logs", undefined, {
-          body: {
-            company_id: media.company_id,
-            video_logs: planned.map((a) => ({
-              media_id: media.ID,
-              log: {
-                ...(a.end === undefined ? { offset: a.start } : { start_offset: a.start, end_offset: a.end }),
-                comment: a.comment,
-                raw_tags: a.rawTags,
-              },
-            })),
-          },
-        });
+  /** Squad registrations (`GET /team-seasons`, then `GET /players?team_season_id=` per season); same TTL and LIVE-only caching as tag groups. */
+  private async squads(): Promise<ScorePlaySquad[]> {
+    if (squadCache && Date.now() - squadCache.at < TAG_FILTER_TTL_MS) return squadCache.squads;
+    const { value: squads, provenance } = await trackProvenance(async () => {
+      const seasons: ScorePlayTeamSeason[] = [];
+      for (let page = 1; ; page++) {
+        const res = await this.request("GET", "/team-seasons", TeamSeasonListSchema, { query: { page, limit: 100 }, replay: true });
+        const items = res.items ?? [];
+        seasons.push(...items);
+        if (items.length < 100 || (res.total ?? 0) <= seasons.length) break;
       }
-    }
-
-    // 3. Re-read to prove persistence (spec §11).
-    const reread = await this.getMedia(mediaId);
-    const rereadTags = (reread.tags ?? []).filter((t) => t.tag_option_id);
-    const rereadIds = new Set([...rereadTags.map((t) => t.tag_option_id!), ...(reread.tag_option_ids ?? [])]);
-    const tagNames = [
-      ...new Set(
-        rereadTags
-          .map((t) => (t.tag_option?.name ?? t.name ?? "").toLowerCase())
-          .filter((n) => managed.has(n)),
-      ),
-    ];
-    const logs = isVideo ? (await this.listVideoLogs(mediaId)).filter((l) => l.comment?.startsWith(marker)) : [];
-    const actions = logs.map(logToAction);
-
-    const problems: string[] = [];
-    const missingAfter = desired.filter((n) => !rereadIds.has(tagIds.get(n)!));
-    if (missingAfter.length) problems.push(`tags not visible on re-read: ${missingAfter.join(", ")}`);
-    const staleAfter = stale.filter((tid) => rereadIds.has(tid));
-    if (staleAfter.length) problems.push(`stale REROUTE tag ids still present: ${staleAfter.join(", ")}`);
-    if (isVideo && !sameActions(logs, planned)) problems.push(`expected ${planned.length} video log(s) for this receipt, re-read found ${logs.length}`);
-    const note = isVideo ? undefined : `media type "${reread.type ?? "unknown"}" is not a video: tags only, no timecoded logs`;
-
-    return {
-      status: problems.length === 0 ? "VERIFIED" : "WRITTEN",
-      at: new Date().toISOString(),
-      detail: [...problems, note].filter(Boolean).join("; ") || undefined,
-      verdictTag: SCOREPLAY_TAXONOMY.verdictTags[receipt.decision.verdict],
-      tags: tagNames,
-      actions,
-    };
+      return (
+        await Promise.all(
+          seasons.map(async (season) =>
+            toSquad(
+              season,
+              await this.request("GET", "/players", PlayerListSchema, { query: { team_season_id: season.id, limit: 500 }, replay: true }),
+            ),
+          ),
+        )
+      ).filter((s): s is ScorePlaySquad => s !== undefined);
+    });
+    if (provenance?.origin === "LIVE") squadCache = { at: Date.now(), squads };
+    return squads;
   }
 
   private async request<S extends z.ZodType | undefined>(
@@ -299,13 +267,11 @@ export class ScorePlayHttpClient implements ScorePlayClient {
     schema: S,
     opts: RequestOptions = {},
   ): Promise<S extends z.ZodType ? z.output<S> : unknown> {
-    const { apiKey, baseUrl } = readConfig();
-    const url = new URL(`${baseUrl}${path}`);
-    for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
-
-    const res = await fetchWithTimeout(
-      url,
-      {
+    const build = () => {
+      const { apiKey, baseUrl } = readConfig();
+      const url = new URL(`${baseUrl}${path}`);
+      for (const [k, v] of Object.entries(opts.query ?? {})) if (v !== undefined) url.searchParams.set(k, String(v));
+      const init: RequestInit = {
         method,
         headers: {
           "X-ScorePlay-Api-Key": apiKey,
@@ -314,10 +280,27 @@ export class ScorePlayHttpClient implements ScorePlayClient {
         },
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
         cache: "no-store",
-      },
-      REQUEST_TIMEOUT_MS,
-      `${method} ${path}`,
-    );
+      };
+      return { url, init };
+    };
+
+    if (opts.replay && schema && (method === "GET" || method === "POST")) {
+      let replayed: unknown;
+      try {
+        ({ value: replayed } = await readScorePlayJson({ method, path, query: opts.query, body: opts.body }, () => {
+          const { url, init } = build();
+          return fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+        }));
+      } catch (err) {
+        throw readError(err, `${method} ${path}`);
+      }
+      const parsed = schema.safeParse(replayed);
+      if (!parsed.success) throw new AppError("UPSTREAM", `ScorePlay ${method} ${path}: unexpected response shape`);
+      return parsed.data as never;
+    }
+
+    const { url, init } = build();
+    const res = await fetchWithTimeout(url, init, REQUEST_TIMEOUT_MS, `${method} ${path}`);
 
     const text = await res.text();
     if (!res.ok) {
@@ -341,6 +324,24 @@ export class ScorePlayHttpClient implements ScorePlayClient {
   }
 }
 
+/** User-facing error for a failed replayable read: operation + status, never the upstream body. */
+function readError(err: unknown, operation: string): AppError {
+  if (err instanceof AppError) return err;
+  if (err instanceof ScorePlayHttpError) {
+    if (err.statusCode === 404) return new AppError("NOT_FOUND", `ScorePlay ${operation}: not found`, { cause: err });
+    if (err.statusCode === 429) {
+      const headers = err.retryAfterSec ? { "Retry-After": String(err.retryAfterSec) } : undefined;
+      return new AppError("RATE_LIMITED", scorePlayReadMessage(err), { cause: err, headers });
+    }
+    const hint = err.statusCode === 401 ? " — invalid API key or missing permission" : "";
+    return new AppError("UPSTREAM", `${scorePlayReadMessage(err)}${hint}`, { cause: err });
+  }
+  if (err instanceof ReplayMissError) return new AppError("UPSTREAM", `ScorePlay ${operation}: not in the demo recording (DEMO_REPLAY=true)`, { cause: err });
+  if (err instanceof ScorePlayInvalidResponseError) return new AppError("UPSTREAM", err.message, { cause: err });
+  const timedOut = err instanceof Error && err.name === "TimeoutError";
+  return new AppError("UPSTREAM", `ScorePlay ${operation}: ${timedOut ? `timed out after ${REQUEST_TIMEOUT_MS} ms` : "network error"}`, { cause: err });
+}
+
 function readConfig(): { apiKey: string; baseUrl: string } {
   const apiKey = process.env.SCOREPLAY_API_KEY?.trim();
   if (!apiKey) throw new AppError("NOT_CONFIGURED", "SCOREPLAY_API_KEY is not set (add it to .env.local)");
@@ -361,28 +362,4 @@ async function fetchWithTimeout(input: string | URL, init: RequestInit, timeoutM
     const timedOut = cause instanceof Error && cause.name === "TimeoutError";
     throw new AppError("UPSTREAM", `ScorePlay ${label}: ${timedOut ? `timed out after ${timeoutMs} ms` : "network error"}`, { cause });
   }
-}
-
-/** Video-log read-back → seconds. `timestamp` is seconds; `start/end_timestamp` are milliseconds (documented). */
-function logToAction(l: ScorePlayVideoLog): MediaReadBack["actions"][number] {
-  const ranged = (l.end_timestamp ?? 0) > 0;
-  return {
-    id: l.id,
-    start: ranged ? (l.start_timestamp ?? 0) / 1000 : (l.timestamp ?? undefined),
-    end: ranged ? l.end_timestamp! / 1000 : undefined,
-    comment: l.comment ?? "",
-  };
-}
-
-/** Same comments and (to 1 s, since `timestamp` is whole seconds) same timing → nothing to rewrite. */
-function sameActions(existing: ScorePlayVideoLog[], planned: PlannedAction[]): boolean {
-  if (existing.length !== planned.length) return false;
-  const key = (comment: string, start: number | undefined, end: number | undefined) =>
-    `${comment}|${Math.floor(start ?? 0)}|${end === undefined ? "-" : Math.floor(end)}`;
-  const have = existing.map((l) => {
-    const a = logToAction(l);
-    return key(a.comment, a.start, a.end);
-  });
-  const want = planned.map((p) => key(p.comment, p.start, p.end));
-  return have.sort().join("\n") === want.sort().join("\n");
 }

@@ -1,0 +1,427 @@
+{
+  "recordedAt": "2026-10-23T14:51:23.399Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "catalog",
+    "indexId": "6ad911d5500e82756f2eb468"
+  },
+  "value": {
+    "indexId": "6ad911d5500e82756f2eb468",
+    "indexName": "premiere-league",
+    "models": [
+      "marengo3.0"
+    ],
+    "searchOptions": [
+      "visual",
+      "audio"
+    ],
+    "entries": [
+      {
+        "videoId": "6ad91206968fe117efe706d1",
+        "filename": "261009_Men_De Zerbi Pre Match Man Utd A_16x9.mp4",
+        "durationSec": 243.008,
+        "status": "ready",
+        "claimedScoreplayId": "130850922"
+      },
+      {
+        "videoId": "6ad912052cc348c0bd201298",
+        "filename": "Man Utd (A) Previously Against.mp4",
+        "durationSec": 18.496,
+        "status": "ready",
+        "claimedScoreplayId": "130850923"
+      },
+      {
+        "videoId": "6ad912059c038876f358b09a",
+        "filename": "261008_Men_Pre Match Man Utd A_Utd Line Up_9x16.mp4",
+        "durationSec": 93.376,
+        "status": "ready",
+        "claimedScoreplayId": "130850920"
+      },
+      {
+        "videoId": "6ad912040ca748ea3c0aa6bd",
+        "filename": "261009_Men_De Zerbi Pre Match Man Utd A_9x16 CLIP.mp4",
+        "durationSec": 25.92,
+        "status": "ready",
+        "claimedScoreplayId": "130850921"
+      },
+      {
+        "videoId": "6ad912039c038876f358b092",
+        "filename": "261008_Men_Pre Match Man Utd A_Mo Kudus_9x16.mp4",
+        "durationSec": 67.413,
+        "status": "ready",
+        "claimedScoreplayId": "130850918"
+      },
+      {
+        "videoId": "6ad9120265b4aff96dc7bbb2",
+        "filename": "solanke over the bar.mp4",
+        "durationSec": 28.416,
+        "status": "ready",
+        "claimedScoreplayId": "130850916"
+      },
+      {
+        "videoId": "6ad91202968fe117efe706ae",
+        "filename": "261008_Men_Pre Match Man Utd A_Podcast Mathys Tel_9x16.mp4",
+        "durationSec": 118.4,
+        "status": "ready",
+        "claimedScoreplayId": "130850919"
+      },
+      {
+        "videoId": "6ad912012cc348c0bd201279",
+        "filename": "261008_Men_Pre Match Man Utd A_Left Back Dilemma_9x16.mp4",
+        "durationSec": 118.613,
+        "status": "ready",
+        "claimedScoreplayId": "130850917"
+      },
+      {
+        "videoId": "6ad91200968fe117efe706a5",
+        "filename": "solanke late goal.mp4",
+        "durationSec": 30.4,
+        "status": "ready",
+        "claimedScoreplayId": "130850915"
+      },
+      {
+        "videoId": "6ad911ff0ca748ea3c0aa69d",
+        "filename": "savio chance.mp4",
+        "durationSec": 19.114,
+        "status": "ready",
+        "claimedScoreplayId": "130850913"
+      },
+      {
+        "videoId": "6ad911fe0ca748ea3c0aa69a",
+        "filename": "Savio cele Man United 9x16 (A) v2.mp4",
+        "durationSec": 13.44,
+        "status": "ready",
+        "claimedScoreplayId": "130850912"
+      },
+      {
+        "videoId": "6ad911fe5411fa6e602f4640",
+        "filename": "Solanke early chance.mp4",
+        "durationSec": 19.605,
+        "status": "ready",
+        "claimedScoreplayId": "130850914"
+      },
+      {
+        "videoId": "6ad911fd968fe117efe70691",
+        "filename": "RDZ United.mp4",
+        "durationSec": 59.157,
+        "status": "ready",
+        "claimedScoreplayId": "130850911"
+      },
+      {
+        "videoId": "6ad911fd2cc348c0bd20125c",
+        "filename": "Slide 18 - Away End FT.mov",
+        "durationSec": 6.974,
+        "status": "ready",
+        "claimedScoreplayId": "130850909"
+      },
+      {
+        "videoId": "6ad911fc0ca748ea3c0aa687",
+        "filename": "Slide 19 - Players Clapping Fans.mov",
+        "durationSec": 15.294,
+        "status": "ready",
+        "claimedScoreplayId": "130850910"
+      },
+      {
+        "videoId": "6ad911fb500e82756f2eb574",
+        "filename": "Slide 17 - Stadium GV.mov",
+        "durationSec": 7.486,
+        "status": "ready",
+        "claimedScoreplayId": "130850908"
+      },
+      {
+        "videoId": "6ad911fb65b4aff96dc7bb78",
+        "filename": "Slide 16 -Tonali.mov",
+        "durationSec": 4.926,
+        "status": "ready",
+        "claimedScoreplayId": "130850907"
+      },
+      {
+        "videoId": "6ad911fa4a68f3b40321d6aa",
+        "filename": "Slide 15 - CG.mov",
+        "durationSec": 7.657,
+        "status": "ready",
+        "claimedScoreplayId": "130850906"
+      },
+      {
+        "videoId": "6ad911fa65b4aff96dc7bb70",
+        "filename": "Slide 14 - Savio.mov",
+        "durationSec": 11.284,
+        "status": "ready",
+        "claimedScoreplayId": "130850905"
+      },
+      {
+        "videoId": "6ad911f95411fa6e602f4621",
+        "filename": "Slide 13 - Kinsky.mov",
+        "durationSec": 5.332,
+        "status": "ready",
+        "claimedScoreplayId": "130850904"
+      },
+      {
+        "videoId": "6ad911f9960d8ea7bdd04d3e",
+        "filename": "Slide 11 - Senesi.mov",
+        "durationSec": 6.377,
+        "status": "ready",
+        "claimedScoreplayId": "130850902"
+      },
+      {
+        "videoId": "6ad911f85411fa6e602f4610",
+        "filename": "Slide 12 - Bergvall.mov",
+        "durationSec": 7.849,
+        "status": "ready",
+        "claimedScoreplayId": "130850903"
+      },
+      {
+        "videoId": "6ad911f8960d8ea7bdd04d32",
+        "filename": "Slide 10 - Gray Tackle.mov",
+        "durationSec": 6.526,
+        "status": "ready",
+        "claimedScoreplayId": "130850901"
+      },
+      {
+        "videoId": "6ad911f79c038876f358b02f",
+        "filename": "Slide 9 - KO.mov",
+        "durationSec": 5.012,
+        "status": "ready",
+        "claimedScoreplayId": "130850900"
+      },
+      {
+        "videoId": "6ad911f765b4aff96dc7bb5e",
+        "filename": "Slide 8 - Can't Smile without you Pre-KO.mov",
+        "durationSec": 13.844,
+        "status": "ready",
+        "claimedScoreplayId": "130850899"
+      },
+      {
+        "videoId": "6ad911f60ca748ea3c0aa65d",
+        "filename": "Limbs Man United 9x16 (A) v2.mp4",
+        "durationSec": 17.216,
+        "status": "ready",
+        "claimedScoreplayId": "130850898"
+      },
+      {
+        "videoId": "6ad911f665b4aff96dc7bb4b",
+        "filename": "Gallagher.mp4",
+        "durationSec": 26.069,
+        "status": "ready",
+        "claimedScoreplayId": "130850897"
+      },
+      {
+        "videoId": "6ad911f55411fa6e602f45f7",
+        "filename": "kudus chance_1.mp4",
+        "durationSec": 26.005,
+        "status": "ready",
+        "claimedScoreplayId": "130850896"
+      },
+      {
+        "videoId": "6ad911f4968fe117efe70655",
+        "filename": "Goal Man United 9x16 (A) v1.mp4",
+        "durationSec": 30.57,
+        "status": "ready",
+        "claimedScoreplayId": "130850894"
+      },
+      {
+        "videoId": "6ad911f49c038876f358b01a",
+        "filename": "Archie tackle.mp4",
+        "durationSec": 13.568,
+        "status": "ready",
+        "claimedScoreplayId": "130850895"
+      },
+      {
+        "videoId": "6ad911f365b4aff96dc7bb3e",
+        "filename": "Dom United Subs.mp4",
+        "durationSec": 43.136,
+        "status": "ready",
+        "claimedScoreplayId": "130850893"
+      },
+      {
+        "videoId": "6ad911f32cc348c0bd20121c",
+        "filename": "Goal Slo Mo Man United 9x16 (A) v1.mp4",
+        "durationSec": 45.973,
+        "status": "ready",
+        "claimedScoreplayId": "130850892"
+      },
+      {
+        "videoId": "6ad911f2960d8ea7bdd04cfe",
+        "filename": "Slide 4 - Dad with his boy.mov",
+        "durationSec": 5.737,
+        "status": "ready",
+        "claimedScoreplayId": "130850888"
+      },
+      {
+        "videoId": "6ad911f165b4aff96dc7bb2f",
+        "filename": "Slide 7 - Teams Out.mov",
+        "durationSec": 7.081,
+        "status": "ready",
+        "claimedScoreplayId": "130850889"
+      },
+      {
+        "videoId": "6ad911f15411fa6e602f45e4",
+        "filename": "Slide 5 - Savio to Camera.mov",
+        "durationSec": 5.204,
+        "status": "ready",
+        "claimedScoreplayId": "130850887"
+      },
+      {
+        "videoId": "6ad911f0960d8ea7bdd04ced",
+        "filename": "Slide 6 - Away End Singing Pre-KO.mov",
+        "durationSec": 10.046,
+        "status": "ready",
+        "claimedScoreplayId": "130850886"
+      },
+      {
+        "videoId": "6ad911ef65b4aff96dc7bb23",
+        "filename": "Slide 3 - Warm Ups.mov",
+        "durationSec": 4.969,
+        "status": "ready",
+        "claimedScoreplayId": "130850885"
+      },
+      {
+        "videoId": "6ad911ef500e82756f2eb512",
+        "filename": "Slide 2 -Players Out for Warm Ups.mov",
+        "durationSec": 9.577,
+        "status": "ready",
+        "claimedScoreplayId": "130850884"
+      },
+      {
+        "videoId": "6ad911ee2cc348c0bd2011f7",
+        "filename": "Slide 1 - Goal.mov",
+        "durationSec": 20.009,
+        "status": "ready",
+        "claimedScoreplayId": "130850883"
+      },
+      {
+        "videoId": "6ad911ed2cc348c0bd2011f2",
+        "filename": "9x16_TEAM_NEWS_MAN_UTD.mp4",
+        "durationSec": 52.437,
+        "status": "ready",
+        "claimedScoreplayId": "130850857"
+      },
+      {
+        "videoId": "6ad911ec2cc348c0bd2011ef",
+        "filename": "Press Conference: De Zerbi speaks to the media ahead of Manchester United trip.mp4",
+        "durationSec": 725.482,
+        "status": "ready",
+        "claimedScoreplayId": "130850856"
+      },
+      {
+        "videoId": "6ad911ec960d8ea7bdd04cd3",
+        "filename": "9x16_TEAM_NEWS_MAN_UTD_2.mp4",
+        "durationSec": 52.437,
+        "status": "ready",
+        "claimedScoreplayId": "130850855"
+      },
+      {
+        "videoId": "6ad911eb500e82756f2eb4ff",
+        "filename": "9x16_RDZ_ON_FERNANDES.mp4",
+        "durationSec": 48.938,
+        "status": "ready",
+        "claimedScoreplayId": "130850854"
+      },
+      {
+        "videoId": "6ad911ea9c038876f358afcf",
+        "filename": "9x16_RDZ_ON_DEKI.mp4",
+        "durationSec": 23.872,
+        "status": "ready",
+        "claimedScoreplayId": "130850853"
+      },
+      {
+        "videoId": "6ad911ea030b76724d136dfb",
+        "filename": "Manchester United vs Spurs | Extended Highlights | 2026-27.mp4",
+        "durationSec": 509.738,
+        "status": "ready",
+        "claimedScoreplayId": "130850831"
+      },
+      {
+        "videoId": "6ad911e9500e82756f2eb4eb",
+        "filename": "Manchester United vs Spurs | Full Match | 2026-27.mp4",
+        "durationSec": 6334.997,
+        "status": "ready",
+        "claimedScoreplayId": "130850832"
+      },
+      {
+        "videoId": "6ad911e865b4aff96dc7baf2",
+        "filename": "16x9_MNU_1_1_TOT_KEY_HIGHLIGHTS.mp4",
+        "durationSec": 121.834,
+        "status": "ready",
+        "claimedScoreplayId": "130850830"
+      },
+      {
+        "videoId": "6ad911e765b4aff96dc7baeb",
+        "filename": "9x16_MNU_1_1_TOT_HIGHLIGHTS.mp4",
+        "durationSec": 119.381,
+        "status": "ready",
+        "claimedScoreplayId": "130850829"
+      },
+      {
+        "videoId": "6ad911e6960d8ea7bdd04cba",
+        "filename": "The mentality is something to build on Solanke on his late equaliser and captaincy against Red Devils.mp4",
+        "durationSec": 152,
+        "status": "ready",
+        "claimedScoreplayId": "130850795"
+      },
+      {
+        "videoId": "6ad911e60ca748ea3c0aa5fd",
+        "filename": "9x16_DEF_ACTIONS_VS_MNU.mp4",
+        "durationSec": 120.64,
+        "status": "ready",
+        "claimedScoreplayId": "130850828"
+      },
+      {
+        "videoId": "6ad911e59c038876f358afb4",
+        "filename": "IMG_2434.MOV",
+        "durationSec": 19.113,
+        "status": "ready",
+        "claimedScoreplayId": "130850794"
+      },
+      {
+        "videoId": "6ad911e5500e82756f2eb4d6",
+        "filename": "We didn’t deserve to lose De Zerbi proud of togetherness in Man United draw.mp4",
+        "durationSec": 214.528,
+        "status": "ready",
+        "claimedScoreplayId": "130850793"
+      },
+      {
+        "videoId": "6ad911e40ca748ea3c0aa5f2",
+        "filename": "Solanke Goal.mp4",
+        "durationSec": 58.901,
+        "status": "ready",
+        "claimedScoreplayId": "130850792"
+      },
+      {
+        "videoId": "6ad911e365b4aff96dc7bacd",
+        "filename": "Fans clap Man United A 9x16.mp4",
+        "durationSec": 30.442,
+        "status": "ready",
+        "claimedScoreplayId": "130850791"
+      },
+      {
+        "videoId": "6ad911e24a68f3b40321d5f2",
+        "filename": "261008_Men_Pre Match Man Utd A_FPL Pick_9x16.mp4",
+        "durationSec": 42.453,
+        "status": "ready",
+        "claimedScoreplayId": "130850740"
+      },
+      {
+        "videoId": "6ad911e165b4aff96dc7bac4",
+        "filename": "9x16_MNU_1_6_TOT_20_21_HIGHLIGHTS_2.mp4",
+        "durationSec": 159.253,
+        "status": "ready",
+        "claimedScoreplayId": "130850739"
+      },
+      {
+        "videoId": "6ad911e00ca748ea3c0aa5dc",
+        "filename": "9x16_MNU_1_6_TOT_20_21_HIGHLIGHTS.mp4",
+        "durationSec": 159.253,
+        "status": "ready",
+        "claimedScoreplayId": "130850738"
+      },
+      {
+        "videoId": "6ad911e09c038876f358af94",
+        "filename": "9x16_MNU_0_3_TOT_PL_18_19_HIGHLIGHTS.mp4",
+        "durationSec": 92.266,
+        "status": "ready",
+        "claimedScoreplayId": "130850737"
+      }
+    ]
+  }
+}

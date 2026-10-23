@@ -1,0 +1,116 @@
+{
+  "recordedAt": "2026-10-23T12:15:28.582Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "moments",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "query": "players celebrating a goal together",
+    "limit": 12,
+    "searchOptions": [
+      "visual"
+    ],
+    "videoIds": [
+      "6ad911e6960d8ea7bdd04cba",
+      "6ad911e765b4aff96dc7baeb",
+      "6ad911e865b4aff96dc7baf2",
+      "6ad911e9500e82756f2eb4eb",
+      "6ad911ea030b76724d136dfb",
+      "6ad911ee2cc348c0bd2011f7",
+      "6ad911ef500e82756f2eb512",
+      "6ad911f165b4aff96dc7bb2f",
+      "6ad911f32cc348c0bd20121c",
+      "6ad911f365b4aff96dc7bb3e",
+      "6ad911f4968fe117efe70655",
+      "6ad911fe5411fa6e602f4640",
+      "6ad91200968fe117efe706a5",
+      "6ad9120265b4aff96dc7bbb2",
+      "6ad91206968fe117efe706d1"
+    ]
+  },
+  "value": [
+    {
+      "videoId": "6ad911f32cc348c0bd20121c",
+      "start": 14.799893379211426,
+      "end": 20.199853897094727,
+      "rank": 1,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911f32cc348c0bd20121c",
+      "start": 35.799739837646484,
+      "end": 45.93299865722656,
+      "rank": 2,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911e865b4aff96dc7baf2",
+      "start": 113.0329818725586,
+      "end": 121.83300018310547,
+      "rank": 3,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911f4968fe117efe70655",
+      "start": 23.66640853881836,
+      "end": 30.533000946044922,
+      "rank": 4,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911f32cc348c0bd20121c",
+      "start": 25.399816513061523,
+      "end": 35.799739837646484,
+      "rank": 5,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911ea030b76724d136dfb",
+      "start": 398.23291015625,
+      "end": 406.4994812011719,
+      "rank": 6,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911f4968fe117efe70655",
+      "start": 18.066469192504883,
+      "end": 23.66640853881836,
+      "rank": 7,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 5827.63330078125,
+      "end": 5833.23291015625,
+      "rank": 8,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911f4968fe117efe70655",
+      "start": 5.466607093811035,
+      "end": 18.066469192504883,
+      "rank": 9,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 4718.56591796875,
+      "end": 4723.03271484375,
+      "rank": 10,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911ee2cc348c0bd2011f7",
+      "start": 0,
+      "end": 9.999500274658203,
+      "rank": 11,
+      "query": "players celebrating a goal together"
+    },
+    {
+      "videoId": "6ad911e765b4aff96dc7baeb",
+      "start": 107.29946899414062,
+      "end": 119.36599731445312,
+      "rank": 12,
+      "query": "players celebrating a goal together"
+    }
+  ]
+}

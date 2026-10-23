@@ -1,0 +1,116 @@
+{
+  "recordedAt": "2026-10-23T12:15:28.583Z",
+  "source": "twelvelabs",
+  "request": {
+    "op": "moments",
+    "indexId": "6ad911d5500e82756f2eb468",
+    "query": "players applauding the travelling fans after the match",
+    "limit": 12,
+    "searchOptions": [
+      "visual"
+    ],
+    "videoIds": [
+      "6ad911e6960d8ea7bdd04cba",
+      "6ad911e765b4aff96dc7baeb",
+      "6ad911e865b4aff96dc7baf2",
+      "6ad911e9500e82756f2eb4eb",
+      "6ad911ea030b76724d136dfb",
+      "6ad911ee2cc348c0bd2011f7",
+      "6ad911ef500e82756f2eb512",
+      "6ad911f165b4aff96dc7bb2f",
+      "6ad911f32cc348c0bd20121c",
+      "6ad911f365b4aff96dc7bb3e",
+      "6ad911f4968fe117efe70655",
+      "6ad911fe5411fa6e602f4640",
+      "6ad91200968fe117efe706a5",
+      "6ad9120265b4aff96dc7bbb2",
+      "6ad91206968fe117efe706d1"
+    ]
+  },
+  "value": [
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 5844.16650390625,
+      "end": 5851.23291015625,
+      "rank": 1,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911ea030b76724d136dfb",
+      "start": 414.76605224609375,
+      "end": 418.96600341796875,
+      "rank": 2,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 85.83290100097656,
+      "end": 93.34388732910156,
+      "rank": 3,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 31.466493606567383,
+      "end": 39.399784088134766,
+      "rank": 4,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 67.9665298461914,
+      "end": 76.89971160888672,
+      "rank": 5,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911f4968fe117efe70655",
+      "start": 18.066469192504883,
+      "end": 23.66640853881836,
+      "rank": 6,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 168.83251953125,
+      "end": 177.33262634277344,
+      "rank": 7,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 26.39985466003418,
+      "end": 31.466493606567383,
+      "rank": 8,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 16.999906539916992,
+      "end": 26.39985466003418,
+      "rank": 9,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911ea030b76724d136dfb",
+      "start": 13.39992618560791,
+      "end": 19.06656265258789,
+      "rank": 10,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 53.066375732421875,
+      "end": 60.0333251953125,
+      "rank": 11,
+      "query": "players applauding the travelling fans after the match"
+    },
+    {
+      "videoId": "6ad911e9500e82756f2eb4eb",
+      "start": 10.53327465057373,
+      "end": 16.999906539916992,
+      "rank": 12,
+      "query": "players applauding the travelling fans after the match"
+    }
+  ]
+}

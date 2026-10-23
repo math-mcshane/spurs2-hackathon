@@ -1,6 +1,6 @@
 "use client";
 
-import type { Usage } from "@/lib/contracts";
+import { UsageSchema, type Usage } from "@/lib/contracts";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 /** Draft intent as edited in the form; becomes a `PublishIntent` once every field is valid. */
 export type IntentDraft = {
+  /** Publishing club (drives policy selection); "" = not stated. */
+  club: string;
   territory: string;
   platform: string;
   usage: Usage;
@@ -16,10 +18,16 @@ export type IntentDraft = {
   publishAt: string;
 };
 
+const CLUB_OPTIONS = [
+  { value: "tottenham", label: "Tottenham Hotspur" },
+  { value: "spurs", label: "San Antonio Spurs" },
+  { value: "", label: "Not stated" },
+];
+
 const TERRITORIES = [
+  { value: "GB", label: "GB · United Kingdom" },
   { value: "FR", label: "FR · France" },
   { value: "US", label: "US · United States" },
-  { value: "GB", label: "GB · United Kingdom" },
   { value: "DE", label: "DE · Germany" },
   { value: "ES", label: "ES · Spain" },
   { value: "IT", label: "IT · Italy" },
@@ -28,6 +36,7 @@ const TERRITORIES = [
 ];
 const PLATFORMS = [
   { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
   { value: "youtube", label: "YouTube" },
   { value: "tiktok", label: "TikTok" },
   { value: "x", label: "X" },
@@ -52,6 +61,21 @@ export function IntentForm({
 }) {
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-[1fr_1fr_auto]">
+      <div className="col-span-2 space-y-1 lg:col-span-3">
+        <Label htmlFor="intent-club" className="text-[10px] tracking-widest text-zinc-500 uppercase">Publishing club</Label>
+        <Select items={CLUB_OPTIONS} value={value.club} onValueChange={(v) => onChange({ club: v ?? "" })}>
+          <SelectTrigger id="intent-club" size="sm" className="w-full text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CLUB_OPTIONS.map((c) => (
+              <SelectItem key={c.value} value={c.value} className="text-xs">
+                {c.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="space-y-1">
         <Label htmlFor="intent-territory" className="text-[10px] tracking-widest text-zinc-500 uppercase">Territory</Label>
         <Select items={TERRITORIES} value={value.territory} onValueChange={(v) => v && onChange({ territory: v })}>
@@ -86,8 +110,8 @@ export function IntentForm({
         <span id="intent-usage-label" className="text-[10px] font-medium tracking-widest text-zinc-500 uppercase">
           Usage
         </span>
-        <div role="radiogroup" aria-labelledby="intent-usage-label" className="flex h-7 rounded-md border border-white/10 p-0.5">
-          {(["ORGANIC", "SPONSORED"] as const).map((u) => (
+        <div role="radiogroup" aria-labelledby="intent-usage-label" className="flex h-7 flex-wrap rounded-md border border-white/10 p-0.5">
+          {UsageSchema.options.map((u) => (
             <button
               key={u}
               type="button"
@@ -95,9 +119,9 @@ export function IntentForm({
               aria-checked={value.usage === u}
               onClick={() => onChange({ usage: u })}
               className={cn(
-                "rounded px-2.5 font-mono text-[10px] tracking-wider transition-colors",
+                "rounded px-2 font-mono text-[10px] tracking-wider transition-colors",
                 value.usage === u
-                  ? u === "SPONSORED"
+                  ? u === "SPONSORED" || u === "COMMERCIAL"
                     ? "bg-fuchsia-500/25 text-fuchsia-200"
                     : "bg-sky-500/25 text-sky-200"
                   : "text-zinc-500 hover:text-zinc-300",

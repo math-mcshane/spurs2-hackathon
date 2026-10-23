@@ -1,28 +1,30 @@
-import type { Candidate, EditPlan, PublishIntent, SearchHit, Segment } from "@/lib/contracts";
+import type { Asset, Candidate, EditDecision, EditPlan, PublishIntent, SearchHit, Segment } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
-import { loadPolicy, type Policy } from "@/lib/rights";
-import { loadDecisionContext, type ContextDeps, type DecisionContext } from "./context";
-import { evaluateEditInContext, evaluateSegmentInContext } from "./decide";
+import type { DecisionContext } from "./context";
+import { combineDecisions, evaluateEditInContext, type DecideOptions } from "./decide";
 
-export interface ResolveInput {
-  edit: EditPlan;
-  intent: PublishIntent;
-  segmentIndex: number;
-  query?: string;
-  limit: number;
-}
+/**
+ * Replacement footage for the Media Compliance Recovery Engine (`./recovery.ts`): Marengo search for comparable
+ * moments, each candidate independently re-checked. Similarity is never permission.
+ */
 
-export interface ResolveResult {
-  query: string;
-  candidates: Candidate[];
-  best?: Candidate;
-}
-
-/** Marengo hits fetched per requested candidate: headroom for hits dropped by overlap/fit. */
+/** Marengo hits fetched per requested candidate: headroom for hits dropped by exclusion/duplicates/fit. */
 const OVERFETCH = 4;
+/** Each hit may trigger a ScorePlay load + video analysis: hard cap per search. */
+const MAX_HITS = 12;
+/** Renditions of the same clip differ by a few frames at most. */
+const DUPLICATE_DURATION_SEC = 0.5;
 
-const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) =>
-  a.start < b.end && a.end > b.start;
+/** One edit under every intent, combined segment by segment (worst verdict, weakest clearance). */
+function evaluateForIntents(ctx: DecisionContext, edit: EditPlan, intents: readonly PublishIntent[], opts: Pick<DecideOptions, "policies"> & { now: Date }): EditDecision {
+  const results = intents.map((intent) => evaluateEditInContext(ctx, edit, intent, opts));
+  if (results.length === 1) return results[0];
+  return {
+    edit,
+    decision: combineDecisions(results.map((r) => r.decision), opts.now),
+    segments: edit.segments.map((segment, i) => ({ segment, decision: combineDecisions(results.map((r) => r.segments[i].decision), opts.now) })),
+  };
+}
 
 /**
  * Fit a hit to `duration` seconds around its midpoint (minimal change to the matched moment),
@@ -37,92 +39,81 @@ function fitToDuration(hit: SearchHit, duration: number, assetDuration: number |
   return { start: round(start), end: round(start + duration) };
 }
 
-function buildQuery(ctx: DecisionContext, segment: Segment, explicit: string | undefined): string {
-  const fromObservations = (ctx.observations[segment.scoreplayMediaId] ?? [])
-    .filter((e) => e.start === undefined || e.end === undefined || overlaps({ start: e.start, end: e.end }, segment))
-    .map((e) => e.observation.trim())
-    .filter(Boolean)
-    .join("; ");
-  const query =
-    explicit?.trim() || segment.label?.trim() || fromObservations || ctx.assets[segment.scoreplayMediaId]?.title.trim();
-  if (!query) throw new AppError("BAD_REQUEST", "No query given and the segment has no label, observations or title");
-  return query;
+/** "9x16_TEAM_NEWS_MAN_UTD_2.mp4" and "9x16_TEAM_NEWS_MAN_UTD.mp4" share the stem "teamnewsmanutd". */
+function nameStem(title: string): string {
+  let s = title.toLowerCase().replace(/\.[a-z0-9]{2,4}$/, "");
+  s = s.replace(/\b\d{1,2}x\d{1,2}\b/g, " "); // aspect-ratio renditions (9x16, 4x5, 16x9)
+  for (let prev = ""; prev !== s; ) {
+    prev = s;
+    s = s.replace(/[\s_-]*(v\d+|\d|copy|final)\s*$/, "").trim();
+  }
+  return s.replace(/[^a-z0-9]+/g, "");
+}
+
+/** Same footage under another name: same stem and (near-)identical duration. */
+function probableDuplicate(a: Asset, b: Asset): boolean {
+  if (a.id === b.id) return true;
+  if (a.durationSec === undefined || b.durationSec === undefined) return false;
+  return Math.abs(a.durationSec - b.durationSec) <= DUPLICATE_DURATION_SEC && nameStem(a.title) === nameStem(b.title);
 }
 
 /**
- * Replace one segment of `edit` with comparable footage from Marengo. Every candidate is re-checked
- * alone AND as part of the full proposed edit; only full-edit ALLOWED candidates are eligible.
- * Similarity is never permission: unknown-rights candidates are listed but never eligible.
+ * Comparable footage for one segment of `edit` (Marengo search for `query`), each candidate re-checked alone and
+ * inside the full proposed edit under every intent; eligible (full-edit ALLOWED) first, then search rank.
+ * Candidate assets are loaded into `ctx`. The original asset and its probable duplicates are never candidates;
+ * hits inside the original asset are returned as `sourceHits` (relevance evidence for a clean section of it).
  */
-export async function resolve(
-  input: ResolveInput,
-  opts: { deps?: ContextDeps; policy?: Policy; now?: Date } = {},
-): Promise<ResolveResult> {
-  const { edit, intent, segmentIndex, limit } = input;
+export async function searchReplacements(
+  ctx: DecisionContext,
+  input: { edit: EditPlan; segmentIndex: number; intents: readonly PublishIntent[]; query: string; limit: number },
+  evalOpts: Pick<DecideOptions, "policies"> & { now: Date },
+): Promise<{ candidates: Candidate[]; sourceHits: SearchHit[] }> {
+  const { edit, segmentIndex, intents, query, limit } = input;
   const target = edit.segments[segmentIndex];
-  if (!target) {
-    throw new AppError("BAD_REQUEST", `segmentIndex ${segmentIndex} out of range (edit has ${edit.segments.length})`);
-  }
-  const policy = opts.policy ?? loadPolicy();
-  const now = opts.now ?? new Date();
-  const ctx = await loadDecisionContext(edit, opts.deps);
-
+  const original = ctx.assets[target.scoreplayMediaId];
   const video = ctx.video();
   if ("status" in video) throw new AppError("NOT_CONFIGURED", `Marengo search unavailable: ${video.detail}`);
 
-  const query = buildQuery(ctx, target, input.query);
   const duration = target.end - target.start;
-  const hits = await video.search(query, { limit: Math.min(limit * OVERFETCH, 50) });
-
-  // Hits whose custom_id doesn't resolve to a ScorePlay asset can't be checked → dropped.
-  const mediaIds = [...new Set(hits.map((h) => h.scoreplayMediaId))];
-  const missing = new Set<string>();
+  const all = await video.search(query, { limit: Math.min(limit * OVERFETCH, MAX_HITS) });
+  const sourceHits = all.filter((h) => h.scoreplayMediaId === original.id);
+  const hits = all.filter((h) => h.scoreplayMediaId !== original.id);
+  // Hits whose ScorePlay asset no longer exists can't be checked → dropped.
+  const gone = new Set<string>();
   await Promise.all(
-    mediaIds.map((id) =>
+    [...new Set(hits.map((h) => h.scoreplayMediaId))].map((id) =>
       ctx.ensure([id]).catch((err: unknown) => {
-        if (err instanceof AppError && err.code === "NOT_FOUND") missing.add(id);
+        if (err instanceof AppError && err.code === "NOT_FOUND") gone.add(id);
         else throw err;
       }),
     ),
   );
 
   const candidates: Candidate[] = [];
-  const seen = new Set<string>();
+  const picked: Asset[] = [];
   for (const hit of hits) {
-    if (missing.has(hit.scoreplayMediaId)) continue;
-    const sameAsset = hit.scoreplayMediaId === target.scoreplayMediaId;
-    if (sameAsset && overlaps(hit, target)) continue;
-    const fitted = fitToDuration(hit, duration, ctx.assets[hit.scoreplayMediaId].durationSec);
-    if (!fitted || (sameAsset && overlaps(fitted, target))) continue;
+    if (gone.has(hit.scoreplayMediaId)) continue;
+    const asset = ctx.assets[hit.scoreplayMediaId];
+    // One candidate per footage: never the original, a rendition of it, or a rendition of one already picked.
+    if (probableDuplicate(asset, original) || picked.some((p) => probableDuplicate(asset, p))) continue;
+    const fitted = fitToDuration(hit, duration, asset.durationSec);
+    if (!fitted) continue;
+    picked.push(asset);
 
-    const segment: Segment = {
-      scoreplayMediaId: hit.scoreplayMediaId,
-      ...fitted,
-      label: target.label ?? query,
-    };
-    const key = `${segment.scoreplayMediaId}@${segment.start}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
+    const segment: Segment = { scoreplayMediaId: asset.id, ...fitted, label: target.label ?? query };
     const proposedEdit: EditPlan = {
-      id: `${edit.id}~seg${segmentIndex}~${key}`,
+      id: `${edit.id}~seg${segmentIndex}~${asset.id}@${segment.start}`,
       title: `${edit.title} (rerouted segment ${segmentIndex + 1})`,
       segments: edit.segments.map((s, i) => (i === segmentIndex ? segment : s)),
       derived: true,
       derivedFrom: edit.id,
     };
-    const segmentDecision = evaluateSegmentInContext(ctx, segment, intent, policy, now);
-    const editDecision = evaluateEditInContext(ctx, proposedEdit, intent, policy, now);
-    candidates.push({
-      hit,
-      proposedEdit,
-      segmentDecision,
-      editDecision,
-      eligible: editDecision.decision.verdict === "ALLOWED",
-    });
+    const alone: EditPlan = { id: `${proposedEdit.id}~alone`, title: asset.title, segments: [segment], derived: true, derivedFrom: edit.id };
+    const segmentDecision = evaluateForIntents(ctx, alone, intents, evalOpts).segments[0].decision;
+    const editDecision = evaluateForIntents(ctx, proposedEdit, intents, evalOpts);
+    candidates.push({ hit, proposedEdit, segmentDecision, editDecision, eligible: editDecision.decision.verdict === "ALLOWED" });
   }
 
   candidates.sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.hit.rank - b.hit.rank);
-  const ranked = candidates.slice(0, limit);
-  return { query, candidates: ranked, best: ranked[0]?.eligible ? ranked[0] : undefined };
+  return { candidates: candidates.slice(0, limit), sourceHits };
 }

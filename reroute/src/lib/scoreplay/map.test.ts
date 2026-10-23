@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapMediaToAsset } from "./map";
+import { mapMediaToAsset, toSquad, type ScorePlaySquad } from "./map";
 import { MediaSchema, type ScorePlayTagFilter } from "./schemas";
 
 /** Verbatim `components.schemas.Media.example` from https://developer.scoreplay.io/downloads/scoreplay.yaml */
@@ -126,7 +126,7 @@ describe("mapMediaToAsset", () => {
       tags: ["Parc des Princes"],
       thumbnailUrl: DOC_MEDIA_EXAMPLE.thumbnail_url,
     });
-    expect(asset.facts).toEqual({ recordedAt: "2025-05-31T22:01:27.000Z" });
+    expect(asset.facts).toEqual({ people: [], recordedAt: "2025-05-31T22:01:27.000Z" }); // full tag list, no player tag
     expect(asset.facts.competition).toBeUndefined(); // event path/name is NOT parsed into a competition
     expect(asset.durationSec).toBeUndefined(); // duration 0 = unknown
     expect(asset.previewUrl).not.toBe(DOC_MEDIA_EXAMPLE.original_url); // never the original download
@@ -139,6 +139,7 @@ describe("mapMediaToAsset", () => {
     expect(asset.facts).toEqual({
       competition: "NBA",
       team: "San Antonio Spurs",
+      teams: ["San Antonio Spurs"],
       people: ["victor wembanyama"],
       sponsors: ["Acme Energy"],
       recordedAt: "2025-05-31T22:01:27.000Z",
@@ -148,10 +149,42 @@ describe("mapMediaToAsset", () => {
     expect(asset.previewUrl).toBe("https://cdn.example/proxy_medium.mp4");
   });
 
-  it("leaves competition/team unknown when no tag filter vouches for them", () => {
-    const asset = mapMediaToAsset(video(), []);
+  it("leaves competition unknown when no tag filter vouches for it, and team unknown for unknown plain labels", () => {
+    const asset = mapMediaToAsset(video({ tags: [optionTag(900, "NBA"), optionTag(703, "Old Trafford")] }), []);
     expect(asset.facts.competition).toBeUndefined();
     expect(asset.facts.team).toBeUndefined();
+    expect(asset.facts.teams).toBeUndefined();
+  });
+
+  it("recognizes known clubs from plain tag options; a match tagging both sides has teams but no single team", () => {
+    const asset = mapMediaToAsset(
+      video({ tags: [optionTag(10797072, "Tottenham Hotspur", ""), optionTag(10797066, "Manchester United", ""), optionTag(10797068, "Old Trafford", "")] }),
+      [],
+    );
+    expect(asset.facts.teams).toEqual(["Tottenham Hotspur", "Manchester United"]);
+    expect(asset.facts.team).toBeUndefined();
+  });
+
+  it("reports a person's club ONLY from ScorePlay squad registration", () => {
+    const squads: ScorePlaySquad[] = [{ teamName: "Tottenham Hotspur FC", seasonName: "2026-27", playerIds: [11] }];
+    const asset = mapMediaToAsset(
+      video({ tags: [optionTag(10797072, "Tottenham Hotspur", ""), playerTag(11, "Dominic Solanke"), playerTag(12, "Bruno Fernandes")], player_ids: [11, 12] }),
+      [],
+      squads,
+    );
+    expect(asset.facts.people).toEqual(["Dominic Solanke", "Bruno Fernandes"]);
+    expect(asset.facts.peopleTeams).toEqual({ "Dominic Solanke": ["Tottenham Hotspur FC"] }); // Fernandes: unknown, never guessed
+    expect(asset.facts.teams).toEqual(["Tottenham Hotspur"]); // "Tottenham Hotspur FC" squad ≡ same club
+    expect(mapMediaToAsset(video(), FILTERS).facts.peopleTeams).toBeUndefined();
+  });
+
+  it("builds squads from team-season + player listings", () => {
+    expect(toSquad({ id: 72215, team_name: "Tottenham Hotspur FC", season_name: "2026-27" }, [{ ID: 1 }, { ID: 2 }])).toEqual({
+      teamName: "Tottenham Hotspur FC",
+      seasonName: "2026-27",
+      playerIds: [1, 2],
+    });
+    expect(toSquad({ id: 1, team_name: " " }, [])).toBeUndefined();
   });
 
   it("treats a team tag option of type `team` as a team fact even without filters", () => {
@@ -165,12 +198,20 @@ describe("mapMediaToAsset", () => {
     expect(asset.metadata.teams).toEqual(["San Antonio Spurs", "Los Angeles Lakers"]);
   });
 
-  it("never turns missing people/sponsor tags into an empty (= cleared) list", () => {
+  it("never turns missing sponsor tags into an empty (= cleared) list", () => {
     for (const tags of [null, [], [optionTag(900, "NBA")]]) {
       const asset = mapMediaToAsset(video({ tags, player_ids: undefined, sponsor_ids: undefined }), FILTERS);
-      expect(asset.facts.people).toBeUndefined();
       expect(asset.facts.sponsors).toBeUndefined();
     }
+  });
+
+  it("people = [] only when ScorePlay positively lists no player; unloaded/hidden/id-only lists stay unknown", () => {
+    const people = (overrides: Record<string, unknown>) => mapMediaToAsset(video({ player_ids: undefined, ...overrides }), FILTERS).facts.people;
+    expect(people({ tags: [optionTag(900, "NBA")] })).toEqual([]); // GET /media/{id}: tags loaded, none is a player
+    expect(people({ tags: [] })).toBeUndefined(); // search results carry `tags: []` → not loaded
+    expect(people({ tags: null })).toBeUndefined();
+    expect(people({ tags: [optionTag(900, "NBA"), { ...playerTag(11, "x"), hidden: true }] })).toBeUndefined(); // hidden player
+    expect(people({ tags: [optionTag(900, "NBA")], player_ids: [11] })).toBeUndefined(); // id without a tag
   });
 
   it("leaves people unknown when player_ids lists players the tags do not resolve", () => {

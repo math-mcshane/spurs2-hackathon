@@ -1,47 +1,133 @@
 {
   "id": "demo-tottenham-pl",
-  "version": "2026-10-22.1",
-  "source": "REROUTE fictional demo dataset (no club, league or sponsor contract was supplied)",
-  "fictional": true,
-  "disclaimer": "FICTIONAL DEMO POLICY — not an actual team, league or sponsor agreement",
+  "version": "2026-10-23.1",
+  "title": "Tottenham Social Media Usage — Demo",
+  "source": "FICTIONAL. Written by the REROUTE team for the hackathon demo, modelled on common football club-content practice: club-owned social channels, a home-market window for full-match recordings, no match broadcast footage in advertising, a club group image-rights pool, partner exclusivity and stadium conditions of entry. No Tottenham Hotspur, Premier League, player or sponsor agreement was supplied or consulted.",
+  "kind": "DEMO",
+  "disclaimer": "FICTIONAL DEMO POLICY — not an actual club, league, player or sponsor agreement. DEMO POLICY — NOT VERIFIED LEGAL CLEARANCE.",
+  "applicability": {
+    "club": "tottenham",
+    "clubNames": ["Tottenham Hotspur", "Tottenham Hotspur FC"],
+    "competitions": ["Premier League"],
+    "provenance": {
+      "requiredTags": ["partner content"],
+      "description": "Club-produced footage filed in the club's ScorePlay workspace and tagged \"partner content\""
+    },
+    "validFrom": "2026-07-01T00:00:00Z",
+    "validUntil": "2027-06-30T23:59:59Z"
+  },
   "rules": [
     {
-      "id": "THFC-1-pl-social-license",
+      "id": "THFC-1-competition",
       "effect": "PERMIT",
-      "dimensions": ["competition", "territory", "platform", "usage", "expiry"],
+      "dimensions": ["competition"],
       "match": { "competition": ["Premier League"] },
-      "intent": { "territories": ["GB", "FR", "US"], "platforms": ["instagram", "youtube", "x"], "usage": ["ORGANIC"] },
-      "validFrom": "2026-08-01T00:00:00Z",
-      "validUntil": "2027-05-31T23:59:59Z",
-      "explanation": "FICTIONAL: Premier League club media may be published organically in GB, FR and US on Instagram, YouTube and X until 31 May 2027."
+      "explanation": "Premier League 2026/27 footage is covered by the club's content licence."
     },
     {
-      "id": "THFC-2-match-footage-people-and-signage",
+      "id": "THFC-2-club-channels",
       "effect": "PERMIT",
-      "dimensions": ["people", "sponsor"],
-      "match": { "competition": ["Premier League"], "assetTags": ["match", "highlights"] },
-      "covers": ["person:*", "brand:*"],
-      "validFrom": "2026-08-01T00:00:00Z",
-      "validUntil": "2027-05-31T23:59:59Z",
-      "explanation": "FICTIONAL: everyone and all stadium signage visible in match footage is cleared for organic club use."
+      "dimensions": ["platform"],
+      "match": {},
+      "intent": { "platforms": ["instagram", "facebook", "x", "tiktok", "youtube"] },
+      "explanation": "Allowed only on the club's own Instagram, Facebook, X, TikTok and YouTube accounts."
     },
     {
-      "id": "THFC-3-press-room-clearance",
+      "id": "THFC-3-licensed-territories",
       "effect": "PERMIT",
-      "dimensions": ["people", "sponsor"],
-      "match": { "assetTags": ["press-conference", "interview"] },
-      "covers": ["person:club-spokesperson", "brand:*"],
-      "validFrom": "2026-08-01T00:00:00Z",
-      "validUntil": "2027-05-31T23:59:59Z",
-      "explanation": "FICTIONAL: in press conferences and interviews only the club spokesperson and the backdrop branding are cleared; any other person needs individual review."
+      "dimensions": ["territory"],
+      "match": {},
+      "intent": { "territories": ["GB", "IE", "US", "CA", "AU", "NZ"] },
+      "explanation": "Club content is licensed for GB, IE, US, CA, AU and NZ. Other countries belong to international media partners."
     },
     {
-      "id": "THFC-4-no-sponsored-interviews",
+      "id": "THFC-4-full-match-home-market",
       "effect": "DENY",
+      "dimensions": ["territory"],
+      "match": { "assetTags": ["Full Match"] },
+      "intent": { "exceptTerritories": ["GB", "IE"] },
+      "explanation": "Full-match recordings can only be shown in the UK and Ireland (GB, IE) — they come from the live broadcast feed."
+    },
+    {
+      "id": "THFC-5-usage",
+      "effect": "PERMIT",
+      "dimensions": ["usage"],
+      "match": {},
+      "intent": { "usage": ["EDITORIAL", "ORGANIC", "SPONSORED", "COMMERCIAL"] },
+      "explanation": "Allowed for editorial, organic, sponsored and sales posts, as long as the people and brand rules are met."
+    },
+    {
+      "id": "THFC-6-no-broadcast-footage-in-ads",
+      "effect": "DENY",
+      "dimensions": ["usage"],
+      "match": { "assetTags": ["Highlights", "Extended Highlights", "Full Match"] },
+      "intent": { "usage": ["COMMERCIAL"] },
+      "explanation": "Broadcast highlights and full matches can't be used to sell merchandise or tickets — editorial and club social only."
+    },
+    {
+      "id": "THFC-7-season-term",
+      "effect": "PERMIT",
+      "dimensions": ["expiry"],
+      "match": {},
+      "validFrom": "2026-07-01T00:00:00Z",
+      "validUntil": "2027-06-30T23:59:59Z",
+      "explanation": "The licence runs for the 2026/27 season: 1 Jul 2026 to 30 Jun 2027."
+    },
+    {
+      "id": "THFC-8-people-editorial",
+      "effect": "PERMIT",
       "dimensions": ["people"],
-      "match": { "assetTags": ["press-conference", "interview"] },
-      "intent": { "usage": ["SPONSORED"] },
-      "explanation": "FICTIONAL: press conferences and interviews may not be used in sponsored posts (image-rights consent not granted)."
+      "match": {},
+      "intent": { "usage": ["EDITORIAL", "ORGANIC"] },
+      "covers": ["person:*"],
+      "explanation": "Players, staff and fans in match-day footage can appear in editorial and organic club posts."
+    },
+    {
+      "id": "THFC-9-club-image-rights-pool",
+      "effect": "PERMIT",
+      "dimensions": ["people"],
+      "match": {},
+      "intent": { "usage": ["SPONSORED", "COMMERCIAL"] },
+      "covers": ["squad:own"],
+      "explanation": "Sponsored and sales posts can show Tottenham's own first-team squad and staff — only if ScorePlay lists them in the squad."
+    },
+    {
+      "id": "THFC-10-stadium-conditions-of-entry",
+      "effect": "PERMIT",
+      "dimensions": ["people"],
+      "match": { "noListedPeople": true, "evidenceLabels": ["rubric:player_focus:no_players"] },
+      "intent": { "usage": ["SPONSORED", "COMMERCIAL"] },
+      "covers": [],
+      "explanation": "Crowd and stadium shots can be used in sales posts (stadium conditions of entry) when no player is identifiable."
+    },
+    {
+      "id": "THFC-11-incidental-branding",
+      "effect": "PERMIT",
+      "dimensions": ["sponsor"],
+      "match": {},
+      "intent": { "usage": ["EDITORIAL", "ORGANIC"] },
+      "covers": ["brand:*"],
+      "explanation": "Kit branding and stadium boards that appear incidentally are fine in editorial and organic posts."
+    },
+    {
+      "id": "THFC-12-official-partners",
+      "effect": "PERMIT",
+      "dimensions": ["sponsor"],
+      "match": {},
+      "intent": { "usage": ["SPONSORED", "COMMERCIAL"] },
+      "covers": ["brand:tottenham-hotspur*", "brand:spurs*", "brand:thfc*", "brand:aia*", "brand:nike*"],
+      "explanation": "Sponsored and sales posts can show the club's own marks and official partners AIA and Nike."
+    },
+    {
+      "id": "THFC-13-partner-exclusivity",
+      "effect": "DENY",
+      "dimensions": ["sponsor"],
+      "match": {
+        "evidenceLabels": ["brand:*"],
+        "evidenceLabelsExcept": ["brand:tottenham-hotspur*", "brand:spurs*", "brand:thfc*", "brand:aia*", "brand:nike*"]
+      },
+      "intent": { "usage": ["SPONSORED", "COMMERCIAL"] },
+      "explanation": "Sales and sponsored posts can’t show other brands — our official partners have exclusivity."
     }
   ]
 }

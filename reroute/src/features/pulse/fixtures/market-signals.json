@@ -1,0 +1,60 @@
+{
+  "label": "SIMULATED MARKET SIGNALS — DEMO",
+  "disclaimer": "Weekly mention counts and sample posts are invented by the team to demonstrate the method. They are not measurements of real fan conversation in any country.",
+  "geographyBasis": "Market = region reported by the (simulated) listening source's aggregate. PULSE never infers a country from language or from individual profiles.",
+  "sources": ["Simulated social-listening aggregate (weekly mention counts)"],
+  "window": { "from": "2026-10-11T00:00:00Z", "to": "2026-10-17T22:00:00Z" },
+  "baselineWeeks": 4,
+  "series": [
+    { "topic": "spurs-harper-run", "market": "GLOBAL", "current": 2100, "baseline": 1500 },
+    {
+      "topic": "spurs-harper-run",
+      "market": "MX",
+      "current": 460,
+      "baseline": 55,
+      "samples": [
+        { "id": "mx-01", "lang": "es", "postedAt": "2026-10-17T03:40:00Z", "text": "[SIMULADO] La racha de 14 puntos de Harper fue lo mejor del partido" },
+        { "id": "mx-02", "lang": "es", "postedAt": "2026-10-17T06:05:00Z", "text": "[SIMULADO] ¿Dónde consigo la camiseta de Harper aquí?" },
+        { "id": "mx-03", "lang": "es", "postedAt": "2026-10-17T14:20:00Z", "text": "[SIMULADO] Pásenme el clip completo de la racha de Harper" }
+      ]
+    },
+    { "topic": "spurs-harper-run", "market": "US", "current": 1300, "baseline": 1100 },
+    { "topic": "spurs-harper-run", "market": "FR", "current": 40, "baseline": 35 },
+
+    { "topic": "spurs-bench-dunk", "market": "GLOBAL", "current": 12400, "baseline": 6800 },
+    {
+      "topic": "spurs-bench-dunk",
+      "market": "MX",
+      "current": 520,
+      "baseline": 410,
+      "samples": [{ "id": "mx-04", "lang": "es", "postedAt": "2026-10-17T04:10:00Z", "text": "[SIMULADO] La reacción de la banca después del clavado 🔥" }]
+    },
+    { "topic": "spurs-bench-dunk", "market": "US", "current": 6100, "baseline": 3600 },
+    {
+      "topic": "spurs-bench-dunk",
+      "market": "FR",
+      "current": 2600,
+      "baseline": 1300,
+      "samples": [{ "id": "fr-01", "lang": "fr", "postedAt": "2026-10-17T07:00:00Z", "text": "[SIMULÉ] Le banc qui explose après le dunk du premier quart-temps" }]
+    },
+
+    { "topic": "spurs-drops-sabonis", "market": "GLOBAL", "current": 3900, "baseline": 2900 },
+    { "topic": "spurs-drops-sabonis", "market": "MX", "current": 150, "baseline": 130 },
+    { "topic": "spurs-drops-sabonis", "market": "US", "current": 2000, "baseline": 1600 },
+    { "topic": "spurs-drops-sabonis", "market": "FR", "current": 600, "baseline": 420 },
+
+    { "topic": "spurs-team-win", "market": "GLOBAL", "current": 2600, "baseline": 2400 },
+    { "topic": "spurs-team-win", "market": "MX", "current": 90, "baseline": 85 },
+    { "topic": "spurs-team-win", "market": "US", "current": 1500, "baseline": 1450 },
+    { "topic": "spurs-team-win", "market": "FR", "current": 210, "baseline": 200 },
+
+    { "topic": "tottenham-defensive-wall", "market": "GLOBAL", "current": 5200, "baseline": 3100 },
+    { "topic": "tottenham-defensive-wall", "market": "GB", "current": 3100, "baseline": 1800 },
+    { "topic": "tottenham-defensive-wall", "market": "MX", "current": 70, "baseline": 60 },
+    { "topic": "tottenham-defensive-wall", "market": "US", "current": 600, "baseline": 420 },
+
+    { "topic": "tottenham-rdz-fernandes", "market": "GLOBAL", "current": 1800, "baseline": 1500 },
+    { "topic": "tottenham-rdz-fernandes", "market": "GB", "current": 900, "baseline": 800 },
+    { "topic": "tottenham-rdz-fernandes", "market": "MX", "current": 25, "baseline": 30 }
+  ]
+}

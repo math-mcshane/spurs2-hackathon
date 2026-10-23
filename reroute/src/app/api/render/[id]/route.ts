@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { connection, type NextRequest } from "next/server";
 import { AppError } from "@/lib/errors";
+import { requireReviewer } from "@/lib/server/auth";
 import { decideEdit } from "@/lib/server/decide";
 import { route } from "@/lib/server/http";
 import { mediaProcessingApproved, renderPath } from "@/lib/server/render";
@@ -15,6 +16,7 @@ import { getReceipt } from "@/lib/server/store";
  */
 export const GET = route(async (req: NextRequest, ctx: RouteContext<"/api/render/[id]">) => {
   await connection();
+  await requireReviewer(req);
   const { id } = await ctx.params;
   if (!mediaProcessingApproved()) {
     throw new AppError("FORBIDDEN", "Media processing is not approved (MEDIA_PROCESSING_APPROVED != true)");

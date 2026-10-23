@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-10-23T14:51:22.195Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "SAS"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [],
+    "sponsors": [],
+    "tags": [
+      {
+        "ID": 10797033,
+        "CreatedAt": "2026-10-16T12:38:19.332911Z",
+        "UpdatedAt": "2026-10-16T12:38:19.332911Z",
+        "DeletedAt": null,
+        "name": "san antonio spurs (sas)",
+        "label": "San Antonio Spurs (SAS)",
+        "company_id": 5369,
+        "is_metadata": false,
+        "is_event": false,
+        "type": "team",
+        "color": "",
+        "count": 0,
+        "total": 0,
+        "emoji": ""
+      }
+    ]
+  }
+}

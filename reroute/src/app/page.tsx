@@ -1,5 +1,6 @@
-import { RerouteApp } from "@/components/reroute/reroute-app";
+import { PulseStudio } from "@/features/pulse/studio/PulseStudio";
 
+/** The product: business goal → real moments → campaign → rights → review → audit receipt. */
 export default function Home() {
-  return <RerouteApp />;
+  return <PulseStudio />;
 }

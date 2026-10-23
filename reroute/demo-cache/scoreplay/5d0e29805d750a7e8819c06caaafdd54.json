@@ -1,0 +1,47 @@
+{
+  "recordedAt": "2026-10-23T12:15:26.514Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "France"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [
+      {
+        "ID": 736909,
+        "CreatedAt": "2026-10-16T17:01:48.256454Z",
+        "UpdatedAt": "2026-10-16T17:08:34.368658Z",
+        "DeletedAt": null,
+        "first_name": "francesco",
+        "last_name": "calone",
+        "full_name": "francesco calone",
+        "company_id": 5369,
+        "profile_picture_ai": "",
+        "api_player_id": 0,
+        "run_ai": true,
+        "run_facial_ai": true,
+        "ai_name": "calone",
+        "app_access": false,
+        "external_id": "",
+        "receive_media": false,
+        "app_installed": false,
+        "phone_os": "",
+        "ai_threshold": 80,
+        "face_id": "3320b096-9ba3-4870-8627-504479bcf292",
+        "tag_options": null,
+        "sponsors": null,
+        "access_tags": null,
+        "Teams": null,
+        "Managers": null,
+        "Company": null,
+        "media_count": 0
+      }
+    ],
+    "sponsors": [],
+    "tags": []
+  }
+}

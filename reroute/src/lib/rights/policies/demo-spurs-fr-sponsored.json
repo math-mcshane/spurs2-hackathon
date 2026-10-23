@@ -1,19 +1,27 @@
 {
   "id": "demo-spurs-fr-sponsored",
-  "version": "2026-10-22.1",
-  "source": "REROUTE fictional demo dataset (no club, league or sponsor contract was supplied)",
-  "fictional": true,
-  "disclaimer": "FICTIONAL DEMO POLICY — not an actual team, league or sponsor agreement",
+  "version": "2026-10-23.1",
+  "title": "Spurs Media Usage — Demo",
+  "source": "FICTIONAL. Written by the REROUTE team as hackathon demo data. No San Antonio Spurs, NBA, broadcaster or sponsor contract was supplied or consulted.",
+  "kind": "DEMO",
+  "disclaimer": "FICTIONAL DEMO POLICY — not an actual team, league, broadcaster or sponsor agreement. DEMO POLICY — NOT VERIFIED LEGAL CLEARANCE.",
+  "applicability": {
+    "club": "spurs",
+    "clubNames": ["San Antonio Spurs"],
+    "competitions": ["NBA"],
+    "validFrom": "2026-10-01T00:00:00Z",
+    "validUntil": "2026-12-31T23:59:59Z"
+  },
   "rules": [
     {
       "id": "SPURS-1-nba-social-license",
       "effect": "PERMIT",
       "dimensions": ["competition", "territory", "platform", "usage", "expiry"],
       "match": { "competition": ["NBA"] },
-      "intent": { "territories": ["FR", "US"], "platforms": ["instagram", "youtube"], "usage": ["ORGANIC", "SPONSORED"] },
+      "intent": { "territories": ["FR", "US"], "platforms": ["instagram", "youtube"], "usage": ["EDITORIAL", "ORGANIC", "SPONSORED"] },
       "validFrom": "2026-10-01T00:00:00Z",
       "validUntil": "2026-12-31T23:59:59Z",
-      "explanation": "FICTIONAL: NBA game footage may be published in FR and US on Instagram and YouTube, organic or sponsored, until 31 Dec 2026."
+      "explanation": "NBA game footage is allowed in FR and US on Instagram and YouTube (editorial, organic or sponsored) until 31 Dec 2026."
     },
     {
       "id": "SPURS-2-in-game-people-and-signage",
@@ -23,7 +31,7 @@
       "covers": ["person:*", "brand:*"],
       "validFrom": "2026-10-01T00:00:00Z",
       "validUntil": "2026-12-31T23:59:59Z",
-      "explanation": "FICTIONAL: players, officials and in-arena signage appearing in NBA game footage are cleared for club social use."
+      "explanation": "Players, officials and arena signage in NBA game footage are cleared for club social posts."
     },
     {
       "id": "SPURS-3-rival-sponsor-exclusivity",
@@ -31,7 +39,7 @@
       "dimensions": ["sponsor"],
       "match": { "evidenceLabels": ["brand:rival-sponsor"] },
       "intent": { "usage": ["SPONSORED"] },
-      "explanation": "FICTIONAL: sponsored campaign posts must not show a rival sponsor's branding (demo exclusivity clause)."
+      "explanation": "Sponsored posts can't show a rival sponsor's branding (exclusivity). Reviewers flag it with the label brand:rival-sponsor."
     },
     {
       "id": "SPURS-4-gb-geo-block",
@@ -39,7 +47,7 @@
       "dimensions": ["territory"],
       "match": { "competition": ["NBA"] },
       "intent": { "territories": ["GB"] },
-      "explanation": "FICTIONAL: NBA game footage is geo-blocked in GB (demo exclusive-broadcaster window)."
+      "explanation": "NBA game footage can't be shown in GB — a broadcaster holds an exclusive window there."
     },
     {
       "id": "SPURS-5-no-sponsored-tiktok",
@@ -47,7 +55,7 @@
       "dimensions": ["platform"],
       "match": { "competition": ["NBA"] },
       "intent": { "platforms": ["tiktok"], "usage": ["SPONSORED"] },
-      "explanation": "FICTIONAL: sponsored NBA footage may not be posted on TikTok."
+      "explanation": "Sponsored NBA footage can't be posted on TikTok."
     }
   ]
 }

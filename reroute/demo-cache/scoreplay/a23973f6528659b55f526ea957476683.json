@@ -1,0 +1,50 @@
+{
+  "recordedAt": "2026-10-23T12:15:27.284Z",
+  "source": "scoreplay",
+  "request": {
+    "method": "GET",
+    "path": "/tag/search",
+    "query": {
+      "query": "Tottenham Hotspur"
+    },
+    "body": null
+  },
+  "value": {
+    "players": [],
+    "sponsors": [],
+    "tags": [
+      {
+        "ID": 10797055,
+        "CreatedAt": "2026-10-16T12:39:04.130579Z",
+        "UpdatedAt": "2026-10-16T12:39:04.130579Z",
+        "DeletedAt": null,
+        "name": "tottenham hotspur fc",
+        "label": "Tottenham Hotspur FC",
+        "company_id": 5369,
+        "is_metadata": false,
+        "is_event": false,
+        "type": "team",
+        "color": "",
+        "count": 0,
+        "total": 0,
+        "emoji": ""
+      },
+      {
+        "ID": 10797072,
+        "CreatedAt": "2026-10-16T18:55:39.672858Z",
+        "UpdatedAt": "2026-10-16T18:55:39.672858Z",
+        "DeletedAt": null,
+        "name": "tottenham hotspur",
+        "label": "Tottenham Hotspur",
+        "company_id": 5369,
+        "is_metadata": false,
+        "is_event": false,
+        "type": "",
+        "color": "",
+        "count": 0,
+        "total": 0,
+        "emoji": ""
+      }
+    ]
+  }
+}

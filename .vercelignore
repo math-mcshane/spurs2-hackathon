@@ -1,0 +1,14 @@
+.env*
+!.env.example
+**/.env*
+!**/.env.example
+**/.data/
+**/.renders/
+**/.cache/
+**/node_modules/
+**/.next/
+**/supabase/.temp/
+**/tsconfig.tsbuildinfo
+**/*.local.txt
+**/.reviewers*
+docs/

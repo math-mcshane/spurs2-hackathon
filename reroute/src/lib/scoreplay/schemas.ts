@@ -17,7 +17,8 @@ export const TagOptionSchema = z.looseObject({
 });
 export type ScorePlayTagOption = z.infer<typeof TagOptionSchema>;
 
-const PlayerSchema = z.looseObject({
+/** Player as embedded in media tags and returned by `GET /players` (names may be lowercased there). */
+export const PlayerSchema = z.looseObject({
   ID: id,
   full_name: z.string().nullish(),
   first_name: z.string().nullish(),
@@ -161,3 +162,23 @@ export const UploadInitSchema = z.looseObject({
   urls: z.array(z.looseObject({ url: z.string(), parts_number: z.number().int() })),
   media_id: id,
 });
+
+/** `GET /team-seasons` — a club registered for a season. Its squad is `GET /players?team_season_id={id}`. */
+export const TeamSeasonSchema = z.looseObject({
+  id,
+  team_id: id.nullish(),
+  season_id: id.nullish(),
+  team_name: z.string().nullish(),
+  season_name: z.string().nullish(),
+});
+export type ScorePlayTeamSeason = z.infer<typeof TeamSeasonSchema>;
+
+export const TeamSeasonListSchema = z.looseObject({
+  items: z.array(TeamSeasonSchema).nullish(),
+  total: z.number().nullish(),
+  page: z.number().nullish(),
+  limit: z.number().nullish(),
+});
+
+/** `GET /players?team_season_id=` */
+export const PlayerListSchema = z.array(PlayerSchema);

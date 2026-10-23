@@ -45,6 +45,11 @@ export const EvidenceSchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
   /** LIVE/CACHED for TwelveLabs/ScorePlay results, HUMAN for producer-entered observations. Unset = unknown origin. */
   origin: DataOriginSchema.optional(),
+  /**
+   * Which machine analysis run produced it (e.g. "pegasus:product", "pegasus:audit-2026-10-23"). Several runs of the
+   * same video are all kept: where they disagree, the engine sees every observation (the conservative reading).
+   */
+  analysisRun: z.string().optional(),
 });
 export type Evidence = z.infer<typeof EvidenceSchema>;
 

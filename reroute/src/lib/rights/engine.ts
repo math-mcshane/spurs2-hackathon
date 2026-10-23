@@ -86,7 +86,7 @@ export function normalizeLabel(raw: string): string {
 }
 
 /** Case/punctuation-insensitive match; a trailing "*" in the pattern means prefix match. */
-function matchesPattern(value: string, pattern: string): boolean {
+export function matchesPattern(value: string, pattern: string): boolean {
   const v = normalizeLabel(value);
   return pattern.endsWith("*") ? v.startsWith(normalizeLabel(pattern.slice(0, -1))) : v === normalizeLabel(pattern);
 }

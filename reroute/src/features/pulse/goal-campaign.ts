@@ -1,4 +1,5 @@
 import type { EditPlan, PublishIntent } from "@/lib/contracts";
+import { edlToEditPlan, type Edl } from "@/lib/rights/recovery/edl";
 import { composeCampaign } from "./campaign-builder";
 import { CLUBS } from "./clubs";
 import { clock } from "./moment-ranking";
@@ -42,6 +43,11 @@ export function editFor(runId: string, rec: Recommendation): EditPlan {
   };
 }
 
+/** The edit a campaign version publishes: its derived cut when it has one, else the moment's own boundaries. */
+export function campaignEdit(runId: string, rec: Recommendation, edl?: Edl): EditPlan {
+  return edl ? edlToEditPlan(edl, `PULSE · ${rec.headline} · ${edl.sourceTitle} (edited cut)`.slice(0, 140)) : editFor(runId, rec);
+}
+
 /** Every channel × territory of the plan, as REROUTE publish intents (club set for policy selection). */
 export function intentsFor(plan: GoalPlan, rec: Recommendation, publishAt: string): PublishIntent[] {
   const competition = rec.candidate.competition ?? plan.competition;
@@ -59,15 +65,20 @@ export function buildGoalCampaign(input: {
   /** The uses this version targets: the run's plan, or a REROUTE-remedied subset of it. */
   plan: GoalPlan;
   destination?: CommerceDestination;
+  /** A derived cut of the moment (recovery TRIM / SAFE_SECTION): an edit plan, not a rendered file. */
+  edl?: Edl;
   now: Date;
   previous?: GoalCampaign;
 }): GoalCampaign {
-  const { run, rec, now, previous, plan } = input;
-  const edit = editFor(run.id, rec);
+  const { run, rec, now, previous, plan, edl } = input;
+  const edit = campaignEdit(run.id, rec, edl);
   // Every version proposes a fresh slot (never a stale date from an earlier version); checks refresh it again.
   const intents = intentsFor(plan, rec, proposedPublishAt(now));
   const primary = rec.matches[0];
-  const seconds = Math.round((rec.candidate.endSeconds ?? 0) - (rec.candidate.startSeconds ?? 0));
+  const start = edl ? edl.retained[0].start : (rec.candidate.startSeconds ?? 0);
+  const seconds = Math.round(edl ? edl.durationSec : (rec.candidate.endSeconds ?? 0) - (rec.candidate.startSeconds ?? 0));
+  const cut = edl ? `an edited ${seconds}-second cut (${edl.retained.map((r) => `${clock(r.start)}–${clock(r.end)}`).join(" + ")})` : `the ${seconds}-second moment at ${clock(start)}`;
+  const organic = plan.usage === "ORGANIC" || plan.usage === "EDITORIAL";
   const draft = composeCampaign({
     id: input.campaignId,
     ownerId: run.id,
@@ -77,13 +88,14 @@ export function buildGoalCampaign(input: {
     reroute: { edit, intent: intents[0] },
     hooks: HOOKS[primary.intent] ?? {},
     fallbackHook: rec.headline,
-    angle: `${rec.headline}: the ${seconds}-second moment at ${clock(rec.candidate.startSeconds ?? 0)} in “${rec.candidate.title}”, as a vertical social cut for ${plan.channels.length} channels.`,
+    angle: `${rec.headline}: ${cut} in “${rec.candidate.title}”, as a vertical social cut for ${plan.channels.length} channels.`,
     cohort: audienceOf(run),
     rationale: [rec.why.opportunity, rec.why.media],
     evidenceLabels: ["Ranking: objective × live TwelveLabs evidence — no fan-signal or market data used"],
-    destination: input.destination,
+    destination: organic ? undefined : input.destination,
+    ...(organic && run.plan.usage === "COMMERCIAL" ? { organicNote: "Posted as organic club content after a rights recovery: no store or ticketing link." } : {}),
     now,
     previous,
   });
-  return { ...draft, campaignId: input.campaignId, version: input.version, key: rec.key, mediaRef: rec.media, plan, intents, origin: input.origin };
+  return { ...draft, campaignId: input.campaignId, version: input.version, key: rec.key, mediaRef: rec.media, plan, intents, origin: input.origin, ...(edl ? { edl } : {}) };
 }

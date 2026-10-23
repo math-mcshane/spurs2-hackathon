@@ -67,19 +67,18 @@ async function walk(s: (typeof SCENARIOS)[number]): Promise<string[]> {
       v = await goals.checkGoalRights(at(v));
       log.push(`  “${rec.candidate.title}”: ${v.rights.state} (${v.rights.perIntent.length} uses)`);
       if (v.rights.state === "ALLOWED") continue;
-      v = await goals.findAlternatives(at(v));
-      const alts = v.alternatives?.candidates ?? [];
-      log.push(`    blocker ${v.blocker?.scope ?? "-"} · ${alts.length} alternative(s): ${alts.map((a) => `“${a.title}” ${a.verdict}`).join(", ") || "-"}`);
-      const pick = alts.find((a) => a.eligible) ?? alts.find((a) => a.verdict !== "BLOCKED");
-      if (pick) {
-        v = await goals.useAlternative(at(v), pick.key);
-        log.push(`    used “${pick.title}” → ${v.rights.state}`);
-      } else if (v.remedy) {
-        v = await goals.applyRemedy(at(v));
-        v = await goals.checkGoalRights(at(v));
-        log.push(`    remedy → ${v.rights.state} (${v.rights.perIntent.length} uses)`);
-      } else if (v.licenceGap) {
-        log.push(`    licence gap: ${v.licenceGap.label}`);
+      v = await goals.findRecovery(at(v));
+      const r = v.recovery;
+      const opts = r?.options ?? [];
+      log.push(`    recovery ${r?.scope ?? "-"} · ${opts.length} option(s): ${opts.map((o) => `${o.kind} ${o.outcome}${o.recheck ? ` ${o.recheck.allowedUses}/${o.recheck.totalUses}` : ""}`).join(", ") || "-"}`);
+      if (r?.recommendedId) {
+        const pick = opts.find((o) => o.id === r.recommendedId)!;
+        v = await goals.applyRecovery(at(v), pick.id);
+        log.push(`    applied ${pick.kind} “${pick.title}” → ${v.rights.state} (${v.rights.perIntent.length} uses)`);
+      } else if (v.nextStep.startsWith("No licence covers")) {
+        log.push(`    licence gap: ${v.nextStep}`);
+      } else if (r?.noPathMessage) {
+        log.push(`    no path: ${r.noPathMessage}`);
       }
     }
   }

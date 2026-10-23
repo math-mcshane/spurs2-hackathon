@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { PencilLineIcon } from "lucide-react";
 import { CONTAINER } from "@/components/pulse/shell";
 import { cn } from "@/lib/utils";
@@ -9,37 +10,72 @@ import { ProvenanceTag, channelList, country, usageWord } from "./parts";
 
 export type View = "goal" | "discover" | "campaign" | "review";
 
-export const VIEWS: { key: View; label: string }[] = [
-  { key: "goal", label: "Goal" },
-  { key: "discover", label: "Discover" },
-  { key: "campaign", label: "Create & clear" },
-  { key: "review", label: "Review" },
+/** The four screens (URL `step`). The header shows them as six journey phases. */
+export const VIEWS: View[] = ["goal", "discover", "campaign", "review"];
+
+type Phase = { key: string; label: string; view: View; anchor?: string };
+
+/** The journey as the user lives it. Campaign, Compliance and Resolution share the campaign screen. */
+const PHASES: Phase[] = [
+  { key: "goal", label: "Goal", view: "goal" },
+  { key: "media", label: "Media", view: "discover" },
+  { key: "campaign", label: "Campaign", view: "campaign" },
+  { key: "compliance", label: "Compliance", view: "campaign", anchor: "lens-title" },
+  { key: "resolution", label: "Resolution", view: "campaign", anchor: "resolution" },
+  { key: "review", label: "Review", view: "review" },
 ];
 
-/** The four steps of the journey. Reached steps are links back; steps not reached yet are inert text. */
-export function StepNav({ view, reached, onView }: { view: View; reached: Record<View, boolean>; onView: (v: View) => void }) {
+/** Where the user is in the journey and which phases they have reached. */
+function journey(goal: GoalView, view: View, reached: Record<View, boolean>): { phase: string; reached: Record<string, boolean> } {
+  const checked = goal.rights.state !== "NOT_CHECKED";
+  const resolving = !!goal.beforeAfter || (!!goal.recovery && goal.rights.current && goal.recovery.forEvaluationId === goal.rights.evaluationId);
+  const phase =
+    view === "goal" ? "goal" : view === "discover" ? "media" : view === "review" ? "review" : resolving ? "resolution" : checked ? "compliance" : "campaign";
+  return {
+    phase,
+    reached: {
+      goal: true,
+      media: reached.discover,
+      campaign: reached.campaign,
+      compliance: reached.campaign && checked,
+      resolution: reached.campaign && (!!goal.recovery || !!goal.beforeAfter),
+      review: reached.review,
+    },
+  };
+}
+
+/** The six phases of the journey. Reached phases are links back; phases not reached yet are inert text. */
+export function StepNav({ goal, view, reached, onView }: { goal: GoalView; view: View; reached: Record<View, boolean>; onView: (v: View, anchor?: string) => void }) {
+  const { phase, reached: open } = journey(goal, view, reached);
+  const list = useRef<HTMLOListElement>(null);
+  // Phones scroll the phases horizontally: keep the current one in view.
+  useEffect(() => {
+    const ol = list.current;
+    const el = ol?.querySelector<HTMLElement>("[aria-current=step]");
+    if (ol && el) ol.scrollLeft = el.offsetLeft - (ol.clientWidth - el.offsetWidth) / 2;
+  }, [phase]);
   return (
     <nav aria-label="Campaign steps">
-      <ol className="flex items-center gap-1 overflow-x-auto py-1 md:py-0">
-        {VIEWS.map((s, i) => {
-          const current = s.key === view;
-          const canGo = reached[s.key] && !current;
+      <ol ref={list} className="relative flex items-center gap-0.5 overflow-x-auto py-1 md:py-0">
+        {PHASES.map((s, i) => {
+          const current = s.key === phase;
+          const canGo = open[s.key] && !current;
           return (
             <li key={s.key} className="shrink-0">
               <button
                 type="button"
                 disabled={!canGo}
                 aria-current={current ? "step" : undefined}
-                onClick={() => onView(s.key)}
+                onClick={() => onView(s.view, s.anchor)}
                 className={cn(
-                  "relative flex h-10 items-center gap-2 rounded-md px-2.5 text-small transition-colors md:h-14",
-                  current ? "text-ink" : reached[s.key] ? "text-ink-muted hover:text-ink" : "text-ink-muted/45",
+                  "relative flex h-10 items-center gap-2 rounded-md px-2 text-small transition-colors md:h-14",
+                  current ? "text-ink" : open[s.key] ? "text-ink-muted hover:text-ink" : "text-ink-muted/45",
                   "disabled:cursor-default",
                 )}
               >
                 <span className={cn("tabular font-mono text-meta", current ? "text-signal" : "text-current")}>{i + 1}</span>
                 {s.label}
-                {current && <span className="absolute inset-x-2.5 bottom-0 h-0.5 rounded-full bg-signal" aria-hidden />}
+                {current && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-signal" aria-hidden />}
               </button>
             </li>
           );

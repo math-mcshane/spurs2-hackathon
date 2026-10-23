@@ -64,11 +64,21 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
                 Moment {n + 1}: TwelveLabs Marengo {rec.candidate.foundBy === "TWELVELABS" ? "search" : "metadata fallback"} · ScorePlay {rec.candidate.discoveredBy.toLowerCase().replace("_", " ")}
               </li>
             ))}
-            {goal.alternatives?.candidates.map((a) => (
-              <li key={a.key} className="flex flex-wrap items-center gap-2">
-                <OriginBadge origin={a.hit.origin} className="h-4 px-1 text-[9px]" /> Alternative {a.key}: REROUTE resolver search
+            {goal.recovery?.options.flatMap((o) =>
+              o.replacement ? (
+                <li key={o.id}>
+                  Recovery replacement {o.replacement.scoreplayMediaId} @ {o.replacement.start.toFixed(2)}–{o.replacement.end.toFixed(2)} s: TwelveLabs search rank {o.replacement.rank} for “
+                  {o.replacement.query}”
+                </li>
+              ) : (
+                []
+              ),
+            )}
+            {goal.policy && (
+              <li>
+                Rules: {goal.policy.packageId} v{goal.policy.version} · {goal.policy.kind} · {goal.policy.sourceType} · verified {String(goal.policy.verified)}
               </li>
-            ))}
+            )}
             <li>SIMULATED data: none. The studio uses no simulated fan or market signals (those live only on the flagged signal board).</li>
             <li>
               Library: {r.library.videos} {CLUBS[r.club].label} videos in ScorePlay, {r.library.indexed} in TwelveLabs index {r.library.indexName ?? "—"}.
@@ -198,11 +208,20 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
                 <dd className="break-all text-zinc-300">{goal.rights.evaluationId}</dd>
               </>
             )}
-            {goal.alternatives && (
+            {goal.recovery && (
               <>
-                <dt>alternatives</dt>
+                <dt>recovery</dt>
                 <dd className="break-all text-zinc-300">
-                  {goal.alternatives.id} (for evaluation {goal.alternatives.forEvaluationId}, blocker {goal.alternatives.blocker.scope})
+                  {goal.recovery.id} (for evaluation {goal.recovery.forEvaluationId}, scope {goal.recovery.scope}) ·{" "}
+                  {goal.recovery.options.map((o) => `${o.kind}→${o.outcome}${o.recommended ? "*" : ""}`).join(", ")}
+                </dd>
+              </>
+            )}
+            {goal.edit && (
+              <>
+                <dt>edit plan</dt>
+                <dd className="break-all text-zinc-300">
+                  {goal.edit.edlId} · keeps {goal.edit.retained.map((r) => `${r.start.toFixed(2)}–${r.end.toFixed(2)}`).join(", ")} · {goal.edit.execution}
                 </dd>
               </>
             )}

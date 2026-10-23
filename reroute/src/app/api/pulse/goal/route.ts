@@ -1,15 +1,15 @@
 import { pulseRoute } from "@/features/pulse/server/http";
 import {
-  applyRemedy,
+  applyRecovery,
   checkGoalRights,
   draftGoalCampaign,
-  findAlternatives,
+  findRecovery,
   getGoal,
   goalDeps,
   runGoal,
   selectMoment,
+  setRunPolicy,
   submitForReview,
-  useAlternative,
 } from "@/features/pulse/server/goal-service";
 import { GoalActionSchema } from "@/features/pulse/types";
 import { AppError } from "@/lib/errors";
@@ -27,9 +27,9 @@ export const GET = pulseRoute(async (req) => {
 });
 
 /**
- * POST /api/pulse/goal — run | select | draft | checkRights | findAlternatives | useAlternative |
- * applyRemedy | submitForReview; returns `{ goal: GoalView }`. Every action on an existing run carries
- * `expectedVersion` (stale → CONFLICT). Human review itself is POST /api/receipts/[id]/review.
+ * POST /api/pulse/goal — run | select | draft | checkRights | findRecovery | applyRecovery | setPolicy |
+ * submitForReview; returns `{ goal: GoalView }`. Every action on an existing run carries `expectedVersion`
+ * (stale → CONFLICT). Human review itself is POST /api/receipts/[id]/review.
  */
 export const POST = pulseRoute(async (req) => {
   const [body, media] = await Promise.all([parseBody(req, GoalActionSchema), mediaAccess(req)]);
@@ -43,12 +43,12 @@ export const POST = pulseRoute(async (req) => {
       return Response.json({ goal: await draftGoalCampaign(target, body.commerceUrl, deps) });
     case "checkRights":
       return Response.json({ goal: await checkGoalRights(target, deps) });
-    case "findAlternatives":
-      return Response.json({ goal: await findAlternatives(target, deps) });
-    case "useAlternative":
-      return Response.json({ goal: await useAlternative(target, body.key, deps) });
-    case "applyRemedy":
-      return Response.json({ goal: await applyRemedy(target, deps) });
+    case "findRecovery":
+      return Response.json({ goal: await findRecovery(target, deps) });
+    case "applyRecovery":
+      return Response.json({ goal: await applyRecovery(target, body.optionId, deps) });
+    case "setPolicy":
+      return Response.json({ goal: await setRunPolicy(target, body.packageId, deps) });
     case "submitForReview":
       return Response.json({ goal: await submitForReview(target, deps) });
   }

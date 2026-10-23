@@ -265,6 +265,37 @@ function contract(name: string, make: () => Repositories, restart: () => Reposit
       await repos.humanObservations.add({ scoreplayMediaId: mediaId, observation: "Sponsor board at 0:12", source: "HUMAN", origin: "HUMAN", start: 12, end: 14 });
       expect(await restart().humanObservations.list(mediaId)).toMatchObject([{ observation: "Sponsor board at 0:12" }]);
     });
+
+    it("policy packages: versions are kept, newest first; duplicates rejected; selection upserts", async () => {
+      const repos = make();
+      const id = `pkg-${randomUUID()}`;
+      const club = `club-${randomUUID()}`;
+      const row = (version: string) => ({
+        id,
+        version,
+        club,
+        title: `Package ${version}`,
+        kind: "DEMO" as const,
+        sourceType: "UPLOADED_JSON" as const,
+        document: { id, version, kind: "DEMO" },
+        fileName: "rules.json",
+        sha256: "a".repeat(64),
+        uploadedBy: "Ed Smith",
+      });
+      await repos.policyPackages.insert(row("1"));
+      const second = await repos.policyPackages.insert(row("2"));
+      expect(second).toMatchObject({ id, version: "2", kind: "DEMO", uploadedBy: "Ed Smith", fileName: "rules.json" });
+      await expect(repos.policyPackages.insert(row("2"))).rejects.toMatchObject({ code: "CONFLICT" });
+      expect((await restart().policyPackages.get(id))?.version).toBe("2");
+      expect((await restart().policyPackages.get(id, "1"))?.title).toBe("Package 1");
+      expect(await restart().policyPackages.get(id, "9")).toBeNull();
+      expect((await restart().policyPackages.list()).filter((p) => p.id === id).map((p) => p.version)).toEqual(["2", "1"]);
+
+      expect(await repos.policyPackages.getSelection(club)).toBeNull();
+      await repos.policyPackages.setSelection({ club, packageId: id, packageVersion: "1", selectedBy: "Ed Smith" });
+      await repos.policyPackages.setSelection({ club, packageId: id, packageVersion: "2", selectedBy: "Jo Lee" });
+      expect(await restart().policyPackages.getSelection(club)).toMatchObject({ club, packageId: id, packageVersion: "2", selectedBy: "Jo Lee" });
+    });
   });
 }
 
@@ -308,5 +339,17 @@ describe.skipIf(!LOCAL_SUPABASE)("supabase repositories (local docker)", () => {
     const evalDel = await db.from("reroute_evaluations").delete().eq("id", evaluation.id);
     expect(evalDel.error?.message).toMatch(/append-only/);
     expect(await repos.events.verifyChain()).toBeNull();
+  });
+
+  it("uploaded policy packages are append-only and can only be DEMO", async () => {
+    const id = `pkg-${randomUUID()}`;
+    const row = { id, version: "1", club: `club-${randomUUID()}`, title: "t", source_type: "UPLOADED_JSON", sha256: "b".repeat(64), uploaded_by: "t" };
+    const verified = await db.from("reroute_policy_packages").insert({ ...row, kind: "VERIFIED", document: { id, version: "1", kind: "VERIFIED" } });
+    expect(verified.error?.code).toBe("23514");
+    expect((await db.from("reroute_policy_packages").insert({ ...row, document: { id, version: "1", kind: "DEMO" } })).error).toBeNull();
+    const upd = await db.from("reroute_policy_packages").update({ title: "tampered" }).eq("id", id);
+    expect(upd.error?.message).toMatch(/append-only/);
+    const del = await db.from("reroute_policy_packages").delete().eq("id", id);
+    expect(del.error?.message).toMatch(/append-only/);
   });
 });

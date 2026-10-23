@@ -1,7 +1,8 @@
 /**
  * Live end-to-end walkthrough of the product flow through the service layer:
- * goal → three real moments → proposal → REROUTE evaluation (every channel × territory) → "Find another
- * way" → independent re-check, remedy or licence gap → human-review receipt → ScorePlay writeback plan
+ * goal → three real moments → proposal → REROUTE evaluation (every channel × territory) → "Find a way to
+ * use it" (recovery engine) → recommended option applied + independent re-check, or licence gap / no path →
+ * human-review receipt → ScorePlay writeback plan
  * (DRY-RUN, printed only). Prints a compact transcript with wall-clock timings per step.
  *
  *   pnpm exec tsx --conditions=react-server --env-file=.env.local scripts/live-walkthrough.ts [A B C D E]
@@ -98,37 +99,36 @@ async function scenario(s: (typeof SCENARIOS)[number]) {
   }
 
   if (v.rights.state !== "ALLOWED") {
-    v = await timed("find another way", () => goals.findAlternatives(at(v)));
-    const b = v.blocker;
-    out(`blocker: ${b ? `${b.scope} [${b.dimensions.join(",")}] ${b.explanation}` : "-"}`);
-    const alts = v.alternatives?.candidates ?? [];
-    if (b?.scope === "CLIP") {
-      out(`alternatives (query “${v.alternatives?.query ?? "-"}”): ${alts.length}`);
-      for (const a of alts) out(`  ${a.key} · “${a.title}” · ${a.verdict} · clearance ${a.clearance}${a.eligible ? " · eligible" : ""}`);
+    v = await timed("find a way to use it", () => goals.findRecovery(at(v)));
+    const r = v.recovery;
+    if (r) {
+      out(`recovery: ${r.scope} · ${r.problem.headline}`);
+      for (const pr of r.problem.items.slice(0, 3)) out(`  problem: ${pr.text} [${pr.source}]`);
+      for (const o of r.options) {
+        const recheck = o.recheck ? ` · recheck ${o.recheck.allowedUses}/${o.recheck.totalUses} ${o.recheck.verdict}` : "";
+        out(`  ${o.id === r.recommendedId ? "*" : "-"} ${o.id} · ${o.kind} ${o.outcome} · “${o.title}”${recheck}${o.notViableBecause ? ` · not viable: ${o.notViableBecause}` : ""}`);
+      }
+      if (r.noPathMessage) out(`  no path: ${r.noPathMessage}`);
     }
-    const pick = alts.find((a) => a.eligible) ?? alts.find((a) => a.verdict !== "BLOCKED");
+    if (v.nextStep.startsWith("No licence covers")) out(`licence gap: ${v.nextStep}`);
+    const pick = r?.recommendedId;
     if (pick) {
-      v = await timed("use alternative", () => goals.useAlternative(at(v), pick.key));
-      out(`alternative “${pick.title}” → v${v.campaign!.version}, independent re-check: ${rights(v)}`);
-    } else if (v.remedy) {
-      out(`remedy: ${v.remedy.label}`);
-      v = await goals.applyRemedy(at(v));
-      v = await timed("re-check", () => goals.checkGoalRights(at(v)));
-      out(`remedy applied → v${v.campaign!.version} (${v.campaign!.intents.length} uses), re-check: ${rights(v)}`);
-    } else if (v.licenceGap) {
-      out(`licence gap: ${v.licenceGap.label} — no remedy offered`);
-      out(`  ${v.licenceGap.description}`);
+      v = await timed("apply recovery", () => goals.applyRecovery(at(v), pick));
+      const ba = v.beforeAfter;
+      out(`applied ${pick} → v${v.campaign!.version} (${v.campaign!.origin}, ${v.campaign!.intents.length} uses), independent re-check: ${rights(v)}`);
+      if (ba) out(`  before ${ba.before.verdict} ${ba.before.allowedUses}/${ba.before.totalUses} → after ${ba.after ? `${ba.after.verdict} ${ba.after.allowedUses}/${ba.after.totalUses}` : "-"}`);
+      if (v.edit) out(`  edit: kept ${v.edit.retained.map((x) => `${x.start}–${x.end}`).join(", ")} (${v.edit.resultDurationSec}s of ${v.edit.originalDurationSec}s) · ${v.edit.executionLabel}`);
     }
   }
 
-  if (v.canSubmit && !v.licenceGap) {
+  if (v.canSubmit) {
     v = await goals.submitForReview(at(v));
     out(`review: receipt ${v.receiptId} · ${v.reviewStatus} · publishable ${v.publishable}`);
     const receipt = await getReceipt(v.receiptId!);
     const mode = writebackMode(receipt);
     out(`writeback plan (${mode.mode === "LIVE" ? "LIVE" : `${mode.status}${mode.refusedReason ? `: ${mode.refusedReason}` : ""}`}): ${toScorePlayActions(planWriteback(receipt)).length} ScorePlay action(s) — printed only, nothing sent`);
   } else {
-    out(`review: not submitted (${v.rights.state}${v.licenceGap ? ", licence gap" : ""})`);
+    out(`review: not submitted (${v.rights.state}${v.nextStep.startsWith("No licence covers") ? ", licence gap" : ""})`);
   }
   out(`next: ${v.nextStep}`);
   out(`evaluations: ${v.evaluations.map((e) => `${e.kind}:v${e.campaignVersion}:${e.verdict}/${e.clearance}`).join(" → ")}`);

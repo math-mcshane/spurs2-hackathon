@@ -168,13 +168,22 @@ function Approval({
             className="w-16 shrink-0"
             source={
               goal.selected
-                ? recommendationSource(goal.selected)
-                : { title: c.media.title, scoreplayAssetId: c.media.scoreplayAssetId, start: c.media.startSeconds, end: c.media.endSeconds, note: "" }
+                ? { ...recommendationSource(goal.selected), ...(goal.edit && { start: goal.edit.original.start, end: goal.edit.original.end }) }
+                : {
+                    title: c.media.title,
+                    scoreplayAssetId: c.media.scoreplayAssetId,
+                    start: goal.edit?.original.start ?? c.media.startSeconds,
+                    end: goal.edit?.original.end ?? c.media.endSeconds,
+                    note: "",
+                  }
             }
           />
           <div className="min-w-0">
             <p className="truncate text-small font-medium text-ink">{displayTitle(c.media.title)}</p>
-            <p className="text-meta text-ink-muted">Campaign version {c.version}</p>
+            <p className="text-meta text-ink-muted">
+              Campaign version {c.version}
+              {goal.edit && ` · Edited cut · ${goal.edit.executionLabel}`}
+            </p>
           </div>
           <StatusPill status={rightsStatus(goal.rights.state, goal.rights.clearance)} className="ml-auto" />
         </div>

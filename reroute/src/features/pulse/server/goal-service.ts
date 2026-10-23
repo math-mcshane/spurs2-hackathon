@@ -1,56 +1,62 @@
 import { randomUUID } from "node:crypto";
-import type { z } from "zod";
-import { isEvidenceLinkable, type EditPlan, type MediaRef, type PublishIntent, type ResolveRequestSchema, type ResolveResponseSchema } from "@/lib/contracts";
+import { isEvidenceLinkable, type EditPlan, type MediaRef, type PublishIntent, type Reason } from "@/lib/contracts";
 import { AppError } from "@/lib/errors";
 import { getMediaResolver, previewFor } from "@/lib/media";
 import { forMediaAccess, type MediaAccess } from "@/lib/media/preview";
 import { mergeProvenance, trackProvenance } from "@/lib/media/provenance";
+import { reasonScope, type Policy } from "@/lib/rights";
+import { policiesForEvaluation, toPolicyContext } from "@/lib/rights/packages";
+import type { PlannedOption, ProblemItem } from "@/lib/rights/recovery";
 import { decideCampaign, type CampaignDecision } from "@/lib/server/decide";
+import { recover, type Recovered, type RecoverInput } from "@/lib/server/recovery";
 import { alternatives, campaigns, evaluations, events, goalRuns } from "@/lib/server/repositories";
-import { resolve } from "@/lib/server/resolver";
 import { createReceipt, getReceipt } from "@/lib/server/store";
 import { CLUBS } from "../clubs";
 import { MEDIA_PREVIEW_DISABLED_NOTE, MEDIA_PREVIEW_REVIEWER_ONLY_NOTE } from "../flags";
 import { configuredDestination, onClubDomain } from "../commerce";
-import { buildGoalCampaign, editFor, proposedPublishAt } from "../goal-campaign";
+import { buildGoalCampaign, campaignEdit, proposedPublishAt } from "../goal-campaign";
 import { goalPlan, parseMatch } from "../goal-intents";
-import { buildGoalView, latestEvaluation, noLicenceReason, scopeRemedy } from "../goal-view";
+import { buildGoalView, evidenceSource, latestEvaluation, noLicenceReason, underRunPolicy } from "../goal-view";
 import { clock } from "../moment-ranking";
 import { PRODUCTS, parseObjective } from "../objective-parser";
 import type {
-  AlternativeCandidate,
   Club,
   CommerceDestination,
-  GoalAlternatives,
   GoalCampaign,
   GoalEvaluation,
   GoalPlan,
+  GoalRecovery,
   GoalRun,
   GoalView,
+  PolicyContext,
   Preview,
   Recommendation,
   RunProvenance,
+  SourcedLine,
+  StoredRecoveryOption,
 } from "../types";
+import { RecoveryOptionSchema } from "../types";
 import { searchGoal, type GoalSearch } from "./goal-search";
 
 /**
  * The product flow: goal → three real moments → campaign proposal → REROUTE evaluation of every
- * channel × territory → "Find another way" (REROUTE resolver) → independent re-check or remedy →
+ * channel × territory under the run's rule package → "Find a way to use it" (Media Compliance Recovery
+ * Engine: locate, propose, independently re-check) → apply an option (new campaign version, re-evaluated) →
  * human review receipt. Rights are only ever REROUTE's; publication is only ever `canPublish()` on the
- * receipt. Every version, evaluation, alternative search and submission is persisted and audited.
+ * receipt. Every version, evaluation, recovery plan and submission is persisted and audited.
  * Every action on an existing run carries the run version the user saw (optimistic concurrency).
  */
 
-type ResolveInput = z.input<typeof ResolveRequestSchema> & { limit: number; intents?: PublishIntent[] };
-type Resolved = z.output<typeof ResolveResponseSchema> & {
-  remedy?: { territories?: string[]; platforms?: string[]; usage?: PublishIntent["usage"] };
-};
+/** The rule package a run is evaluated against: the policies the engine may select from + its identity. */
+export type RunPolicies = { policies: Policy[]; context?: PolicyContext };
 
 /** External calls (live services); persistence goes through the repositories. */
 export type GoalDeps = {
   search(input: { club: Club; objective: GoalRun["objective"]; match?: string }): Promise<GoalSearch>;
-  decideCampaign(input: { edit: EditPlan; intents: PublishIntent[] }): Promise<CampaignDecision>;
-  resolve(input: ResolveInput): Promise<Resolved>;
+  decideCampaign(input: { edit: EditPlan; intents: PublishIntent[]; policies: Policy[] }): Promise<CampaignDecision>;
+  recover(input: RecoverInput & { policies: Policy[] }): Promise<Recovered>;
+  /** Exactly one package for `club` (the requested one, else the club's default) + other clubs' defaults. */
+  policies(club: Club, packageId?: string): Promise<RunPolicies>;
   resolveMedia(scoreplayMediaId: string, club: Club): Promise<MediaRef>;
   /** Playable reference for a linked video, resolved per request (never stored). */
   preview(ref: MediaRef, club: Club): Promise<Preview | undefined>;
@@ -61,8 +67,12 @@ export type GoalDeps = {
 
 const defaultDeps: GoalDeps = {
   search: (input) => searchGoal(input),
-  decideCampaign: (input) => decideCampaign(input),
-  resolve: (input) => resolve(input),
+  decideCampaign: ({ policies, ...input }) => decideCampaign(input, { policies }),
+  recover: ({ policies, ...input }) => recover(input, { policies }),
+  policies: async (club, packageId) => {
+    const { policies, package: pkg } = await policiesForEvaluation({ club, packageId });
+    return { policies, ...(pkg ? { context: toPolicyContext(pkg) } : {}) };
+  },
   resolveMedia: (id, club) => getMediaResolver(club).forScoreplay(id),
   preview: (ref, club) => previewFor(ref, { club }),
   media: "DISABLED",
@@ -82,8 +92,8 @@ export type GoalTarget = { id: string; expectedVersion: number };
 
 /** The Studio has no producer login (reviewers sign in for review); actions are attributed to the Studio. */
 const ACTOR = "pulse-studio";
-/** Replacements REROUTE's resolver evaluates per "Find another way". */
-const ALTERNATIVES = 3;
+/** Replacement moments the recovery engine searches and re-checks per "Find a way to use it". */
+const REPLACEMENTS = 3;
 
 const stale = () => new AppError("CONFLICT", "This goal was updated elsewhere — reload it before continuing.");
 
@@ -109,13 +119,11 @@ async function save(id: string, version: number, mutate: (run: GoalRun) => void,
   return { run, version: version + 1 };
 }
 
-/** Keys and links of every moment the view shows (top three, the selected one, current alternatives). */
+/** Keys and links of every moment the view shows (top three, the selected one, current replacement options). */
 async function present(run: GoalRun, version: number, deps: GoalDeps): Promise<GoalView> {
   const receipt = run.review ? await getReceipt(run.review.receiptId) : null;
-  const latest = latestEvaluation(run);
   const shown = new Map<string, MediaRef>();
   for (const r of [...run.pool.slice(0, 3), ...run.adopted.filter((a) => a.key === run.campaign?.key)]) shown.set(r.key, r.media);
-  for (const a of run.alternatives.filter((x) => x.forEvaluationId === latest?.id)) for (const c of a.candidates) shown.set(c.key, c.media);
   const previews = new Map<string, Preview>();
   if (deps.media !== "ALLOWED") {
     // No stream lookups at all, and no thumbnail/preview URL anywhere in the view.
@@ -143,10 +151,11 @@ function momentOf(run: GoalRun, key: string): Recommendation {
   return rec;
 }
 
-/** The latest evaluation, required to be of the campaign's current version. */
+/** The latest evaluation, required to be of the campaign's current version and the run's current rule package. */
 function currentEvaluation(run: GoalRun): GoalEvaluation {
   const latest = latestEvaluation(run);
   if (!latest || latest.campaignVersion !== run.campaign?.version) throw new AppError("BAD_REQUEST", "Check rights with REROUTE for this version first.");
+  if (!underRunPolicy(run, latest)) throw new AppError("BAD_REQUEST", "The rule package changed since the last check — check rights again.");
   return latest;
 }
 
@@ -167,7 +176,7 @@ async function newVersion(
   rec: Recommendation,
   origin: GoalCampaign["origin"],
   now: Date,
-  opts: { destination?: CommerceDestination; plan?: GoalPlan } = {},
+  opts: { destination?: CommerceDestination; plan?: GoalPlan; edl?: GoalCampaign["edl"] | null } = {},
 ): Promise<GoalCampaign> {
   const previous = run.campaign;
   const campaignId = previous?.campaignId ?? randomUUID();
@@ -176,25 +185,59 @@ async function newVersion(
   const kept = previous?.cta.destination?.source === "PRODUCER_ENTERED" ? previous.cta.destination : undefined;
   const dest = product && kind ? (opts.destination ?? kept ?? configuredDestination(run.club, product, kind, run.objective.market?.code)) : undefined;
   const plan = opts.plan ?? previous?.plan ?? run.plan;
-  const draft = buildGoalCampaign({ run, rec, campaignId, version: (previous?.version ?? 0) + 1, origin, plan, destination: dest, now, previous });
+  // A derived cut stays with its moment across later versions (destination, campaign changes) unless replaced.
+  const edl = opts.edl === null ? undefined : (opts.edl ?? (previous?.key === rec.key ? previous.edl : undefined));
+  const draft = buildGoalCampaign({ run, rec, campaignId, version: (previous?.version ?? 0) + 1, origin, plan, destination: dest, edl, now, previous });
   const version = await campaigns.saveVersion(campaignId, draft, ACTOR, { goalRunId: run.id });
-  await events.append({ subjectType: "campaign", subjectId: campaignId, type: "CAMPAIGN_VERSION_SAVED", actor: ACTOR, payload: { goalRunId: run.id, version, origin, key: rec.key } });
+  await events.append({
+    subjectType: "campaign",
+    subjectId: campaignId,
+    type: "CAMPAIGN_VERSION_SAVED",
+    actor: ACTOR,
+    payload: { goalRunId: run.id, version, origin, key: rec.key, ...(edl ? { edl: { id: edl.id, retained: edl.retained, removed: edl.removed.map((r) => [r.start, r.end]), execution: edl.execution } } : {}) },
+  });
   return { ...draft, version };
+}
+
+/** The run's rule package (Policy Center): the one it was set to, else the club's default. */
+async function runPolicies(run: GoalRun, deps: GoalDeps): Promise<RunPolicies> {
+  return deps.policies(run.club, run.policy?.packageId);
+}
+
+/**
+ * Markets (or channels) of the campaign that no rule licenses, when NONE of them is licensed: nothing in the
+ * footage can fix it and a reviewer cannot grant it. A partly licensed campaign is not a gap (keep the licensed part).
+ */
+function licenceGapOf(perIntent: GoalEvaluation["perIntent"], policies: readonly Policy[]): GoalEvaluation["licenceGap"] {
+  const unlicensed = (dimension: "territory" | "platform", pick: (i: PublishIntent) => string) => {
+    const all = [...new Set(perIntent.map((p) => pick(p.intent)))];
+    const bad = all.filter((v) =>
+      perIntent
+        .filter((p) => pick(p.intent) === v)
+        .every((p) => p.decision.reasons.some((r: Reason) => r.outcome !== "PERMIT" && r.dimension === dimension && reasonScope(r, policies) === "CAMPAIGN")),
+    );
+    return bad.length === all.length ? bad : [];
+  };
+  const territories = unlicensed("territory", (i) => i.territory.toUpperCase());
+  const platforms = unlicensed("platform", (i) => i.platform);
+  return territories.length || platforms.length ? { territories, platforms } : undefined;
 }
 
 /** Asks REROUTE about every channel × territory of the campaign (for a fresh publication slot) and records each decision. */
 async function evaluate(run: GoalRun, campaign: GoalCampaign, kind: GoalEvaluation["kind"], deps: GoalDeps): Promise<GoalEvaluation> {
-  const edit = editFor(run.id, momentOf(run, campaign.key));
+  const edit = campaignEdit(run.id, momentOf(run, campaign.key), campaign.edl);
   const publishAt = proposedPublishAt(deps.now());
-  const result = await deps.decideCampaign({ edit, intents: campaign.intents.map((i) => ({ ...i, publishAt })) });
+  const { policies, context } = await runPolicies(run, deps);
+  const result = await deps.decideCampaign({ edit, intents: campaign.intents.map((i) => ({ ...i, publishAt })), policies });
   const perIntent = result.perIntent.map((p) => ({ intent: p.intent, decision: p.decision.decision }));
   const records = await Promise.all(
     perIntent.map((p) =>
       evaluations.record({ campaignId: campaign.campaignId, campaignVersion: campaign.version, kind, media: result.media, intent: p.intent, decision: p.decision }),
     ),
   );
-  // The evaluation is identified by the record of the use REROUTE's resolver will work on (the worst one).
+  // The evaluation is identified by the record of the worst use.
   const worst = Math.max(0, perIntent.findIndex((p) => p.decision.verdict === result.overall.verdict));
+  const gap = licenceGapOf(perIntent, policies);
   const evaluation: GoalEvaluation = {
     id: records[worst].id,
     kind,
@@ -206,20 +249,24 @@ async function evaluate(run: GoalRun, campaign: GoalCampaign, kind: GoalEvaluati
     overall: result.overall,
     perIntent,
     evaluatedAt: result.overall.evaluatedAt,
+    ...(context ? { policy: context } : {}),
+    ...(gap ? { licenceGap: gap } : {}),
   };
   await campaigns.setState(campaign.campaignId, { status: `RIGHTS_${result.overall.verdict}` });
   await events.append({
     subjectType: "campaign",
     subjectId: campaign.campaignId,
-    type: kind === "ORIGINAL" ? "RIGHTS_EVALUATED" : "ALTERNATIVE_RECHECKED",
+    type: kind === "ORIGINAL" ? "RIGHTS_EVALUATED" : "RECOVERY_RECHECKED",
     actor: ACTOR,
     payload: {
       goalRunId: run.id,
       version: campaign.version,
       verdict: result.overall.verdict,
       clearance: result.overall.clearance,
+      policy: context ? { id: context.packageId, version: context.version, sourceType: context.sourceType, verified: context.verified } : null,
+      edit: { id: edit.id, derived: edit.derived, segments: edit.segments.map((s) => [s.scoreplayMediaId, s.start, s.end]) },
       evaluationIds: records.map((r) => r.id),
-      uses: perIntent.map((p) => `${p.intent.platform}/${p.intent.territory}:${p.decision.verdict}`),
+      uses: perIntent.map((p) => `${p.intent.platform}/${p.intent.territory}/${p.intent.usage}:${p.decision.verdict}`),
     },
   });
   return evaluation;
@@ -241,7 +288,7 @@ export async function runGoal(goal: string, club: Club, deps: GoalDeps = default
     );
   }
   const match = parseMatch(goal);
-  const { value: found, provenance } = await trackProvenance(() => deps.search({ club, objective, match }));
+  const [{ value: found, provenance }, { context: policy }] = await Promise.all([trackProvenance(() => deps.search({ club, objective, match })), deps.policies(club)]);
   const run: GoalRun = {
     id: `goal-${randomUUID()}`,
     schemaVersion: 2,
@@ -254,7 +301,9 @@ export async function runGoal(goal: string, club: Club, deps: GoalDeps = default
     ...found,
     adopted: [],
     evaluations: [],
-    alternatives: [],
+    recoveries: [],
+    applied: [],
+    ...(policy ? { policy } : {}),
     ...(provenance ? { dataOrigin: provenance } : {}),
   };
   await goalRuns.create(run);
@@ -323,7 +372,8 @@ export async function draftGoalCampaign(target: GoalTarget, commerceUrl: string 
 export async function checkGoalRights(target: GoalTarget, deps: GoalDeps = defaultDeps): Promise<GoalView> {
   const run = await load(target);
   const campaign = currentCampaign(run);
-  const { value: evaluation, provenance } = await trackProvenance(() => evaluate(run, campaign, campaign.origin === "ALTERNATIVE" ? "ALTERNATIVE" : "ORIGINAL", deps));
+  const recheck = campaign.origin === "ALTERNATIVE" || campaign.origin === "EDIT" || campaign.origin === "REMEDY";
+  const { value: evaluation, provenance } = await trackProvenance(() => evaluate(run, campaign, recheck ? "ALTERNATIVE" : "ORIGINAL", deps));
   const saved = await save(
     run.id,
     target.expectedVersion,
@@ -335,133 +385,195 @@ export async function checkGoalRights(target: GoalTarget, deps: GoalDeps = defau
   return present(saved.run, saved.version, deps);
 }
 
+/** Where a reason's fact or rule comes from, for the user. */
+function reasonSource(r: Reason, policyTitle: string): string {
+  if (r.basis === "TECHNICAL_OBSERVATION") return "TwelveLabs video analysis";
+  if (r.basis === "MEDIA_IDENTITY") return "ScorePlay ↔ TwelveLabs link";
+  if (r.basis === "POLICY_SELECTION") return "Policy selection";
+  if (r.ruleId.startsWith("subject:")) return "ScorePlay squad list + TwelveLabs video analysis";
+  return `${policyTitle} · rule ${r.ruleId}`;
+}
+
+function problemLine(p: ProblemItem, policyTitle: string): SourcedLine {
+  const sources = [...new Set(p.evidence.map(evidenceSource))];
+  const source = sources.length ? sources.join(" + ") : p.scope === "CAMPAIGN" ? "Your campaign plan" : `${policyTitle} · ${p.ruleIds.join(", ")}`;
+  return { text: p.text, source, ...(p.at ? { at: p.at } : {}) };
+}
+
+/** A planned option as stored on the run (view fields + what applying it needs). */
+function storedOption(o: PlannedOption, recommendedId: string | undefined, media: readonly MediaRef[], policyTitle: string): StoredRecoveryOption {
+  return {
+    id: o.id,
+    kind: o.kind,
+    title: o.title,
+    summary: o.summary,
+    tradeoff: o.tradeoff,
+    changesGoal: o.changesGoal,
+    outcome: o.outcome,
+    ...(o.notViableBecause ? { notViableBecause: o.notViableBecause } : {}),
+    ...(o.recheck
+      ? {
+          recheck: {
+            verdict: o.recheck.verdict,
+            clearance: o.recheck.clearance,
+            allowedUses: o.recheck.allowedUses,
+            totalUses: o.recheck.totalUses,
+            remaining: o.recheck.remaining.map((r) => ({
+              text: r.explanation,
+              source: reasonSource(r, policyTitle),
+              ...(r.start !== undefined && r.end !== undefined ? { at: { start: r.start, end: r.end } } : {}),
+            })),
+            policyId: o.recheck.policyId,
+            policyVersion: o.recheck.policyVersion,
+            evaluatedAt: o.recheck.evaluatedAt,
+          },
+        }
+      : {}),
+    ...(o.replacement ? { replacement: o.replacement } : {}),
+    ...(o.campaignChange ? { campaignChange: o.campaignChange } : {}),
+    ...(o.relevance ? { relevance: o.relevance } : {}),
+    recommended: o.id === recommendedId,
+    applicable: o.outcome === "RESOLVES_DEMO" || o.outcome === "NEEDS_REVIEW",
+    ...(o.edl ? { edl: o.edl } : {}),
+    ...(o.intents ? { intents: o.intents } : {}),
+    ...(o.edit && o.kind === "REPLACE" ? { segment: o.edit.segments[0] } : {}),
+    ...(o.replacement ? { media: media.find((m) => m.scoreplayMediaId === o.replacement!.scoreplayMediaId) } : {}),
+  };
+}
+
+/** The recovery plan of the latest evaluation of the current moment, if any. */
+function currentRecovery(run: GoalRun, latest: GoalEvaluation): GoalRecovery | undefined {
+  return run.recoveries.findLast((r) => r.forEvaluationId === latest.id && r.forKey === run.campaign?.key);
+}
+
 /**
- * "Find another way": REROUTE's resolver classifies the restriction over every use of the campaign.
- * Tied to the clip → comparable footage, each candidate checked for every use. Tied to the campaign
- * (territory/platform/usage/date) → no replacement clips; REROUTE's remedy (the licensed subset) is
- * offered instead. Never repeated for the same evaluation.
+ * "Find a way to use it" (Media Compliance Recovery Engine): locates every restriction of the latest evaluation
+ * in the footage or in the plan, proposes trims, a clean section, real replacement moments, a campaign change,
+ * a change of use or a clearance request — and re-checks each one independently for every use. Persisted and
+ * audited; never repeated for the same evaluation.
  */
-export async function findAlternatives(target: GoalTarget, deps: GoalDeps = defaultDeps): Promise<GoalView> {
+export async function findRecovery(target: GoalTarget, deps: GoalDeps = defaultDeps): Promise<GoalView> {
   const run = await load(target);
   const latest = currentEvaluation(run);
-  if (latest.overall.verdict === "ALLOWED") throw new AppError("BAD_REQUEST", "REROUTE allowed every proposed use; there is nothing to route around.");
-  if (run.alternatives.some((a) => a.forEvaluationId === latest.id)) return present(run, target.expectedVersion, deps);
+  if (latest.overall.verdict === "ALLOWED") throw new AppError("BAD_REQUEST", "Every planned use is already allowed; there is nothing to fix.");
+  if (currentRecovery(run, latest)) return present(run, target.expectedVersion, deps);
 
+  const campaign = currentCampaign(run);
   const rec = momentOf(run, latest.key);
-  const use = blockingUse(latest);
-  const {
-    value: { result, candidates },
-    provenance,
-  } = await trackProvenance(async () => {
-    const result = await deps.resolve({
-      edit: latest.edit,
-      intent: use.intent,
+  const edl = campaign.edl;
+  const source = {
+    assetId: rec.candidate.scoreplayAssetId,
+    title: rec.candidate.title,
+    range: edl ? edl.sourceRange : { start: rec.candidate.startSeconds ?? 0, end: rec.candidate.endSeconds ?? (rec.candidate.startSeconds ?? 0) + 15 },
+    ...(edl ? { priorRemovals: edl.removed.filter((r) => r.ruleIds.length > 0) } : {}),
+  };
+  const { policies, context } = await runPolicies(run, deps);
+  const policyTitle = context?.title ?? "Rights policy";
+  const { value: recovered, provenance } = await trackProvenance(() =>
+    deps.recover({
+      source,
       intents: latest.perIntent.map((p) => p.intent),
-      segmentIndex: 0,
-      query: rec.matches[0]?.query,
-      limit: ALTERNATIVES,
-    });
-    const candidates: AlternativeCandidate[] =
-      result.blocker.scope === "CAMPAIGN"
-        ? []
-        : await Promise.all(
-            result.candidates.map(async (c) => {
-              const seg = c.proposedEdit.segments[0];
-              const media = await deps.resolveMedia(seg.scoreplayMediaId, run.club);
-              return {
-                key: `${seg.scoreplayMediaId}@${seg.start}-${seg.end}`,
-                hit: c.hit,
-                segment: seg,
-                verdict: c.editDecision.decision.verdict,
-                clearance: c.editDecision.decision.clearance,
-                eligible: c.eligible,
-                reasons: c.editDecision.decision.reasons.filter((r) => r.outcome !== "PERMIT").map(({ dimension, outcome, explanation }) => ({ dimension, outcome, explanation })),
-                title: media.match?.scoreplayFilename ?? `ScorePlay asset ${seg.scoreplayMediaId}`,
-                media,
-                thumbnailUrl: c.hit.thumbnailUrl,
-              };
-            }),
-          );
-    return { result, candidates };
+      query: rec.matches[0]?.query ?? rec.headline,
+      replacements: REPLACEMENTS,
+      idPrefix: `${campaign.campaignId}:v${campaign.version}`,
+      policies,
+    }),
+  );
+  const { plan } = recovered;
+  const options = plan.options.map((o) => storedOption(o, plan.recommendedId, recovered.media, policyTitle));
+  const record = await alternatives.record({
+    evaluationId: latest.id,
+    blocker: {
+      scope: plan.scope === "CLIP" ? "CLIP" : "CAMPAIGN",
+      dimensions: [...new Set(plan.problems.map((p) => (p.scope === "CAMPAIGN" ? "campaign" : "footage")))],
+      ruleIds: [...new Set(plan.problems.flatMap((p) => p.ruleIds))],
+      explanation: plan.headline,
+      ...(plan.noPathMessage ? { suggestion: plan.noPathMessage } : {}),
+    },
+    candidates: options.map((o) => ({
+      ...RecoveryOptionSchema.parse(o),
+      ...(o.edl ? { edl: { id: o.edl.id, retained: o.edl.retained, removed: o.edl.removed.map((r) => ({ start: r.start, end: r.end, ruleIds: r.ruleIds })) } } : {}),
+    })),
   });
-  const campaignScoped = result.blocker.scope === "CAMPAIGN";
-  const record = await alternatives.record({ evaluationId: latest.id, blocker: result.blocker, candidates });
-  const found: GoalAlternatives = {
+  const found: GoalRecovery = {
     id: record.id,
-    forKey: latest.key,
     forEvaluationId: latest.id,
-    requestedAt: deps.now().toISOString(),
-    intent: use.intent,
-    query: result.query,
-    blocker: result.blocker,
-    candidates,
-    remedy: campaignScoped ? result.remedy : undefined,
+    forKey: latest.key,
+    generatedAt: deps.now().toISOString(),
+    scope: plan.scope,
+    headline: plan.headline,
+    problems: plan.problems.map((p) => problemLine(p, policyTitle)),
+    options,
+    ...(plan.recommendedId ? { recommendedId: plan.recommendedId } : {}),
+    ...(plan.noPathMessage ? { noPathMessage: plan.noPathMessage } : {}),
+    media: recovered.media,
   };
   await events.append({
     subjectType: "campaign",
     subjectId: latest.campaignId,
-    type: "ALTERNATIVES_SEARCHED",
+    type: "RECOVERY_PLANNED",
     actor: ACTOR,
-    payload: { goalRunId: run.id, evaluationId: latest.id, blocker: result.blocker.scope, remedy: found.remedy ?? null, candidates: candidates.map((c) => `${c.key}:${c.verdict}`) },
+    payload: {
+      goalRunId: run.id,
+      evaluationId: latest.id,
+      recoveryId: record.id,
+      scope: plan.scope,
+      recommended: plan.recommendedId ?? null,
+      options: options.map((o) => `${o.id}:${o.outcome}${o.recheck ? `:${o.recheck.allowedUses}/${o.recheck.totalUses}` : ""}`),
+      policy: context ? `${context.packageId}@${context.version}` : null,
+    },
   });
   const saved = await save(
     run.id,
     target.expectedVersion,
     (r) => {
-      r.alternatives.push(found);
+      r.recoveries.push(found);
     },
     provenance,
   );
   return present(saved.run, saved.version, deps);
 }
 
-/** The "Find another way" result of the latest evaluation of the current moment, if any. */
-function currentAlternatives(run: GoalRun, latest: GoalEvaluation): GoalAlternatives | undefined {
-  return run.alternatives.findLast((a) => a.forEvaluationId === latest.id && a.forKey === run.campaign?.key);
-}
-
-/** A resolver candidate as a goal moment (its MediaRef re-resolved server-side, never trusted from the hit). */
-function adoptedMoment(run: GoalRun, from: GoalAlternatives, c: AlternativeCandidate, media: MediaRef): Recommendation {
+/** A replacement option as a goal moment (its MediaRef re-resolved server-side, never trusted from the plan). */
+function replacementMoment(run: GoalRun, from: GoalRecovery, o: StoredRecoveryOption, media: MediaRef): Recommendation {
   const original = momentOf(run, from.forKey);
-  const { start, end } = c.segment;
-  const title = media.match?.scoreplayFilename ?? c.title;
-  const seconds = Math.round(end - start);
+  const r = o.replacement!;
+  const title = media.match?.scoreplayFilename ?? r.title;
   return {
-    key: c.key,
+    key: r.key,
     candidate: {
-      scoreplayAssetId: c.segment.scoreplayMediaId,
+      scoreplayAssetId: r.scoreplayMediaId,
       twelveLabsVideoId: media.twelvelabsVideoId,
       title,
       kind: "video",
-      thumbnailUrl: c.thumbnailUrl,
       durationSec: media.match?.scoreplayDurationSec,
-      startSeconds: start,
-      endSeconds: end,
+      startSeconds: r.start,
+      endSeconds: r.end,
       competition: original.candidate.competition,
       foundBy: "TWELVELABS",
       discoveredBy: "INDEX_SEARCH",
-      rank: c.hit.rank,
-      query: from.query,
-      origin: c.hit.origin,
+      rank: r.rank,
+      query: r.query,
+      origin: "LIVE",
       mapping: { via: media.method as "AUTHORITATIVE_ID" | "FILENAME_DURATION", filename: media.match?.twelvelabsFilename ?? title },
     },
     media,
-    headline: `${original.headline} (alternative)`,
+    headline: `${original.headline} (replacement)`,
     score: 0,
     breakdown: {
       relevance: 0,
       readiness: 0,
       contextFactor: 1,
       notes: {
-        relevance: `Found by REROUTE's resolver: #${c.hit.rank} for “${from.query}”.`,
+        relevance: `Found by the recovery engine: #${r.rank} for “${r.query}”.`,
         readiness: "Cut to the same length as the restricted moment.",
         context: `Replaces ${from.forKey}.`,
       },
     },
-    matches: [{ ...original.matches[0], query: from.query, rank: c.hit.rank, start: c.hit.start, end: c.hit.end }],
+    matches: [{ ...original.matches[0], query: r.query, rank: r.rank, start: r.start, end: r.end }],
     why: {
       opportunity: original.why.opportunity,
-      media: `REROUTE found this ${seconds}-second moment at ${clock(start)}–${clock(end)} in “${title}” as comparable footage, and checked it independently.`,
+      media: `PULSE found this ${Math.round(r.end - r.start)}-second moment at ${clock(r.start)}–${clock(r.end)} in “${title}” as comparable footage, and checked it independently.`,
       action: original.why.action,
     },
     duplicates: [],
@@ -469,68 +581,107 @@ function adoptedMoment(run: GoalRun, from: GoalAlternatives, c: AlternativeCandi
   };
 }
 
-/** Swaps an alternative of the CURRENT evaluation into a new campaign version and re-evaluates every use. */
-export async function useAlternative(target: GoalTarget, key: string, deps: GoalDeps = defaultDeps): Promise<GoalView> {
+/**
+ * Applies one option of the CURRENT recovery plan as a new campaign version and re-evaluates every use from
+ * scratch (the plan's own re-check is never copied). TRIM / SAFE_SECTION → derived cut (edit plan, not rendered);
+ * REPLACE → the replacement moment; ADAPT_CAMPAIGN / CHANGE_USAGE → the changed plan.
+ */
+export async function applyRecovery(target: GoalTarget, optionId: string, deps: GoalDeps = defaultDeps): Promise<GoalView> {
   const run = await load(target);
   const latest = currentEvaluation(run);
-  const from = currentAlternatives(run, latest);
-  const candidate = from?.candidates.find((c) => c.key === key);
-  if (!from || !candidate) throw new AppError("BAD_REQUEST", "That alternative is not one REROUTE proposed for the current check of this campaign.");
-  if (candidate.verdict === "BLOCKED") throw new AppError("BAD_REQUEST", "REROUTE blocked this alternative too; pick another one.");
+  const from = currentRecovery(run, latest);
+  const option = from?.options.find((o) => o.id === optionId);
+  if (!from || !option) throw new AppError("BAD_REQUEST", "That option is not part of the current recovery plan for this campaign. Find a way to use it again.");
+  if (!option.applicable) throw new AppError("BAD_REQUEST", option.notViableBecause ?? "This option does not resolve the restriction; it can't be applied.");
+  const campaign = currentCampaign(run);
+  const now = deps.now();
+
   const { value, provenance } = await trackProvenance(async () => {
-    const media = await deps.resolveMedia(candidate.segment.scoreplayMediaId, run.club);
-    if (!isEvidenceLinkable(media)) {
-      throw new AppError("BAD_REQUEST", `ScorePlay asset ${candidate.segment.scoreplayMediaId} has no unique TwelveLabs link (${media.method}); it cannot be used.`);
+    let withMoment = run;
+    let next: GoalCampaign;
+    if (option.kind === "TRIM" || option.kind === "SAFE_SECTION") {
+      if (!option.edl) throw new AppError("BAD_REQUEST", "This option has no edit plan.");
+      next = await newVersion(run, momentOf(run, latest.key), "EDIT", now, { edl: option.edl });
+    } else if (option.kind === "REPLACE") {
+      const r = option.replacement!;
+      const media = await deps.resolveMedia(r.scoreplayMediaId, run.club);
+      if (!isEvidenceLinkable(media)) {
+        throw new AppError("BAD_REQUEST", `ScorePlay asset ${r.scoreplayMediaId} has no unique TwelveLabs link (${media.method}); it cannot be used.`);
+      }
+      const rec = replacementMoment(run, from, option, media);
+      withMoment = { ...run, adopted: [...run.adopted.filter((a) => a.key !== rec.key), rec] };
+      next = await newVersion(withMoment, rec, "ALTERNATIVE", now, { edl: null });
+    } else if (option.kind === "ADAPT_CAMPAIGN" || option.kind === "CHANGE_USAGE") {
+      const change = option.campaignChange ?? {};
+      const plan = campaign.plan;
+      const territories = change.territories?.length ? plan.territories.filter((t) => change.territories!.includes(t)) : plan.territories;
+      const channels = change.platforms?.length ? plan.channels.filter((c) => change.platforms!.includes(c)) : plan.channels;
+      if (!territories.length || !channels.length) throw new AppError("BAD_REQUEST", "This change would leave no planned use.");
+      const changed: GoalPlan = {
+        ...plan,
+        territories,
+        channels,
+        usage: change.usage ?? plan.usage,
+        territoryBasis: change.dropped?.length ? `Limited by the recovery engine to licensed markets: ${territories.join(", ")}.` : plan.territoryBasis,
+      };
+      next = await newVersion(run, momentOf(run, campaign.key), "REMEDY", now, { plan: changed });
+    } else {
+      throw new AppError("BAD_REQUEST", "A clearance request is a next step for a person, not a change PULSE can apply.");
     }
-    const rec = adoptedMoment(run, from, candidate, media);
-    const withMoment: GoalRun = { ...run, adopted: [...run.adopted.filter((r) => r.key !== rec.key), rec] };
-    const campaign = await newVersion(withMoment, rec, "ALTERNATIVE", deps.now());
-    const evaluation = await evaluate(withMoment, campaign, "ALTERNATIVE", deps);
-    return { rec, campaign, evaluation };
+    const evaluation = await evaluate(withMoment, next, "ALTERNATIVE", deps);
+    return { withMoment, next, evaluation };
   });
-  const { rec, campaign, evaluation } = value;
+  const { withMoment, next, evaluation } = value;
+  await events.append({
+    subjectType: "campaign",
+    subjectId: campaign.campaignId,
+    type: "RECOVERY_APPLIED",
+    actor: ACTOR,
+    payload: {
+      goalRunId: run.id,
+      recoveryId: from.id,
+      optionId,
+      kind: option.kind,
+      fromEvaluationId: latest.id,
+      version: next.version,
+      before: latest.overall.verdict,
+      after: evaluation.overall.verdict,
+      predicted: option.recheck?.verdict ?? null,
+    },
+  });
   const saved = await save(
     run.id,
     target.expectedVersion,
     (r) => {
-      r.adopted = [...r.adopted.filter((x) => x.key !== rec.key), rec];
-      setCampaign(r, campaign);
-      r.selectedKey = rec.key;
+      r.adopted = withMoment.adopted;
+      setCampaign(r, next);
+      r.selectedKey = next.key;
       r.evaluations.push(evaluation);
+      r.applied.push({ recoveryId: from.id, optionId, kind: option.kind, title: option.title, fromEvaluationId: latest.id, fromKey: latest.key, campaignVersion: next.version, at: now.toISOString() });
     },
     provenance,
   );
   return present(saved.run, saved.version, deps);
 }
 
-/**
- * CAMPAIGN-scoped restriction: restrict the campaign to the licensed subset REROUTE proposed, within
- * the campaign's own uses (new version). Nothing is re-checked here — the user checks rights again for
- * the new version. An empty licensed subset is a licence gap: refused, never re-targeted elsewhere.
- */
-export async function applyRemedy(target: GoalTarget, deps: GoalDeps = defaultDeps): Promise<GoalView> {
+/** Evaluates this run against another rule package of its club (Policy Center); the verdict is stale until re-checked. */
+export async function setRunPolicy(target: GoalTarget, packageId: string, deps: GoalDeps = defaultDeps): Promise<GoalView> {
   const run = await load(target);
-  const campaign = currentCampaign(run);
-  const latest = currentEvaluation(run);
-  const found = currentAlternatives(run, latest);
-  const plan = campaign.plan;
-  const { remedy, gap } = found ? scopeRemedy(found, plan) : {};
-  if (gap) {
-    throw new AppError("BAD_REQUEST", `No licensed path for ${[...gap.territories, ...gap.platforms].join(", ")} in this campaign: request a licence from the rights holder; there is no remedy to apply.`);
+  const { context } = await deps.policies(run.club, packageId);
+  if (!context || context.packageId !== packageId) {
+    throw new AppError("BAD_REQUEST", `Rule package "${packageId}" does not exist or does not apply to ${CLUBS[run.club].label}.`);
   }
-  if (!remedy) throw new AppError("BAD_REQUEST", "REROUTE proposed no remedy for the current check. Find another way first.");
-  const territories = remedy.territories ?? plan.territories;
-  const channels = remedy.platforms ? plan.channels.filter((c) => remedy.platforms!.includes(c)) : plan.channels;
-  const remedied: GoalPlan = {
-    ...plan,
-    territories,
-    channels,
-    usage: remedy.usage ?? plan.usage,
-    territoryBasis: remedy.territories ? `Limited by REROUTE's remedy to licensed territories: ${territories.join(", ")}.` : plan.territoryBasis,
-  };
-  const next = await newVersion(run, momentOf(run, campaign.key), "REMEDY", deps.now(), { plan: remedied });
-  await events.append({ subjectType: "campaign", subjectId: campaign.campaignId, type: "REMEDY_APPLIED", actor: ACTOR, payload: { goalRunId: run.id, evaluationId: latest.id, remedy, version: next.version } });
-  const saved = await save(run.id, target.expectedVersion, (r) => setCampaign(r, next));
+  if (run.policy?.packageId === context.packageId && run.policy.version === context.version) return present(run, target.expectedVersion, deps);
+  await events.append({
+    subjectType: "goal",
+    subjectId: run.id,
+    type: "POLICY_CONTEXT_CHANGED",
+    actor: ACTOR,
+    payload: { from: run.policy ? `${run.policy.packageId}@${run.policy.version}` : null, to: `${context.packageId}@${context.version}`, sourceType: context.sourceType, verified: context.verified },
+  });
+  const saved = await save(run.id, target.expectedVersion, (r) => {
+    r.policy = context;
+  });
   return present(saved.run, saved.version, deps);
 }
 
@@ -545,9 +696,7 @@ export async function submitForReview(target: GoalTarget, deps: GoalDeps = defau
   const latest = currentEvaluation(run);
   if (latest.overall.verdict === "BLOCKED") throw new AppError("BAD_REQUEST", "REROUTE blocked this campaign; a blocked campaign cannot be submitted. Find another way first.");
   if (run.review?.evaluationId === latest.id) return present(run, target.expectedVersion, deps);
-  const found = currentAlternatives(run, latest);
-  const gap = found && scopeRemedy(found, campaign.plan).gap;
-  if (gap) throw new AppError("BAD_REQUEST", `${noLicenceReason(gap)}.`);
+  if (latest.licenceGap) throw new AppError("BAD_REQUEST", `${noLicenceReason(latest.licenceGap)}.`);
 
   const receipt = await createReceipt({
     edit: latest.edit,

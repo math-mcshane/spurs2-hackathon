@@ -15,7 +15,7 @@ describe("reasonFinding: real evidence vs the rule applied", () => {
     expect(f).toEqual({
       dimension: "sponsor",
       outcome: "DENY",
-      found: [{ text: "Manchester United: crest on kit (9–14 s)", source: "Video analysis · TwelveLabs" }],
+      found: [{ text: "Manchester United: crest on kit (9–14 s)", source: "TwelveLabs video analysis" }],
       rule: { id: "THFC-13", text: "Sales posts can't show other brands.", tag: "Demo policy · fictional" },
     });
   });

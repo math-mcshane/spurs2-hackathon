@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEMO_CLEARANCE_LABEL, type Asset, type Blocker, type Candidate, type Decision, type EditPlan, type MediaRef, type PublishIntent, type Verdict } from "@/lib/contracts";
+import { DEMO_CLEARANCE_LABEL, type Asset, type Decision, type EditPlan, type Evidence, type MediaRef, type PublishIntent, type Verdict } from "@/lib/contracts";
 import type { Repositories } from "@/lib/server/repositories";
-import { classifyBlocker } from "@/lib/rights/blocker";
+import { BUNDLED_POLICIES } from "@/lib/rights";
+import { evaluateUses, planRecovery, type RecoveryEvalContext, type RecoveryPlan } from "@/lib/rights/recovery";
 import { resetRepositoriesForTests, useMemoryRepositoriesForTests } from "@/lib/server/repositories/testing";
 import { getReceipt, recordReview } from "@/lib/server/store";
 import { buildGoalCampaign } from "../goal-campaign";
@@ -11,7 +12,7 @@ import { parseObjective } from "../objective-parser";
 import * as goals from "../server/goal-service";
 import type { GoalDeps } from "../server/goal-service";
 import type { GoalSearch } from "../server/goal-search";
-import { GoalViewSchema, type GoalIntent, type GoalRun } from "../types";
+import { GoalViewSchema, type GoalIntent, type GoalRun, type PolicyContext } from "../types";
 
 const NOW = new Date("2026-10-22T12:00:00Z");
 const A = "Promote Tottenham merchandise to UK supporters";
@@ -124,27 +125,68 @@ function campaignDecider(byAsset: Record<string, Verdict>, opts: { fictional?: b
   });
 }
 
-function candidate(id: string, start: number, end: number, verdict: Verdict, base: EditPlan): Candidate {
-  const segment = { scoreplayMediaId: id, start, end, label: "q" };
-  const proposedEdit: EditPlan = { ...base, id: `${base.id}~${id}`, segments: [segment], derived: true, derivedFrom: base.id };
-  const d = decision(verdict);
-  return {
-    hit: { scoreplayMediaId: id, twelvelabsVideoId: `tl-${id}`, start, end, rank: 1, origin: "LIVE", mapping: "FILENAME_DURATION" },
-    proposedEdit,
-    segmentDecision: d,
-    editDecision: { edit: proposedEdit, decision: d, segments: [{ segment, decision: d }] },
-    eligible: verdict === "ALLOWED",
-  };
+// ---------- Recovery engine fakes: the REAL planner over fixture assets/observations ----------
+
+const SQUAD = { "Dominic Solanke-Mitchell": ["Tottenham Hotspur FC"], "Micky van de Ven": ["Tottenham Hotspur FC"] };
+/** A Tottenham asset as REROUTE's context loads it (ScorePlay facts the demo policy needs). */
+const thfc = (id: string, facts: Partial<Asset["facts"]> = {}): Asset => ({
+  ...asset(id),
+  tags: ["partner content", "Premier League", "Tottenham Hotspur", "Manchester United"],
+  facts: { competition: "Premier League", teams: ["Tottenham Hotspur", "Manchester United"], people: Object.keys(SQUAD), peopleTeams: SQUAD, ...facts },
+});
+const seen = (id: string, label: string, start: number, end: number): Evidence => ({
+  scoreplayMediaId: id,
+  start,
+  end,
+  observation: `${label.split(":").pop()}: seen`,
+  source: "TWELVELABS",
+  label,
+  confidence: 0.9,
+  origin: "CACHED",
+});
+/** A crowd shot without players: cleared for sales posts by the "no players" rubric. */
+const CROWD_907: Evidence = { scoreplayMediaId: "907", observation: "Rubric player_focus: no_players", source: "TWELVELABS", label: "rubric:player_focus:no_players" };
+
+type World = { evidence?: Evidence[]; replacements?: { id: string; start: number; end: number }[] };
+const ASSETS = ["901", "902", "903", "904", "907"].map((id) => (id === "907" ? thfc(id, { people: [] }) : thfc(id)));
+
+/** `recover` backed by the real `planRecovery` (no ScorePlay/TwelveLabs): every option is re-checked by the engine. */
+function engineRecover(world: World = {}): GoalDeps["recover"] {
+  return vi.fn(async (input: Parameters<GoalDeps["recover"]>[0]) => {
+    const ctx: RecoveryEvalContext = {
+      assets: Object.fromEntries(ASSETS.map((a) => [a.id, a])),
+      observations: Object.fromEntries(ASSETS.map((a) => [a.id, (world.evidence ?? []).filter((e) => e.scoreplayMediaId === a.id)])),
+      analysis: Object.fromEntries(ASSETS.map((a) => [a.id, { status: "AVAILABLE" as const }])),
+      policies: input.policies,
+      now: NOW,
+    };
+    const replacements = (world.replacements ?? []).map((r, i) => {
+      const segment = { scoreplayMediaId: r.id, start: r.start, end: r.end, label: input.query };
+      const title = ctx.assets[r.id].title;
+      const alone: EditPlan = { id: `${input.idPrefix}:replace:${r.id}`, title, segments: [segment], derived: true };
+      return { key: `${r.id}@${r.start}-${r.end}`, title, segment, query: input.query, rank: i + 1, evaluations: evaluateUses(ctx, alone, input.intents) };
+    });
+    const plan = planRecovery({ ctx, source: input.source, intents: input.intents, replacements, idPrefix: input.idPrefix });
+    return { plan, media: [input.source.assetId, ...replacements.map((r) => r.segment.scoreplayMediaId)].map((id) => ref(id)), notes: [] };
+  });
 }
 
-const CLIP: Blocker = { scope: "CLIP", dimensions: ["people"], ruleIds: ["r-x"], explanation: "A person on screen is restricted", suggestion: "Use footage without this person" };
-const CAMPAIGN: Blocker = { scope: "CAMPAIGN", dimensions: ["territory"], ruleIds: ["r-t"], explanation: "Not licensed in NG", suggestion: "Licensed territories: GB, US, FR, ES, DE, IN" };
+/** A fixed plan (for outcomes the fixtures don't produce on their own). */
+const fixedRecover = (plan: RecoveryPlan): GoalDeps["recover"] => vi.fn(async () => ({ plan, media: [], notes: [] }));
+
+const PACKAGES: Record<string, PolicyContext> = {
+  "demo-tottenham-pl": { packageId: "demo-tottenham-pl", version: "1", title: "Tottenham Social Media Usage — Demo", club: "tottenham", kind: "DEMO", sourceType: "PRESET", verified: false, label: "Demo policy — not verified legal clearance" },
+  "demo-tottenham-commercial": { packageId: "demo-tottenham-commercial", version: "1", title: "Tottenham Commercial — Demo", club: "tottenham", kind: "DEMO", sourceType: "PRESET", verified: false, label: "Demo policy — not verified legal clearance" },
+};
+/** Policy Center fake: the bundled policies under the requested package of the club (default: demo-tottenham-pl). */
+const policiesFake: GoalDeps["policies"] = vi.fn(async (_club, packageId) => ({ policies: [...BUNDLED_POLICIES], context: PACKAGES[packageId ?? "demo-tottenham-pl"] ?? PACKAGES["demo-tottenham-pl"] }));
 
 function deps(over: Partial<GoalDeps> = {}): GoalDeps {
   return {
     search: vi.fn(async ({ objective }) => searchFor(objective.raw)),
     decideCampaign: campaignDecider({}),
-    resolve: vi.fn(async (input) => ({ query: input.query ?? "q", blocker: CLIP, candidates: [candidate("907", 3, 8.4, "ALLOWED", input.edit)], best: undefined })),
+    recover: engineRecover(),
+    policies: policiesFake,
     resolveMedia: vi.fn(async (id: string) => ref(id)),
     preview: vi.fn(async (r: MediaRef) => ({ source: "TWELVELABS_STREAM" as const, url: `https://cdn.example/${r.twelvelabsVideoId}.m3u8`, hls: true })),
     media: "ALLOWED",
@@ -224,7 +266,8 @@ function runFixture(goal: string): GoalRun {
     pool: [],
     adopted: [],
     evaluations: [],
-    alternatives: [],
+    recoveries: [],
+    applied: [],
   };
 }
 
@@ -347,36 +390,57 @@ describe("goal → campaign → rights → alternative → review", () => {
     expect((await repos.events.list("campaign", v.campaign!.campaignId)).map((e) => e.type)).toContain("RIGHTS_EVALUATED");
   });
 
-  it("BLOCKED → resolver search over every use → alternative (with title) swapped into a new version and re-checked independently", async () => {
+  it("BLOCKED → Find a way to use it → REPLACE (engine re-checked, with title) applied as a new version and re-evaluated at once", async () => {
     const decide = campaignDecider({ "901": "BLOCKED", "907": "ALLOWED" });
-    const d = deps({ decideCampaign: decide });
+    const recover = engineRecover({ evidence: [seen("901", "brand:manchester-united", 0, 30), CROWD_907], replacements: [{ id: "907", start: 3, end: 8.4 }] });
+    const d = deps({ decideCampaign: decide, recover });
     let v = await goals.runGoal(A, "tottenham", d);
     expect(v.campaign!.mediaRef.scoreplayMediaId).toBe("901");
     v = await goals.checkGoalRights(at(v), d);
     expect(v.rights.state).toBe("BLOCKED");
     expect(v.canSubmit).toBe(false);
+    expect(v.recovery).toBeUndefined();
     await expect(goals.submitForReview(at(v), d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
-    v = await goals.findAlternatives(at(v), d);
-    const resolveInput = vi.mocked(d.resolve).mock.calls[0][0];
-    expect(resolveInput).toMatchObject({ segmentIndex: 0, intent: { platform: "instagram", territory: "GB", club: "tottenham" } });
-    expect(resolveInput.intents).toHaveLength(3);
-    expect(resolveInput.query).toBe(v.selected!.matches[0].query);
-    expect(v.blocker).toEqual(CLIP);
-    expect(v.alternatives!.candidates).toHaveLength(1);
-    expect(v.alternatives!.candidates[0]).toMatchObject({ title: "MNU_TOT_907.mp4", preview: { url: "https://cdn.example/tl-907.m3u8" } });
+    v = await goals.findRecovery(at(v), d);
+    const input = vi.mocked(d.recover).mock.calls[0][0];
+    expect(input).toMatchObject({ source: { assetId: "901", range: { start: 0, end: 6.9 } }, query: v.selected!.matches[0].query, policies: BUNDLED_POLICIES });
+    expect(input.intents).toHaveLength(3);
+    expect(input.intents.every((i) => i.club === "tottenham" && i.territory === "GB")).toBe(true);
+    expect(v.recovery).toMatchObject({ forEvaluationId: v.rights.evaluationId, scope: "CLIP" });
+    const replace = v.recovery!.options.find((o) => o.kind === "REPLACE")!;
+    expect(replace).toMatchObject({
+      outcome: "RESOLVES_DEMO",
+      applicable: true,
+      recommended: true,
+      replacement: { scoreplayMediaId: "907", title: "MNU_TOT_907.mp4", start: 3, end: 8.4 },
+      recheck: { verdict: "ALLOWED", clearance: "DEMO", allowedUses: 3, totalUses: 3 },
+    });
+    expect(v.recovery!.recommendedId).toBe(replace.id);
+    // The brand covers the whole moment: no cut of it is offered as workable.
+    expect(v.recovery!.options.some((o) => (o.kind === "TRIM" || o.kind === "SAFE_SECTION") && o.applicable)).toBe(false);
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(v))).success).toBe(true);
+    // A second request for the same evaluation reuses the stored plan.
+    expect((await goals.findRecovery(at(v), d)).recovery!.id).toBe(v.recovery!.id);
+    expect(d.recover).toHaveBeenCalledTimes(1);
 
-    const key = v.alternatives!.candidates[0].key;
-    const swapped = await goals.useAlternative(at(v), key, d);
+    const swapped = await goals.applyRecovery(at(v), replace.id, d);
     expect(d.resolveMedia).toHaveBeenCalledWith("907", "tottenham");
-    expect(swapped.campaign).toMatchObject({ version: 2, origin: "ALTERNATIVE", key, mediaRef: { scoreplayMediaId: "907" } });
+    expect(swapped.campaign).toMatchObject({ version: 2, origin: "ALTERNATIVE", key: replace.replacement!.key, mediaRef: { scoreplayMediaId: "907" } });
     expect(vi.mocked(decide).mock.calls).toHaveLength(2);
     expect(vi.mocked(decide).mock.calls[1][0].edit.segments[0]).toMatchObject({ scoreplayMediaId: "907", start: 3, end: 8.4 });
-    expect(swapped.rights).toMatchObject({ state: "ALLOWED", kind: "ALTERNATIVE", campaignVersion: 2, clearanceLabel: DEMO_CLEARANCE_LABEL });
-    // The previous search belongs to the previous evaluation: neither shown nor usable now.
-    expect(swapped.alternatives).toBeUndefined();
-    expect(swapped.blocker).toBeUndefined();
-    await expect(goals.useAlternative(at(swapped), key, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(swapped.rights).toMatchObject({ state: "ALLOWED", kind: "ALTERNATIVE", current: true, campaignVersion: 2, clearanceLabel: DEMO_CLEARANCE_LABEL });
+    expect(swapped.beforeAfter).toMatchObject({
+      optionId: replace.id,
+      kind: "REPLACE",
+      before: { verdict: "BLOCKED", allowedUses: 0, totalUses: 3, title: "MNU_TOT_901.mp4" },
+      after: { verdict: "ALLOWED", clearance: "DEMO", allowedUses: 3, totalUses: 3, title: "MNU_TOT_907.mp4" },
+    });
+    expect(swapped.canSubmit).toBe(true);
+    // The plan belongs to the previous evaluation: neither shown nor applicable now.
+    expect(swapped.recovery).toBeUndefined();
+    await expect(goals.applyRecovery(at(swapped), replace.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(goals.findRecovery(at(swapped), d)).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/already allowed/) });
     // What the API returns satisfies the published GoalView contract (the browser client parses it).
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(swapped))).success).toBe(true);
     expect(swapped.evaluations.map((e) => [e.kind, e.verdict])).toEqual([
@@ -385,6 +449,35 @@ describe("goal → campaign → rights → alternative → review", () => {
     ]);
     const kinds = (await repos.evaluations.listForCampaign(v.campaign!.campaignId)).map((e) => e.kind);
     expect(kinds.filter((k) => k === "ALTERNATIVE")).toHaveLength(3);
+    const types = (await repos.events.list("campaign", v.campaign!.campaignId)).map((e) => e.type);
+    expect(types).toEqual(expect.arrayContaining(["RECOVERY_PLANNED", "RECOVERY_RECHECKED", "RECOVERY_APPLIED"]));
+  });
+
+  it("TRIM: the cut is a new EDIT version (edit plan, not rendered) and REROUTE evaluates the derived edit of the retained segments", async () => {
+    const decide: GoalDeps["decideCampaign"] = vi.fn(async ({ edit, intents }: { edit: EditPlan; intents: PublishIntent[] }) => {
+      const d = decision(edit.derived ? "ALLOWED" : "BLOCKED", { dimension: "sponsor" });
+      return { overall: d, perIntent: intents.map((intent) => ({ intent, decision: { edit, decision: d, segments: edit.segments.map((segment) => ({ segment, decision: d })) } })), media: [decidedRef("901")], notes: [] };
+    });
+    const d = deps({ decideCampaign: decide, recover: engineRecover({ evidence: [seen("901", "brand:dhl", 2, 3.5)] }) });
+    let v = await goals.runGoal(A, "tottenham", d);
+    v = await goals.checkGoalRights(at(v), d);
+    v = await goals.findRecovery(at(v), d);
+    const trim = v.recovery!.options.find((o) => o.kind === "TRIM")!;
+    expect(trim).toMatchObject({ outcome: "RESOLVES_DEMO", applicable: true, changesGoal: false, timeline: { execution: "PLAN_NOT_RENDERED", sourceAssetId: "901" } });
+    const retained = trim.timeline!.retained;
+    expect(retained.length).toBeGreaterThan(1);
+    expect(trim.timeline!.removed.some((r) => r.start <= 2 && r.end >= 3.5)).toBe(true);
+
+    const cut = await goals.applyRecovery(at(v), trim.id, d);
+    expect(cut.campaign).toMatchObject({ version: 2, origin: "EDIT", key: v.campaign!.key, mediaRef: { scoreplayMediaId: "901" }, edl: { retained, execution: "PLAN_NOT_RENDERED" } });
+    expect(cut.edit).toMatchObject({ executionLabel: "Edit plan — not rendered", retained });
+    const evaluated = vi.mocked(decide).mock.calls[1][0].edit;
+    expect(evaluated.derived).toBe(true);
+    expect(evaluated.segments.map((s) => ({ start: s.start, end: s.end }))).toEqual(retained);
+    expect(evaluated.segments.every((s) => s.scoreplayMediaId === "901")).toBe(true);
+    expect(cut.rights).toMatchObject({ state: "ALLOWED", kind: "ALTERNATIVE", campaignVersion: 2 });
+    expect(cut.beforeAfter).toMatchObject({ kind: "TRIM", before: { verdict: "BLOCKED" }, after: { verdict: "ALLOWED" }, timeline: { retained } });
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(cut))).success).toBe(true);
   });
 
   it("footage-derived URLs (previews, thumbnails) reach the goal view only when media access is ALLOWED", async () => {
@@ -398,74 +491,127 @@ describe("goal → campaign → rights → alternative → review", () => {
         media: access,
         search: vi.fn(async ({ objective }) => withThumbs(searchFor(objective.raw))),
         decideCampaign: campaignDecider({ "901": "BLOCKED", "907": "ALLOWED" }),
-        resolve: vi.fn(async (input) => {
-          const c = candidate("907", 3, 8.4, "ALLOWED", input.edit);
-          return { query: input.query ?? "q", blocker: CLIP, candidates: [{ ...c, hit: { ...c.hit, thumbnailUrl: "https://thumbs.twelvelabs.io/tl-907/3.jpg" } }] };
-        }),
+        recover: engineRecover({ evidence: [seen("901", "brand:manchester-united", 0, 30), CROWD_907], replacements: [{ id: "907", start: 3, end: 8.4 }] }),
         preview: vi.fn(async (r: MediaRef) => ({ source: "TWELVELABS_STREAM" as const, url: `https://d1abc.cloudfront.net/${r.twelvelabsVideoId}.m3u8`, hls: true })),
       });
     const allowed = media("ALLOWED");
     let v = await goals.runGoal(A, "tottenham", allowed);
     v = await goals.checkGoalRights(at(v), allowed);
-    v = await goals.findAlternatives(at(v), allowed);
+    v = await goals.findRecovery(at(v), allowed);
+    v = await goals.applyRecovery(at(v), v.recovery!.recommendedId!, allowed);
 
     const reviewer = JSON.stringify(await goals.getGoal(v.run.id, allowed));
     expect(reviewer).toMatch(MEDIA_URL);
-    expect(reviewer).toContain("cloudfront.net/tl-");
-    expect(reviewer).toContain("thumbs.twelvelabs.io");
+    expect(reviewer).toContain("cloudfront.net/tl-907");
+    expect(reviewer).toContain("cdn.scoreplay.io/thumbs");
 
     for (const access of ["DISABLED", "REVIEWER_ONLY"] as const) {
       const d = media(access);
       const view = (await goals.getGoal(v.run.id, d))!;
       expect(GoalViewSchema.safeParse(view).success).toBe(true);
-      expect(view.recommendations.length + (view.alternatives?.candidates.length ?? 0)).toBeGreaterThan(1);
-      expect(view.campaign).toBeDefined();
+      expect(view.recommendations.length).toBeGreaterThan(1);
+      expect(view.campaign).toMatchObject({ mediaRef: { scoreplayMediaId: "907" } });
       expect(JSON.stringify(view)).not.toMatch(MEDIA_URL);
       expect(d.preview).not.toHaveBeenCalled();
       expect(view.recommendations[0].previewNote).toMatch(access === "DISABLED" ? /Video preview disabled until the organizers confirm playback rights/ : /signed-in reviewers only/);
     }
   });
 
-  it("alternatives of an earlier moment are not offered after switching moments", async () => {
-    const d = deps({ decideCampaign: campaignDecider({ "901": "BLOCKED", "903": "BLOCKED" }) });
+  it("recovery options of an earlier moment are not offered after switching moments", async () => {
+    const d = deps({
+      decideCampaign: campaignDecider({ "901": "BLOCKED", "903": "BLOCKED" }),
+      recover: engineRecover({ evidence: [seen("901", "brand:manchester-united", 0, 30), CROWD_907], replacements: [{ id: "907", start: 3, end: 8.4 }] }),
+    });
     let v = await goals.runGoal(A, "tottenham", d);
     v = await goals.checkGoalRights(at(v), d);
-    v = await goals.findAlternatives(at(v), d);
-    const key = v.alternatives!.candidates[0].key;
+    v = await goals.findRecovery(at(v), d);
+    const id = v.recovery!.recommendedId!;
     v = await goals.selectMoment(at(v), v.recommendations.find((r) => r.candidate.scoreplayAssetId === "903")!.key, d);
+    await expect(goals.applyRecovery(at(v), id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     v = await goals.checkGoalRights(at(v), d);
-    expect(v.alternatives).toBeUndefined();
-    await expect(goals.useAlternative(at(v), key, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(v.recovery).toBeUndefined();
+    await expect(goals.applyRecovery(at(v), id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("a CAMPAIGN-scoped blocker offers no clips, is never searched again, and its remedy restricts the uses in a new version", async () => {
-    const d = deps({
-      decideCampaign: campaignDecider({ "904": "BLOCKED" }),
-      resolve: vi.fn(async (input) => ({
-        query: "q",
-        blocker: CAMPAIGN,
-        candidates: [candidate("907", 0, 7, "BLOCKED", input.edit)],
-        remedy: { territories: ["GB", "US"] },
-      })),
-    });
+  it("a CAMPAIGN restriction (unlicensed markets) offers ADAPT_CAMPAIGN, is planned once, and applying it limits the territories and re-checks ALLOWED", async () => {
+    const d = deps({ decideCampaign: territoryDecider });
     let v = await goals.runGoal(B, "tottenham", d);
     v = await goals.checkGoalRights(at(v), d);
-    const first = await goals.findAlternatives(at(v), d);
-    const again = await goals.findAlternatives(at(first), d);
-    expect(d.resolve).toHaveBeenCalledTimes(1);
-    expect(first.blocker).toMatchObject({ scope: "CAMPAIGN", suggestion: CAMPAIGN.suggestion });
-    expect(first.alternatives!.candidates).toEqual([]);
-    expect(again.alternatives!.id).toBe(first.alternatives!.id);
-    expect(first.remedy).toMatchObject({ label: "Limit to licensed territories: GB, US", territories: ["GB", "US"] });
-    await expect(goals.useAlternative(at(again), "907@0-7", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(v.rights.state).toBe("NEEDS_REVIEW");
+    expect(v.nextStep).not.toMatch(/No licence covers/);
+    const first = await goals.findRecovery(at(v), d);
+    const again = await goals.findRecovery(at(first), d);
+    expect(d.recover).toHaveBeenCalledTimes(1);
+    expect(again.recovery!.id).toBe(first.recovery!.id);
+    expect(first.recovery!.options.some((o) => o.kind === "REPLACE" || o.kind === "TRIM")).toBe(false);
+    const adapt = first.recovery!.options.find((o) => o.kind === "ADAPT_CAMPAIGN")!;
+    expect(adapt).toMatchObject({ applicable: true, campaignChange: { territories: ["GB", "US"], dropped: ["FR", "ES", "DE", "IN", "NG"] } });
+    expect(first.recovery!.recommendedId).toBe(adapt.id);
 
-    const remedied = await goals.applyRemedy(at(again), d);
-    expect(remedied.campaign).toMatchObject({ version: 2, origin: "REMEDY", plan: { territories: ["GB", "US"] } });
-    expect(remedied.campaign!.intents).toHaveLength(6);
-    expect(remedied).toMatchObject({ rights: { current: false }, remedy: undefined, canSubmit: false });
-    const rechecked = await goals.checkGoalRights(at(remedied), d);
-    expect(vi.mocked(d.decideCampaign).mock.calls[1][0].intents.map((i) => i.territory).sort()).toEqual(["GB", "GB", "GB", "US", "US", "US"]);
-    expect(rechecked.rights.campaignVersion).toBe(2);
+    const adapted = await goals.applyRecovery(at(again), adapt.id, d);
+    expect(adapted.campaign).toMatchObject({ version: 2, origin: "REMEDY", plan: { territories: ["GB", "US"] } });
+    expect(adapted.campaign!.intents).toHaveLength(6);
+    expect(vi.mocked(d.decideCampaign).mock.calls.at(-1)![0].intents.map((i) => i.territory).sort()).toEqual(["GB", "GB", "GB", "US", "US", "US"]);
+    expect(adapted.rights).toMatchObject({ state: "ALLOWED", kind: "ALTERNATIVE", current: true, campaignVersion: 2, clearance: "DEMO", clearanceLabel: DEMO_CLEARANCE_LABEL });
+    expect(adapted.rights.perIntent).toHaveLength(6);
+    expect(adapted.beforeAfter).toMatchObject({ kind: "ADAPT_CAMPAIGN", before: { verdict: "NEEDS_REVIEW", totalUses: 21 }, after: { verdict: "ALLOWED", allowedUses: 6, totalUses: 6 } });
+    expect(adapted.canSubmit).toBe(true);
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(adapted))).success).toBe(true);
+  });
+
+  it("NOT_VIABLE and NEXT_STEP options are shown but can never be applied", async () => {
+    const recheck = { verdict: "BLOCKED" as const, clearance: "NONE" as const, allowedUses: 0, totalUses: 3, remaining: [], policyId: "demo-tottenham-pl", policyVersion: "1", evaluatedAt: NOW.toISOString() };
+    const plan: RecoveryPlan = {
+      scope: "CLIP",
+      headline: "Restricted for every use",
+      problems: [{ scope: "CLIP", pervasive: false, text: "Partner brand on screen", ruleIds: ["THFC-13-partner-exclusivity"], at: { start: 2, end: 3.5 }, evidence: [] }],
+      current: recheck,
+      options: [
+        { id: "trim-1", kind: "TRIM", title: "Remove 0:01.5–0:06.0", summary: "Cut the brand", tradeoff: "Keeps 1.4 s of 6.9 s", changesGoal: false, outcome: "NOT_VIABLE", notViableBecause: "Leaves 1.4 s — shorter than a 3 s post." },
+        { id: "request_clearance-2", kind: "REQUEST_CLEARANCE", title: "Request clearance", summary: "Ask the rights holder", tradeoff: "Takes time", changesGoal: false, outcome: "NEXT_STEP" },
+      ],
+      noPathMessage: "No change PULSE can make clears this use under the selected policy. The next step is a clearance request.",
+    };
+    const d = deps({ decideCampaign: campaignDecider({ "901": "BLOCKED" }), recover: fixedRecover(plan) });
+    let v = await goals.runGoal(A, "tottenham", d);
+    v = await goals.checkGoalRights(at(v), d);
+    v = await goals.findRecovery(at(v), d);
+    expect(v.recovery!.options.map((o) => [o.id, o.outcome, o.applicable, o.recommended])).toEqual([
+      ["trim-1", "NOT_VIABLE", false, false],
+      ["request_clearance-2", "NEXT_STEP", false, false],
+    ]);
+    expect(v.recovery!.recommendedId).toBeUndefined();
+    expect(v.nextStep).toBe(plan.noPathMessage);
+    await expect(goals.applyRecovery(at(v), "trim-1", d)).rejects.toMatchObject({ code: "BAD_REQUEST", message: "Leaves 1.4 s — shorter than a 3 s post." });
+    await expect(goals.applyRecovery(at(v), "request_clearance-2", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(goals.applyRecovery(at(v), "no-such-option", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect((await goals.getGoal(v.run.id, d))!.campaign).toMatchObject({ version: 1 });
+  });
+
+  it("switching the rule package makes the verdict stale: no recovery or submission until rights are checked again", async () => {
+    const d = deps({ decideCampaign: campaignDecider({ "901": "NEEDS_REVIEW" }) });
+    let v = await goals.runGoal(A, "tottenham", d);
+    expect(v.policy).toMatchObject({ packageId: "demo-tottenham-pl" });
+    v = await goals.checkGoalRights(at(v), d);
+    expect(v).toMatchObject({ rights: { current: true }, canSubmit: true });
+    await expect(goals.setRunPolicy(at(v), "no-such-package", d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    const switched = await goals.setRunPolicy(at(v), "demo-tottenham-commercial", d);
+    expect(switched.policy).toMatchObject({ packageId: "demo-tottenham-commercial" });
+    expect(switched).toMatchObject({ rights: { current: false }, canSubmit: false });
+    expect(switched.nextStep).toBe("Check rights for every planned channel and country.");
+    await expect(goals.findRecovery(at(switched), d)).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/rule package changed/) });
+    await expect(goals.submitForReview(at(switched), d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const events = await repos.events.list("goal", v.run.id);
+    expect(events.find((e) => e.type === "POLICY_CONTEXT_CHANGED")).toMatchObject({ payload: { from: "demo-tottenham-pl@1", to: "demo-tottenham-commercial@1" } });
+    expect(vi.mocked(d.policies)).toHaveBeenCalledWith("tottenham", "demo-tottenham-commercial");
+
+    const rechecked = await goals.checkGoalRights(at(switched), d);
+    expect(rechecked).toMatchObject({ rights: { current: true }, canSubmit: true });
+    const stored = await repos.goalRuns.get(v.run.id);
+    expect(JSON.stringify(stored)).toContain("demo-tottenham-commercial");
+    expect((await goals.submitForReview(at(rechecked), d)).reviewStatus).toBe("PENDING");
+    expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(rechecked))).success).toBe(true);
   });
 
   it("demo clearance can be reviewed but is never publishable; the receipt covers every use; NEEDS_REVIEW can be submitted", async () => {
@@ -565,12 +711,6 @@ const territoryDecider: GoalDeps["decideCampaign"] = vi.fn(async ({ edit, intent
   const overall = { ...territoryDecision(perIntent.find((p) => p.decision.decision.verdict !== "ALLOWED")?.intent ?? intents[0]), policySelection: SELECTION };
   return { overall, perIntent, media: [decidedRef(edit.segments[0].scoreplayMediaId)], notes: [] };
 });
-/** REROUTE's real blocker classification over every use, against the bundled demo policy. */
-const realClassifier: GoalDeps["resolve"] = vi.fn(async (input: Parameters<GoalDeps["resolve"]>[0]) => ({
-  query: input.query ?? "q",
-  candidates: [],
-  ...classifyBlocker((input.intents ?? [input.intent as PublishIntent]).map((intent) => ({ intent, decision: territoryDecision(intent) }))),
-}));
 
 describe("more goals at plan level", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -594,21 +734,15 @@ describe("more goals at plan level", () => {
     expect(configured.campaign!.channels.find((c) => c.channel === "x")!.copy).toContain("Ver camisetas: https://shop.tottenhamhotspur.com/es-mx/camisetas");
   });
 
-  it("Mexico not licensed: CAMPAIGN blocker, no clip swaps, NO remedy (never re-targeted to other countries) — request a licence", async () => {
-    const d = deps({ decideCampaign: territoryDecider, resolve: realClassifier });
+  it("Mexico not licensed: licence gap, no clip swaps and NO campaign change (never re-targeted to other countries) — request a licence", async () => {
+    const d = deps({ decideCampaign: territoryDecider });
     let v = await goals.runGoal(MX, "tottenham", d);
     v = await goals.checkGoalRights(at(v), d);
     expect(v.rights).toMatchObject({ state: "NEEDS_REVIEW", current: true });
     expect(v.rights.perIntent.every((p) => p.territory === "MX" && p.verdict === "NEEDS_REVIEW")).toBe(true);
-    v = await goals.findAlternatives(at(v), d);
-    expect(v.blocker).toMatchObject({ scope: "CAMPAIGN", dimensions: ["territory"] });
-    expect(v.blocker!.explanation).toMatch(/Not licensed for Mexico \(MX\)/);
-    expect(v.alternatives!.candidates).toEqual([]);
-    // REROUTE's raw remedy lists the policy's territories elsewhere; it stays in the audit record only.
-    expect(v.alternatives!.remedy).toEqual({ territories: LICENSED });
-    expect(v.remedy).toBeUndefined();
-    expect(v.licenceGap).toMatchObject({ label: "No licensed path in Mexico (MX)", territories: ["MX"], platforms: [] });
-    expect(v.licenceGap!.description).toMatch(/demo-tottenham-pl \(DEMO\).*request a licence for MX/);
+    const evaluation = (await repos.goalRuns.get(v.run.id))!.evaluations.at(-1)!;
+    expect(evaluation.licenceGap).toEqual({ territories: ["MX"], platforms: [] });
+    expect(evaluation.policy).toMatchObject({ packageId: "demo-tottenham-pl" });
     expect(v.nextStep).toMatch(/^No licence covers Mexico \(MX\) — request a licence before review\./);
     // A human reviewer cannot grant a missing licence: NEEDS_REVIEW, yet not submittable.
     expect(v.canSubmit).toBe(false);
@@ -616,22 +750,20 @@ describe("more goals at plan level", () => {
       code: "BAD_REQUEST",
       message: "No licence covers Mexico (MX) — request a licence before review.",
     });
-    await expect(goals.applyRemedy(at(v), d)).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringMatching(/request a licence/) });
+
+    v = await goals.findRecovery(at(v), d);
+    const kinds = v.recovery!.options.map((o) => o.kind);
+    expect(kinds).not.toContain("ADAPT_CAMPAIGN");
+    expect(kinds).not.toContain("REPLACE");
+    const clearance = v.recovery!.options.find((o) => o.kind === "REQUEST_CLEARANCE")!;
+    expect(clearance).toMatchObject({ outcome: "NEXT_STEP", applicable: false });
+    expect(v.recovery!.recommendedId).toBeUndefined();
+    expect(v.recovery!.noPathMessage).toMatch(/MX/);
+    expect(v.nextStep).toMatch(/^No licence covers Mexico \(MX\)/);
+    await expect(goals.applyRecovery(at(v), clearance.id, d)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     const stored = (await goals.getGoal(v.run.id, d))!;
     expect(stored.campaign).toMatchObject({ version: 1, plan: { territories: ["MX"] } });
     expect(GoalViewSchema.safeParse(JSON.parse(JSON.stringify(v))).success).toBe(true);
-  });
-
-  it("the same classifier still offers a remedy when part of the campaign is licensed (Scenario B: GB, US)", async () => {
-    const d = deps({ decideCampaign: territoryDecider, resolve: realClassifier });
-    let v = await goals.runGoal(B, "tottenham", d);
-    v = await goals.checkGoalRights(at(v), d);
-    v = await goals.findAlternatives(at(v), d);
-    expect(v.licenceGap).toBeUndefined();
-    expect(v.remedy).toMatchObject({ label: "Limit to licensed territories: GB, US", territories: ["GB", "US"] });
-    const remedied = await goals.checkGoalRights(at(await goals.applyRemedy(at(v), d)), d);
-    expect(remedied.rights).toMatchObject({ state: "ALLOWED", clearance: "DEMO", clearanceLabel: DEMO_CLEARANCE_LABEL });
-    expect(remedied.rights.perIntent).toHaveLength(6);
   });
 
   it("tickets: home territory, commercial, ticketing CTA only via a configured or club-domain link, sales KPI not connected", async () => {

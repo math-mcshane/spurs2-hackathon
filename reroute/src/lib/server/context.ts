@@ -4,6 +4,7 @@ import { getMediaResolver } from "@/lib/media";
 import type { AnalysisStatus } from "@/lib/rights";
 import { getScorePlayClient } from "@/lib/scoreplay";
 import { getVideoIntelligence } from "@/lib/twelvelabs";
+import { recordedObservations } from "@/lib/twelvelabs/recorded-runs";
 import { listHumanObservations } from "./store";
 
 export type { AnalysisStatus } from "@/lib/rights";
@@ -120,7 +121,8 @@ export class DecisionContext {
       return { status: { status: "UNLINKABLE", detail }, evidence: [] };
     }
     try {
-      return { status: { status: "AVAILABLE" }, evidence: await video.observations(ref) };
+      const product = await video.observations(ref);
+      return { status: { status: "AVAILABLE" }, evidence: withRecordedRuns(product, ref) };
     } catch (err) {
       if (err instanceof AppError && err.code === "NOT_FOUND" && err.message.startsWith("MEDIA_IDENTITY")) {
         return { status: { status: "UNLINKABLE", detail: err.message }, evidence: [] };
@@ -130,6 +132,18 @@ export class DecisionContext {
       return { status: { status, detail: message(err) }, evidence: [] };
     }
   }
+}
+
+const sameMoment = (e: Evidence) => `${e.label ?? ""}|${e.start ?? ""}|${e.end ?? ""}`;
+
+/**
+ * Product-run evidence plus every recorded run of the same TwelveLabs video (`recorded-runs.ts`): the engine sees
+ * both runs (conservative union). A recorded observation identical in label and time range to one already present is
+ * dropped. Only called once the product analysis is AVAILABLE — a recorded run never upgrades a missing analysis.
+ */
+export function withRecordedRuns(product: Evidence[], ref: MediaRef): Evidence[] {
+  const seen = new Set(product.map(sameMoment));
+  return [...product, ...recordedObservations(ref).filter((e) => !seen.has(sameMoment(e)))];
 }
 
 /** Load assets + observations for every distinct asset referenced by `edit`. */

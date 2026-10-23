@@ -18,8 +18,10 @@ import type {
   AuditEvent,
   CampaignRecord,
   EvaluationRecord,
+  PolicySelectionRecord,
   Repositories,
   ReviewRecord,
+  StoredPolicyPackage,
   WritebackAttempt,
 } from "./types";
 
@@ -111,6 +113,50 @@ const WritebackRowSchema = z.object({
 });
 
 const ReviewRowSchema = z.object({ status: z.enum(["APPROVED", "REJECTED"]), reviewer: z.string(), at: z.string() });
+
+const PolicyPackageRowSchema = z.object({
+  id: z.string(),
+  version: z.string(),
+  club: z.string(),
+  title: z.string(),
+  kind: z.literal("DEMO"),
+  source_type: z.enum(["UPLOADED_JSON", "UPLOADED_CSV", "SAMPLE_DOCUMENT_MAPPING"]),
+  document: z.unknown(),
+  file_name: z.string().nullable(),
+  sha256: z.string(),
+  uploaded_by: z.string(),
+  created_at: z.string(),
+});
+
+const PolicySelectionRowSchema = z.object({
+  club: z.string(),
+  package_id: z.string(),
+  package_version: z.string(),
+  selected_by: z.string(),
+  selected_at: z.string(),
+});
+
+function toPolicyPackage(row: unknown): StoredPolicyPackage {
+  const r = PolicyPackageRowSchema.parse(row);
+  return {
+    id: r.id,
+    version: r.version,
+    club: r.club,
+    title: r.title,
+    kind: r.kind,
+    sourceType: r.source_type,
+    document: r.document,
+    fileName: opt(r.file_name),
+    sha256: r.sha256,
+    uploadedBy: r.uploaded_by,
+    createdAt: iso(r.created_at),
+  };
+}
+
+function toPolicySelection(row: unknown): PolicySelectionRecord {
+  const r = PolicySelectionRowSchema.parse(row);
+  return { club: r.club, packageId: r.package_id, packageVersion: r.package_version, selectedBy: r.selected_by, selectedAt: iso(r.selected_at) };
+}
 
 function toEvent(row: unknown): AuditEvent {
   const r = EventRowSchema.parse(row);
@@ -543,6 +589,62 @@ export function supabaseRepositories(db: () => SupabaseClient): Repositories {
           .order("created_at", { ascending: true });
         if (error) fail("list observations", error);
         return data.map((r) => EvidenceSchema.parse(r.evidence));
+      },
+    },
+
+    policyPackages: {
+      async insert(pkg) {
+        const { data, error } = await db()
+          .from("reroute_policy_packages")
+          .insert({
+            id: pkg.id,
+            version: pkg.version,
+            club: pkg.club,
+            title: pkg.title,
+            kind: "DEMO",
+            source_type: pkg.sourceType,
+            document: pkg.document,
+            file_name: pkg.fileName ?? null,
+            sha256: pkg.sha256,
+            uploaded_by: pkg.uploadedBy,
+          })
+          .select("*")
+          .single();
+        if (error?.code === "23505") throw new AppError("CONFLICT", `Policy package ${pkg.id} version ${pkg.version} already exists`);
+        if (error) fail("store policy package", error);
+        return toPolicyPackage(data);
+      },
+      async list() {
+        const { data, error } = await db().from("reroute_policy_packages").select("*").order("created_at", { ascending: false });
+        if (error) fail("list policy packages", error);
+        return data.map(toPolicyPackage);
+      },
+      async get(id, version) {
+        let query = db().from("reroute_policy_packages").select("*").eq("id", id);
+        if (version !== undefined) query = query.eq("version", version);
+        const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (error) fail("read policy package", error);
+        return data ? toPolicyPackage(data) : null;
+      },
+      async getSelection(club) {
+        const { data, error } = await db().from("reroute_policy_selection").select("*").eq("club", club).maybeSingle();
+        if (error) fail("read policy selection", error);
+        return data ? toPolicySelection(data) : null;
+      },
+      async setSelection(selection) {
+        const { data, error } = await db()
+          .from("reroute_policy_selection")
+          .upsert({
+            club: selection.club,
+            package_id: selection.packageId,
+            package_version: selection.packageVersion,
+            selected_by: selection.selectedBy,
+            selected_at: new Date().toISOString(),
+          })
+          .select("*")
+          .single();
+        if (error) fail("store policy selection", error);
+        return toPolicySelection(data);
       },
     },
   };

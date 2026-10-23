@@ -167,6 +167,39 @@ export interface HumanObservationRepository {
   list(scoreplayMediaId: string): Promise<Evidence[]>;
 }
 
+/** How an uploaded package reached the library (bundled presets are not stored). */
+export type UploadedPolicySourceType = "UPLOADED_JSON" | "UPLOADED_CSV" | "SAMPLE_DOCUMENT_MAPPING";
+
+/** An uploaded rule package. `kind` is always DEMO: an upload can never be verified clearance. */
+export type StoredPolicyPackage = {
+  id: string;
+  version: string;
+  club: string;
+  title: string;
+  kind: "DEMO";
+  sourceType: UploadedPolicySourceType;
+  /** The Policy document (PolicySchema-validated by `lib/rights/packages.ts`, kind forced to DEMO). */
+  document: unknown;
+  fileName?: string;
+  sha256: string;
+  uploadedBy: string;
+  createdAt: string;
+};
+
+export type PolicySelectionRecord = { club: string; packageId: string; packageVersion: string; selectedBy: string; selectedAt: string };
+
+export interface PolicyPackageRepository {
+  /** Append-only; a duplicate (id, version) is rejected (CONFLICT). */
+  insert(pkg: Omit<StoredPolicyPackage, "createdAt">): Promise<StoredPolicyPackage>;
+  /** Every stored version, newest first. */
+  list(): Promise<StoredPolicyPackage[]>;
+  /** One version, or the newest version of `id` when `version` is omitted; null when absent. */
+  get(id: string, version?: string): Promise<StoredPolicyPackage | null>;
+  getSelection(club: string): Promise<PolicySelectionRecord | null>;
+  /** Upsert: the latest choice for a club wins. */
+  setSelection(selection: Omit<PolicySelectionRecord, "selectedAt">): Promise<PolicySelectionRecord>;
+}
+
 export interface Repositories {
   goalRuns: GoalRunRepository;
   campaigns: CampaignRepository;
@@ -177,4 +210,5 @@ export interface Repositories {
   observationCache: ObservationCacheRepository;
   receipts: ReceiptRepository;
   humanObservations: HumanObservationRepository;
+  policyPackages: PolicyPackageRepository;
 }

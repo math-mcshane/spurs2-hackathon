@@ -1,18 +1,21 @@
 import { canPublish, DEMO_CLEARANCE_LABEL, type Decision, type Evidence, type PublishIntent, type Reason, type RightsReceipt } from "@/lib/contracts";
+import { EDL_EXECUTION_LABEL, type Edl } from "@/lib/rights/recovery/edl";
+import { analysisRunLabel } from "@/lib/twelvelabs/runs";
 import { withPreview } from "./moment-ranking";
 import { MARKETS, PRODUCTS } from "./objective-parser";
-import { MarketCodeSchema } from "./types";
+import { MarketCodeSchema, RecoveryOptionSchema } from "./types";
 import type {
+  BeforeAfter,
   ChannelRights,
-  GoalAlternatives,
+  EditTimeline,
   GoalEvaluation,
-  GoalPlan,
   GoalRun,
   GoalView,
   Preview,
   Product,
   Recommendation,
   RecommendationView,
+  RecoveryView,
   ReviewStatus,
   RightsIssue,
   RightsView,
@@ -49,51 +52,38 @@ const countryOf = (territory: string) => {
   return market.success ? `${MARKETS[market.data].label} (${territory})` : territory;
 };
 
-type Remedy = NonNullable<GoalAlternatives["remedy"]>;
-
-/**
- * REROUTE's remedy for a CAMPAIGN blocker, kept inside the campaign's own uses. When no requested
- * territory (or channel) is licensed, REROUTE lists what the policy licenses ELSEWHERE — that would
- * re-target the goal, not fix it — so PULSE offers no remedy and reports a licence gap instead.
- */
-export function scopeRemedy(found: Pick<GoalAlternatives, "blocker" | "remedy">, plan: Pick<GoalPlan, "territories" | "channels">): { remedy?: Remedy; gap?: { territories: string[]; platforms: string[] } } {
-  if (found.blocker.scope !== "CAMPAIGN") return {};
-  const r = found.remedy ?? {};
-  const territories = r.territories?.filter((t) => plan.territories.includes(t));
-  const platforms = r.platforms?.filter((p) => (plan.channels as string[]).includes(p));
-  const gap = {
-    territories: found.blocker.dimensions.includes("territory") && !territories?.length ? [...plan.territories] : [],
-    platforms: found.blocker.dimensions.includes("platform") && !platforms?.length ? [...plan.channels] : [],
-  };
-  if (gap.territories.length || gap.platforms.length) return { gap };
-  const remedy: Remedy = {
-    ...(territories?.length ? { territories } : {}),
-    ...(platforms?.length ? { platforms } : {}),
-    ...(r.usage ? { usage: r.usage } : {}),
-  };
-  return Object.keys(remedy).length ? { remedy } : {};
-}
-
 /** Why a licence gap cannot go to review: a human reviewer cannot grant a missing licence. */
 export function noLicenceReason(gap: { territories: string[]; platforms: string[] }): string {
   const what = [...gap.territories.map(countryOf), ...gap.platforms.map((p) => PLATFORM[p] ?? p)].join(", ");
   return `No licence covers ${what} — request a licence before review`;
 }
 
-/** Plain-English licence gap: no licensed path for the campaign's market(s) — request a licence, no remedy. */
-function licenceGap(gap: { territories: string[]; platforms: string[] }, policy: Pick<Decision, "policyId" | "policyFictional">): NonNullable<GoalView["licenceGap"]> {
-  const where = gap.territories.map(countryOf).join(", ");
-  const channels = gap.platforms.map((p) => PLATFORM[p] ?? p).join(", ");
-  const what = [gap.territories.length && `in ${where}`, gap.platforms.length && `on ${channels}`].filter(Boolean).join(" or ");
-  const ask = [gap.territories.length && gap.territories.join(", "), gap.platforms.length && channels].filter(Boolean).join(" / ");
+/** Where an observation came from, for the user: partner + which analysis run. */
+export function evidenceSource(e: Pick<Evidence, "source" | "analysisRun" | "origin">): string {
+  if (e.source === "TWELVELABS") return analysisRunLabel(e.analysisRun);
+  return e.source === "HUMAN" ? "Reviewer observation" : "ScorePlay data";
+}
+
+/** Before/after of a derived cut, in source seconds, with where each removal's evidence came from. */
+export function timelineOf(edl: Edl, assetDurationSec?: number): EditTimeline {
   return {
-    label: `No licensed path ${what}`,
-    description:
-      `REROUTE's policy ${policy.policyId}${policy.policyFictional ? " (DEMO)" : ""} licenses none of this campaign's uses ${what}. ` +
-      `Another clip would hit the same restriction and no remedy exists inside this goal — PULSE will not re-target it to other markets. ` +
-      `Next step: request a licence for ${ask} from the rights holder.`,
-    territories: gap.territories,
-    platforms: gap.platforms,
+    edlId: edl.id,
+    sourceAssetId: edl.sourceAssetId,
+    sourceTitle: edl.sourceTitle,
+    ...(assetDurationSec ? { assetDurationSec } : {}),
+    original: edl.sourceRange,
+    removed: edl.removed.map((r) => ({
+      start: r.start,
+      end: r.end,
+      why: r.reason,
+      source: [...new Set(r.evidence.map(evidenceSource))].join(" + ") || "Edit rule (leftover too short)",
+    })),
+    retained: edl.retained,
+    output: edl.timeline,
+    resultDurationSec: edl.durationSec,
+    originalDurationSec: edl.originalDurationSec,
+    execution: edl.execution,
+    executionLabel: EDL_EXECUTION_LABEL,
   };
 }
 
@@ -153,7 +143,6 @@ export function rightsIssues(reasons: readonly Pick<Reason, "dimension" | "outco
   return [...byTopic.values()].sort((a, b) => Number(b.outcome === "DENY") - Number(a.outcome === "DENY"));
 }
 
-const SOURCE: Record<Evidence["source"], string> = { TWELVELABS: "Video analysis · TwelveLabs", SCOREPLAY: "ScorePlay data", HUMAN: "Reviewer observation" };
 /** Evidence labels that can back a reason, per dimension (labels set by the TwelveLabs parser / reviewers). */
 const EVIDENCE_PREFIX: Record<string, string> = { sponsor: "brand:", people: "person:" };
 const secs = (n: number) => `${Math.round(n * 10) / 10}`;
@@ -178,9 +167,9 @@ export function reasonFinding(
       )
     : [];
   const found = seen.length
-    ? [...new Map(seen.map((e) => [`${e.source}|${e.observation}|${e.start}|${e.end}`, e])).values()].map((e) => ({
+    ? [...new Map(seen.map((e) => [`${e.source}|${e.analysisRun}|${e.observation}|${e.start}|${e.end}`, e])).values()].map((e) => ({
         text: e.start === undefined ? e.observation : `${e.observation} (${secs(e.start)}–${secs(e.end ?? e.start)} s)`,
-        source: SOURCE[e.source],
+        source: evidenceSource(e),
       }))
     : [fallbackFinding(r, ctx.plannedUse)];
   return {
@@ -237,6 +226,11 @@ export function latestEvaluation(run: GoalRun): GoalEvaluation | undefined {
   return c ? run.evaluations.findLast((e) => e.campaignId === c.campaignId && e.key === c.key) : undefined;
 }
 
+/** Whether `e` was decided under the run's current rule package (a package switch makes the verdict stale). */
+export function underRunPolicy(run: Pick<GoalRun, "policy">, e: Pick<GoalEvaluation, "policy">): boolean {
+  return !run.policy || !e.policy || (e.policy.packageId === run.policy.packageId && e.policy.version === run.policy.version);
+}
+
 export function presentRights(run: GoalRun): RightsView {
   const e = latestEvaluation(run);
   if (!e) {
@@ -273,7 +267,7 @@ export function presentRights(run: GoalRun): RightsView {
     kind: e.kind,
     campaignVersion: e.campaignVersion,
     evaluatedAt: e.evaluatedAt,
-    current: e.campaignVersion === run.campaign?.version,
+    current: e.campaignVersion === run.campaign?.version && underRunPolicy(run, e),
     perIntent,
     issues,
     missingFacts: [...new Set(e.perIntent.flatMap((p) => p.decision.missingFacts))],
@@ -291,15 +285,51 @@ const PREVIEW_UNAVAILABLE = "No browser-playable stream is available for this vi
 /** The review receipt for the current campaign version, if one was submitted. */
 type Receipt = Pick<RightsReceipt, "id" | "decision" | "humanReviewStatus" | "writeback">;
 
-/** Plain-English label for a REROUTE remedy (the licensed subset of the campaign's uses). */
-export function remedyLabel(remedy: NonNullable<GoalAlternatives["remedy"]>): string {
-  return [
-    remedy.territories?.length && `Limit to licensed territories: ${remedy.territories.join(", ")}`,
-    remedy.platforms?.length && `Limit to licensed channels: ${remedy.platforms.join(", ")}`,
-    remedy.usage && `Switch the use to ${remedy.usage.toLowerCase()}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+/** "N of M uses allowed" counts of one evaluation. */
+const usesOf = (e: GoalEvaluation) => ({ allowedUses: e.perIntent.filter((p) => p.decision.verdict === "ALLOWED").length, totalUses: e.perIntent.length });
+
+/** The recovery plan of the latest evaluation of the current version, as the Compliance Editor shows it. */
+function recoveryView(run: GoalRun, latest: GoalEvaluation | undefined, current: boolean): RecoveryView | undefined {
+  if (!latest || !current) return undefined;
+  const found = run.recoveries.findLast((r) => r.forEvaluationId === latest.id && r.forKey === latest.key);
+  if (!found) return undefined;
+  const assetDuration = run.campaign?.mediaRef.match?.scoreplayDurationSec;
+  return {
+    id: found.id,
+    forEvaluationId: found.forEvaluationId,
+    generatedAt: found.generatedAt,
+    scope: found.scope,
+    problem: { headline: found.headline, items: found.problems },
+    // The view schema drops what only `applyRecovery` needs (EDL internals, intents, segment, media refs).
+    options: found.options.map((o) =>
+      RecoveryOptionSchema.parse({
+        ...o,
+        ...(o.relevance ? { summary: `${o.summary} ${o.relevance}` } : {}),
+        ...(o.edl ? { timeline: timelineOf(o.edl, assetDuration) } : {}),
+      }),
+    ),
+    ...(found.recommendedId ? { recommendedId: found.recommendedId } : {}),
+    ...(found.noPathMessage ? { noPathMessage: found.noPathMessage } : {}),
+  };
+}
+
+const titleOfKey = (run: GoalRun, key: string) => [...run.pool, ...run.adopted].find((r) => r.key === key)?.candidate.title ?? key;
+
+/** The last applied recovery and REROUTE's verdict before (the evaluation it fixed) and after (its version's check). */
+function beforeAfterView(run: GoalRun): BeforeAfter | undefined {
+  const last = run.applied.at(-1);
+  const before = last && run.evaluations.find((e) => e.id === last.fromEvaluationId);
+  if (!last || !before || run.campaign?.campaignId !== before.campaignId) return undefined;
+  const after = run.evaluations.findLast((e) => e.campaignId === before.campaignId && e.campaignVersion === last.campaignVersion);
+  const edl = run.campaign?.version === last.campaignVersion ? run.campaign.edl : undefined;
+  return {
+    optionId: last.optionId,
+    kind: last.kind,
+    title: last.title,
+    before: { evaluationId: before.id, verdict: before.overall.verdict, ...usesOf(before), key: before.key, title: titleOfKey(run, before.key) },
+    ...(after ? { after: { evaluationId: after.id, verdict: after.overall.verdict, clearance: after.overall.clearance, ...usesOf(after), key: after.key, title: titleOfKey(run, after.key) } } : {}),
+    ...(edl ? { timeline: timelineOf(edl, run.campaign?.mediaRef.match?.scoreplayDurationSec) } : {}),
+  };
 }
 
 function nextStep(
@@ -308,8 +338,8 @@ function nextStep(
   review: ReviewStatus,
   canSubmit: boolean,
   publishable: boolean,
-  remedy: boolean,
-  gap: GoalView["licenceGap"],
+  recovery: RecoveryView | undefined,
+  gap: GoalEvaluation["licenceGap"],
 ): string {
   if (!run.campaign) return run.pool.length ? "Pick one of the three moments to build its campaign." : "No usable moment was found — refine the goal or index more footage.";
   if (run.campaign.cta.status === "NOT_CONFIGURED" && review === "NOT_SUBMITTED" && rights.state === "NOT_CHECKED") {
@@ -321,14 +351,15 @@ function nextStep(
     return publishable
       ? "Approved with verified clearance — ready to publish in the club's own tool, then record it back in ScorePlay."
       : `Approved by a reviewer, but not publishable: ${rights.clearanceLabel ?? "the clearance is not verified"}. Preview the ScorePlay record (dry run) to log the decision.`;
-  if (review === "REJECTED") return "The reviewer rejected this version. Find another way or change the proposal, then submit again.";
+  if (review === "REJECTED") return "The reviewer rejected this version. Find a way to use it or change the proposal, then submit again.";
   if (review === "PENDING") return "Waiting for a reviewer to approve or reject.";
   if (gap) return `${noLicenceReason(gap)}. Request a licence — we won't move your campaign to other markets.`;
-  if (remedy) return "The problem is where or how the campaign runs, not the clip: apply the suggested change, then check rights again.";
-  if (rights.state === "BLOCKED") return "This clip can't be used as planned. Find another way — we'll look for comparable footage and check it for you.";
+  if (recovery?.recommendedId) return "Review the suggested correction: each option was re-checked on its own. Use the revised plan, or send it for human review.";
+  if (recovery?.noPathMessage) return recovery.noPathMessage;
+  if (rights.state === "BLOCKED") return "This clip can't be used as planned. Find a way to use it — PULSE locates the problem, proposes the smallest fix and re-checks it.";
   if (canSubmit)
     return rights.state === "NEEDS_REVIEW"
-      ? "Submit for human review — or find another way first."
+      ? "Submit for human review — or find a way to use it first."
       : "Submit for human review to create the audit receipt.";
   return "Check rights again.";
 }
@@ -352,30 +383,25 @@ export function buildGoalView(
   const publishable = !!liveReceipt && canPublish(liveReceipt);
   const lastWrite = liveReceipt?.writeback.at(-1);
 
-  // "Find another way" results are bound to the evaluation that produced them.
-  const found = latest && rights.current ? run.alternatives.findLast((a) => a.forEvaluationId === latest.id && a.forKey === latest.key) : undefined;
-  const alternatives = found && {
-    ...found,
-    candidates: found.candidates.map((c) => ({ ...c, preview: previews.get(c.key) })),
-  };
-  // REROUTE's remedy, kept inside the campaign's own uses; an empty licensed subset is a licence gap, not a remedy.
-  const scoped = found ? scopeRemedy(found, draft?.plan ?? run.plan) : {};
-  const remedy = scoped.remedy && {
-    label: remedyLabel(scoped.remedy),
-    description: found!.blocker.suggestion ?? found!.blocker.explanation,
-    ...scoped.remedy,
-  };
-  const gap = scoped.gap && latest ? licenceGap(scoped.gap, latest.overall) : undefined;
+  const recovery = recoveryView(run, latest, rights.current);
   // A reviewer cannot grant a missing licence: a licence gap is never submittable.
+  const gap = rights.current ? latest?.licenceGap : undefined;
   const canSubmit = !!latest && rights.current && latest.overall.verdict !== "BLOCKED" && !submitted && !gap;
   const kpi = goalKpi(run.objective);
 
-  const commerce = run.objective.product && PRODUCTS[run.objective.product.key].commerce;
+  // A recovery may turn a sales post into an organic one: then no store/ticketing items apply.
+  const commerce = draft?.plan.usage === "COMMERCIAL" && run.objective.product && PRODUCTS[run.objective.product.key].commerce;
   const notLocalized = draft?.evidenceLabels.find((l) => l.startsWith("Copy not localized"));
   const campaign = draft && {
     ...draft,
     checklist: [
-      { item: "Media and exact timestamps", status: "DONE" as const, note: `TwelveLabs moment on ScorePlay asset ${draft.mediaRef.scoreplayMediaId} (${draft.mediaRef.method}).` },
+      draft.edl
+        ? {
+            item: "Media and exact timestamps",
+            status: "DONE" as const,
+            note: `Edited cut of ScorePlay asset ${draft.edl.sourceAssetId}: ${draft.edl.retained.length} kept part(s), ${draft.edl.durationSec} s. ${EDL_EXECUTION_LABEL}.`,
+          }
+        : { item: "Media and exact timestamps", status: "DONE" as const, note: `TwelveLabs moment on ScorePlay asset ${draft.mediaRef.scoreplayMediaId} (${draft.mediaRef.method}).` },
       notLocalized
         ? { item: "Localized copy", status: "MISSING" as const, note: notLocalized }
         : {
@@ -433,10 +459,10 @@ export function buildGoalView(
     selected: selectedRec && view(selectedRec),
     campaign,
     rights,
-    blocker: found?.blocker,
-    alternatives,
-    remedy,
-    licenceGap: gap,
+    recovery,
+    ...(draft?.edl ? { edit: timelineOf(draft.edl, draft.mediaRef.match?.scoreplayDurationSec) } : {}),
+    beforeAfter: beforeAfterView(run),
+    ...(run.policy ? { policy: run.policy } : {}),
     evaluations: run.evaluations.map((e) => ({
       id: e.id,
       kind: e.kind,
@@ -456,7 +482,7 @@ export function buildGoalView(
       : rights.clearanceLabel
         ? `${rights.clearanceLabel} — never publishable, even after approval.`
         : "Publishable only with a verified REROUTE clearance AND human approval.",
-    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable, !!remedy, gap),
+    nextStep: nextStep(run, rights, reviewStatus, canSubmit, publishable, recovery, gap),
     kpi,
     timing: { toRecommendationsSec: seconds(run.resultsAt), toProposalSec: run.proposalAt ? seconds(run.proposalAt) : undefined },
     dataOrigin: run.dataOrigin,

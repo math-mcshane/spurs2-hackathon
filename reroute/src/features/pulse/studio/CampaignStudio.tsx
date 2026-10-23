@@ -10,29 +10,34 @@ import { cn } from "@/lib/utils";
 import { CLUBS } from "../clubs";
 import { clock } from "../moment-ranking";
 import type { GoalView } from "../types";
+import { EditPlanView, momentSpan } from "./ComplianceEditor";
 import { MomentPreview, recommendationSource } from "./MomentPreview";
 import { CHANNEL_LABEL, channelList, country, displayTitle, usageWord } from "./parts";
 
 type Campaign = NonNullable<GoalView["campaign"]>;
 
-/** The selected moment, large: what the campaign is built on. Swaps in place when a replacement is adopted. */
+/**
+ * The selected moment, large: what the campaign is built on. Swaps in place when a replacement is adopted; a
+ * derived cut is marked as an edit plan (never a rendered file) with its before/after.
+ */
 export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalView; campaign: Campaign; onChangeMoment: () => void }) {
-  const replacement = c.origin === "ALTERNATIVE";
+  const edit = goal.edit;
+  const replacement = c.origin === "ALTERNATIVE" || (goal.beforeAfter?.kind === "REPLACE" && goal.beforeAfter.after?.key === c.key);
   const len = c.media.endSeconds - c.media.startSeconds;
   const context = [CLUBS[goal.run.club].label, goal.run.match && `v ${goal.run.match}`, goal.selected?.season].filter(Boolean).join(" · ");
   return (
-    <Swap id={c.key}>
+    <Swap id={`${c.key}:${edit?.edlId ?? ""}`}>
       <MomentPreview
         size="stage"
-        label={replacement ? "Replacement moment · re-checked" : "Campaign moment"}
+        label={edit ? `Edited cut · ${edit.executionLabel}` : replacement ? "Replacement moment · re-checked" : "Campaign moment"}
         source={
           goal.selected
-            ? recommendationSource(goal.selected)
+            ? { ...recommendationSource(goal.selected), ...(edit && { start: edit.original.start, end: edit.original.end }) }
             : {
                 title: c.media.title,
                 scoreplayAssetId: c.media.scoreplayAssetId,
-                start: c.media.startSeconds,
-                end: c.media.endSeconds,
+                start: edit?.original.start ?? c.media.startSeconds,
+                end: edit?.original.end ?? c.media.endSeconds,
                 note: "No playable stream is available for this moment.",
               }
         }
@@ -43,7 +48,11 @@ export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalVi
             {displayTitle(c.media.title)}
           </h2>
           <p className="tabular mt-2 text-small text-ink-muted">
-            {clock(c.media.startSeconds)}–{clock(c.media.endSeconds)} · {len.toFixed(1)} s cut
+            {!edit
+              ? `${clock(c.media.startSeconds)}–${clock(c.media.endSeconds)} · ${len.toFixed(1)} s cut`
+              : edit.removed.length > 0
+                ? `Edited cut · ${edit.resultDurationSec.toFixed(1)} s of ${edit.originalDurationSec.toFixed(1)} s`
+                : `${clock(edit.original.start)}–${clock(edit.original.end)} · clean section · ${edit.resultDurationSec.toFixed(1)} s`}
             {context && <span> · {context}</span>}
           </p>
         </div>
@@ -51,6 +60,7 @@ export function MediaStage({ goal, campaign: c, onChangeMoment }: { goal: GoalVi
           <ArrowLeftRightIcon /> Change moment
         </Button>
       </div>
+      {edit && <EditPlanView timeline={edit} chosen={goal.beforeAfter && momentSpan(goal, goal.beforeAfter.before.key)} compact className="mt-5 max-w-xl" />}
     </Swap>
   );
 }

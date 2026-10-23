@@ -86,13 +86,29 @@ export async function resolve(input: ResolveInput, opts: DecideOptions = {}): Pr
   const now = opts.now ?? new Date();
   const evalOpts = { now, policies: opts.policies };
   const ctx = await loadDecisionContext(edit, { deps: opts.deps, club: intents.find((i) => i.club)?.club });
-  const original = ctx.assets[target.scoreplayMediaId];
-  const query = input.query?.trim() || target.label?.trim() || original.title.trim();
+  const query = input.query?.trim() || target.label?.trim() || ctx.assets[target.scoreplayMediaId].title.trim();
 
   const current = intents.map((intent) => ({ intent, decision: evaluateEditInContext(ctx, edit, intent, evalOpts).segments[segmentIndex].decision }));
   const { blocker, remedy } = classifyBlocker(current, opts.policies);
   if (blocker.scope !== "CLIP") return { query, blocker, candidates: [], ...(remedy ? { remedy } : {}) };
 
+  const ranked = await searchReplacements(ctx, { edit, segmentIndex, intents, query, limit }, evalOpts);
+  return { query, blocker, candidates: ranked, ...(ranked[0]?.eligible ? { best: ranked[0] } : {}) };
+}
+
+/**
+ * Comparable footage for one segment of `edit` (Marengo search for `query`), each candidate re-checked alone and
+ * inside the full proposed edit under every intent; eligible (full-edit ALLOWED) first, then search rank.
+ * Candidate assets are loaded into `ctx`. The original asset and its probable duplicates are excluded.
+ */
+export async function searchReplacements(
+  ctx: DecisionContext,
+  input: { edit: EditPlan; segmentIndex: number; intents: readonly PublishIntent[]; query: string; limit: number },
+  evalOpts: Pick<DecideOptions, "policies"> & { now: Date },
+): Promise<Candidate[]> {
+  const { edit, segmentIndex, intents, query, limit } = input;
+  const target = edit.segments[segmentIndex];
+  const original = ctx.assets[target.scoreplayMediaId];
   const video = ctx.video();
   if ("status" in video) throw new AppError("NOT_CONFIGURED", `Marengo search unavailable: ${video.detail}`);
 
@@ -136,6 +152,5 @@ export async function resolve(input: ResolveInput, opts: DecideOptions = {}): Pr
   }
 
   candidates.sort((a, b) => Number(b.eligible) - Number(a.eligible) || a.hit.rank - b.hit.rank);
-  const ranked = candidates.slice(0, limit);
-  return { query, blocker, candidates: ranked, ...(ranked[0]?.eligible ? { best: ranked[0] } : {}) };
+  return candidates.slice(0, limit);
 }

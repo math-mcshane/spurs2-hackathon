@@ -21,7 +21,7 @@ import { Notice, type Stage } from "./parts";
 import { ReviewView } from "./Review";
 import { RightsLens, type LensBusy } from "./RightsLens";
 
-type Busy = null | "load" | "run" | "draft" | "rights" | "alternatives" | "remedy" | "submit" | `select:${string}` | `alt:${string}`;
+type Busy = null | "load" | "run" | "draft" | "rights" | "recovery" | "policy" | "submit" | `select:${string}` | `apply:${string}`;
 
 /** What a long action is doing, in order (shown with elapsed seconds; cold caches take 20–70 s). */
 const PROGRESS: Partial<Record<string, { stages: Stage[]; note?: string }>> = {
@@ -41,21 +41,22 @@ const PROGRESS: Partial<Record<string, { stages: Stage[]; note?: string }>> = {
     ],
     note: "a first analysis can take up to ~70 s; recorded results return in seconds",
   },
-  alternatives: {
+  recovery: {
     stages: [
-      { after: 0, text: "Working out what blocks the campaign" },
-      { after: 2, text: "Searching comparable footage" },
-      { after: 8, text: "Checking each candidate independently" },
+      { after: 0, text: "Locating the restricted seconds in the clip" },
+      { after: 2, text: "Planning a cut around them" },
+      { after: 4, text: "Searching the club's footage for a replacement" },
+      { after: 8, text: "Re-checking every option against the rules" },
     ],
-    note: "each replacement gets its own rights check; this can take up to ~70 s",
+    note: "each option gets its own rights check; this can take up to ~70 s",
   },
-  alt: {
+  apply: {
     stages: [
-      { after: 0, text: "Saving a new campaign version" },
-      { after: 1, text: "Checking rights for the replacement" },
+      { after: 0, text: "Saving the revised plan as a new campaign version" },
+      { after: 1, text: "Re-checking every use" },
     ],
   },
-  remedy: { stages: [{ after: 0, text: "Limiting the campaign to its licensed uses" }, { after: 1, text: "Saving a new campaign version" }] },
+  policy: { stages: [{ after: 0, text: "Switching the rule package" }] },
   submit: { stages: [{ after: 0, text: "Creating the audit receipt" }, { after: 1, text: "Recording the audit event" }] },
 };
 
@@ -65,9 +66,9 @@ const VIEW_AFTER: Record<GoalAction["action"], View> = {
   select: "campaign",
   draft: "campaign",
   checkRights: "campaign",
-  findAlternatives: "campaign",
-  useAlternative: "campaign",
-  applyRemedy: "campaign",
+  findRecovery: "campaign",
+  applyRecovery: "campaign",
+  setPolicy: "campaign",
   submitForReview: "review",
 };
 
@@ -91,7 +92,7 @@ function defaultView(g: GoalView): View {
 function urlState(): { run: string | null; step: View | null } {
   const q = new URLSearchParams(window.location.search);
   const step = q.get("step");
-  return { run: q.get("run"), step: VIEWS.some((v) => v.key === step) ? (step as View) : null };
+  return { run: q.get("run"), step: VIEWS.includes(step as View) ? (step as View) : null };
 }
 
 function writeUrl(run: string | null, step: View, mode: "push" | "replace") {
@@ -102,8 +103,8 @@ function writeUrl(run: string | null, step: View, mode: "push" | "replace") {
 }
 
 /**
- * PULSE: Goal → Discover → Create & clear → Review. One business goal becomes three real moments, a campaign
- * draft, a rights decision for every channel × market (with "Find another way" when restricted), a human review
+ * PULSE: Goal → Media → Campaign → Compliance → Resolution → Review. One business goal becomes three real moments, a campaign
+ * draft, a rights decision for every channel × market (with "Find a way to use it" when restricted), a human review
  * and an audit receipt. The run id and step live in the URL (`?run=…&step=…`): a reload restores the exact state.
  */
 export function PulseStudio() {
@@ -204,14 +205,21 @@ export function PulseStudio() {
   const reached = reachedViews(goal);
   const shown: View = goal && !reached[view] ? defaultView(goal) : view;
   const locked = busy !== null;
-  const progress = busy ? PROGRESS[busy.startsWith("alt:") ? "alt" : busy] : undefined;
-  const lensBusy: LensBusy = busy === "rights" || busy === "alternatives" || busy === "remedy" || busy === "submit" || busy?.startsWith("alt:") ? (busy as LensBusy) : null;
+  const progress = busy ? PROGRESS[busy.startsWith("apply:") ? "apply" : busy] : undefined;
+  const lensBusy: LensBusy =
+    busy === "rights" || busy === "recovery" || busy === "policy" || busy === "submit" || busy?.startsWith("apply:") ? (busy as LensBusy) : null;
   const runGoal = () => void act({ action: "run", goal: text, club }, "run", (g) => !g.recommendations.length && toast.warning("No moment found for this goal"));
+  /** Header journey: Campaign, Compliance and Resolution share the campaign screen; an anchor scrolls to its part. */
+  const goPhase = (next: View, anchor?: string) => {
+    const target = anchor && next === shown ? document.getElementById(anchor) : null;
+    if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });
+    else go(next, id ?? null);
+  };
 
   return (
     <div className="flex min-h-dvh flex-col">
       <PulseHeader
-        nav={goal ? <StepNav view={shown} reached={reached} onView={(next) => go(next, id ?? null)} /> : undefined}
+        nav={goal ? <StepNav goal={goal} view={shown} reached={reached} onView={goPhase} /> : undefined}
         actions={
           <>
             <ReviewerControl session={session} onSignIn={() => setSignInOpen(true)} onSignedOut={setSession} />
@@ -315,7 +323,7 @@ export function PulseStudio() {
               )}
 
               {shown === "campaign" && goal.campaign && (
-                <div className="grid grid-cols-1 gap-x-12 gap-y-10 lg:grid-cols-12">
+                <div className="grid grid-cols-1 gap-x-12 gap-y-10 lg:grid-cols-12 lg:grid-rows-[auto_1fr]">
                   <div className="min-w-0 lg:col-span-7 lg:row-start-1">
                     <MediaStage goal={goal} campaign={goal.campaign} onChangeMoment={() => go("discover", id)} />
                   </div>
@@ -328,15 +336,19 @@ export function PulseStudio() {
                         progress={lensBusy ? progress : undefined}
                         deskHref={deskHref(goal)}
                         onCheck={() => void act({ action: "checkRights", id, expectedVersion: v }, "rights")}
-                        onFindAnotherWay={() => void act({ action: "findAlternatives", id, expectedVersion: v }, "alternatives")}
-                        onUseAlternative={(key) =>
-                          void act({ action: "useAlternative", id, expectedVersion: v, key }, `alt:${key}`, () => toast.success("Replacement adopted and re-checked — same goal"))
+                        onFindRecovery={() => void act({ action: "findRecovery", id, expectedVersion: v }, "recovery")}
+                        onApplyRecovery={(optionId) =>
+                          void act({ action: "applyRecovery", id, expectedVersion: v, optionId }, `apply:${optionId}`, (g) =>
+                            g.rights.current ? toast.success("Revised plan saved and re-checked — same goal") : toast("Revised plan saved — check rights again"),
+                          )
                         }
-                        onApplyRemedy={() =>
-                          void act({ action: "applyRemedy", id, expectedVersion: v }, "remedy", () => toast("Campaign limited to its licensed markets — check rights again"))
-                        }
+                        onSetPolicy={(packageId) => {
+                          if (packageId !== goal.policy?.packageId)
+                            void act({ action: "setPolicy", id, expectedVersion: v, packageId }, "policy", () => toast("Rules changed — check rights again"));
+                        }}
                         onSubmit={() => void act({ action: "submitForReview", id, expectedVersion: v }, "submit", () => toast.success("Submitted — audit receipt created"))}
                         onOpenReview={() => go("review", id)}
+                        onChooseAsset={() => go("discover", id)}
                         onEditGoal={() => go("goal", id)}
                       />
                     </div>

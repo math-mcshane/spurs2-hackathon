@@ -80,6 +80,7 @@ describe("parsePegasusObservations", () => {
       label: "brand:acme-energie",
       confidence: 0.9,
       origin: "LIVE",
+      analysisRun: "pegasus:product",
     });
     expect(evidence.map((e) => e.label)).toEqual([
       "brand:acme-energie",
@@ -90,9 +91,9 @@ describe("parsePegasusObservations", () => {
     ]);
   });
 
-  it("accepts fenced JSON and propagates CACHED origin", () => {
+  it("accepts fenced JSON, propagates CACHED origin and tags every item with the product run", () => {
     const { evidence } = parsePegasusObservations("```json\n" + good + "\n```", "sp-1", "CACHED");
-    expect(evidence.every((e) => e.origin === "CACHED")).toBe(true);
+    expect(evidence.every((e) => e.origin === "CACHED" && e.analysisRun === "pegasus:product")).toBe(true);
   });
 
   it("throws on malformed or truncated output", () => {

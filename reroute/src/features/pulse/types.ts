@@ -4,7 +4,6 @@
  */
 import { z } from "zod";
 import {
-  BlockerSchema,
   ClearanceSchema,
   DataOriginSchema,
   DecisionSchema,
@@ -13,11 +12,11 @@ import {
   PolicySelectionSchema,
   PublishIntentSchema,
   ReasonSchema,
-  SearchHitSchema,
   SegmentSchema,
   UsageSchema,
   VerdictSchema,
 } from "@/lib/contracts";
+import { EdlSchema } from "@/lib/rights/recovery/edl";
 
 export const ClubSchema = z.enum(["spurs", "tottenham"]);
 export type Club = z.infer<typeof ClubSchema>;
@@ -726,11 +725,126 @@ export type IntentDecision = z.infer<typeof IntentDecisionSchema>;
 
 const iso = z.iso.datetime({ offset: true });
 
+// ---------- Media Compliance Recovery Engine ("Find a way to use it") ----------
+
+export const RecoveryKindSchema = z.enum(["TRIM", "SAFE_SECTION", "REPLACE", "ADAPT_CAMPAIGN", "CHANGE_USAGE", "REQUEST_CLEARANCE"]);
+export type RecoveryKind = z.infer<typeof RecoveryKindSchema>;
+
+const SpanSchema = z.object({ start: z.number(), end: z.number() });
+
+/** A finding in plain language with where it came from ("ScorePlay", "TwelveLabs video analysis", "Demo policy …"). */
+export const SourcedLineSchema = z.object({ text: z.string(), source: z.string(), at: SpanSchema.optional() });
+export type SourcedLine = z.infer<typeof SourcedLineSchema>;
+
+/** An independent REROUTE re-evaluation of the proposed change, for every use of the campaign. */
+export const RecheckSchema = z.object({
+  verdict: VerdictSchema,
+  clearance: ClearanceSchema,
+  allowedUses: z.number().int().nonnegative(),
+  totalUses: z.number().int().positive(),
+  /** What still stands between the changed usage and ALLOWED (empty when ALLOWED). */
+  remaining: z.array(SourcedLineSchema),
+  policyId: z.string(),
+  policyVersion: z.string(),
+  evaluatedAt: iso,
+});
+export type Recheck = z.infer<typeof RecheckSchema>;
+
+/** Before/after of a derived cut (source seconds). An edit PLAN: no file exists unless `execution` says otherwise. */
+export const EditTimelineSchema = z.object({
+  edlId: z.string(),
+  sourceAssetId: z.string(),
+  sourceTitle: z.string(),
+  assetDurationSec: z.number().optional(),
+  original: SpanSchema,
+  removed: z.array(SpanSchema.extend({ why: z.string(), source: z.string() })),
+  retained: z.array(SpanSchema),
+  output: z.array(z.object({ sourceStart: z.number(), sourceEnd: z.number(), outStart: z.number(), outEnd: z.number() })),
+  resultDurationSec: z.number(),
+  originalDurationSec: z.number(),
+  execution: z.literal("PLAN_NOT_RENDERED"),
+  /** "Edit plan — not rendered". */
+  executionLabel: z.string(),
+});
+export type EditTimeline = z.infer<typeof EditTimelineSchema>;
+
+export const RecoveryOptionSchema = z.object({
+  id: z.string(),
+  kind: RecoveryKindSchema,
+  /** e.g. "Remove 0:09.0–0:14.5". */
+  title: z.string(),
+  summary: z.string(),
+  /** Expected cost of the change, e.g. "Keeps 5.7 s of 7.8 s" or "Drops France, Spain, Germany". */
+  tradeoff: z.string(),
+  /** True when the option no longer serves the objective exactly as written (e.g. a sales post becomes organic). */
+  changesGoal: z.boolean(),
+  /**
+   * RESOLVES_DEMO = re-check ALLOWED under a demo policy (never legal clearance); NEEDS_REVIEW / STILL_BLOCKED =
+   * re-check result; NOT_VIABLE = rejected before or after the re-check (`notViableBecause`); NEXT_STEP = a
+   * human action (clearance request), nothing executable.
+   */
+  outcome: z.enum(["RESOLVES_DEMO", "NEEDS_REVIEW", "STILL_BLOCKED", "NOT_VIABLE", "NEXT_STEP"]),
+  recheck: RecheckSchema.optional(),
+  notViableBecause: z.string().optional(),
+  timeline: EditTimelineSchema.optional(),
+  replacement: z
+    .object({ key: z.string(), title: z.string(), scoreplayMediaId: z.string(), start: z.number(), end: z.number(), query: z.string(), rank: z.number().int() })
+    .optional(),
+  campaignChange: z
+    .object({ territories: z.array(z.string()).optional(), dropped: z.array(z.string()).optional(), platforms: z.array(z.string()).optional(), usage: UsageSchema.optional() })
+    .optional(),
+  /** The engine's pick (at most one option). */
+  recommended: z.boolean(),
+  /** Whether `applyRecovery` accepts it (never for NOT_VIABLE / NEXT_STEP / STILL_BLOCKED). */
+  applicable: z.boolean(),
+});
+export type RecoveryOption = z.infer<typeof RecoveryOptionSchema>;
+
+export const RecoveryViewSchema = z.object({
+  id: z.string(),
+  forEvaluationId: z.string(),
+  generatedAt: iso,
+  /** CLIP = the footage is the problem; CAMPAIGN = the planned use is; MIXED = both. */
+  scope: z.enum(["CLIP", "CAMPAIGN", "MIXED"]),
+  problem: z.object({ headline: z.string(), items: z.array(SourcedLineSchema) }),
+  /** Ranked: recommended first, then the other workable options, then rejected ones and next steps. */
+  options: z.array(RecoveryOptionSchema),
+  recommendedId: z.string().optional(),
+  /** Set when no option resolves the restriction: the honest next step. */
+  noPathMessage: z.string().optional(),
+});
+export type RecoveryView = z.infer<typeof RecoveryViewSchema>;
+
+/** The last applied recovery option and the two evaluations it connects (what changed, and what REROUTE said). */
+export const BeforeAfterSchema = z.object({
+  optionId: z.string(),
+  kind: RecoveryKindSchema,
+  title: z.string(),
+  before: z.object({ evaluationId: z.string(), verdict: VerdictSchema, allowedUses: z.number().int(), totalUses: z.number().int(), key: z.string(), title: z.string() }),
+  after: z.object({ evaluationId: z.string(), verdict: VerdictSchema, clearance: ClearanceSchema, allowedUses: z.number().int(), totalUses: z.number().int(), key: z.string(), title: z.string() }).optional(),
+  timeline: EditTimelineSchema.optional(),
+});
+export type BeforeAfter = z.infer<typeof BeforeAfterSchema>;
+
+/** The rule package a run is evaluated against (Policy Center). `verified` is false for every demo/uploaded package. */
+export const PolicyContextSchema = z.object({
+  packageId: z.string(),
+  version: z.string(),
+  title: z.string(),
+  club: z.string(),
+  kind: z.enum(["VERIFIED", "DEMO"]),
+  sourceType: z.enum(["PRESET", "UPLOADED_JSON", "UPLOADED_CSV", "SAMPLE_DOCUMENT_MAPPING"]),
+  verified: z.boolean(),
+  /** e.g. "Demo policy — not verified legal clearance". */
+  label: z.string(),
+});
+export type PolicyContext = z.infer<typeof PolicyContextSchema>;
+
 /** One recorded REROUTE campaign evaluation (every proposed channel × territory). */
 export const GoalEvaluationSchema = z.object({
   /** Id of the `evaluations` record holding the overall decision. */
   id: z.string(),
-  /** ORIGINAL = the proposed media; ALTERNATIVE = independent re-check after "Find another way". */
+  /** ORIGINAL = the proposed media and plan; ALTERNATIVE = independent re-check after a recovery change. */
   kind: z.enum(["ORIGINAL", "ALTERNATIVE"]),
   campaignId: z.string(),
   campaignVersion: z.number().int().positive(),
@@ -741,47 +855,59 @@ export const GoalEvaluationSchema = z.object({
   overall: DecisionSchema,
   perIntent: z.array(IntentDecisionSchema).min(1),
   evaluatedAt: iso,
+  /** The rule package the decision used (Policy Center), recorded with it. */
+  policy: PolicyContextSchema.optional(),
+  /**
+   * Planned markets/channels no rule of the package licenses, when NONE of the campaign's markets (or channels)
+   * is licensed: no edit or replacement can fix it and a reviewer cannot grant it — a licence request is next.
+   */
+  licenceGap: z.object({ territories: z.array(z.string()), platforms: z.array(z.string()) }).optional(),
 });
 export type GoalEvaluation = z.infer<typeof GoalEvaluationSchema>;
 
-const ReasonBriefSchema = z.object({ dimension: z.string(), outcome: z.enum(["DENY", "PERMIT", "MISSING"]), explanation: z.string() });
-
-/** A replacement REROUTE's resolver found and checked (alone and as the full edit) for the blocking use. */
-export const AlternativeCandidateSchema = z.object({
-  /** `<scoreplayMediaId>@<start>-<end>`. */
-  key: z.string(),
-  hit: SearchHitSchema,
-  segment: SegmentSchema,
-  verdict: VerdictSchema,
-  clearance: ClearanceSchema,
-  eligible: z.boolean(),
-  reasons: z.array(ReasonBriefSchema),
-  /** ScorePlay title (filename) of the candidate asset, resolved server-side. */
-  title: z.string(),
-  /** Canonical link of the candidate asset at search time (re-resolved again before it is used). */
-  media: MediaRefSchema,
-  thumbnailUrl: z.string().optional(),
-  /** Playable reference, resolved per request — never stored. */
-  preview: PreviewSchema.optional(),
+/** A recovery option as stored on the run: the view fields plus what `applyRecovery` needs to rebuild it. */
+export const StoredRecoveryOptionSchema = RecoveryOptionSchema.extend({
+  /** TRIM / SAFE_SECTION: the derived cut. */
+  edl: EdlSchema.optional(),
+  /** The uses the re-check covered (ADAPT_CAMPAIGN / CHANGE_USAGE change them). */
+  intents: z.array(PublishIntentSchema).optional(),
+  /** REPLACE: the replacement segment and its canonical link at search time (re-resolved before use). */
+  segment: SegmentSchema.optional(),
+  media: MediaRefSchema.optional(),
+  relevance: z.string().optional(),
 });
-export type AlternativeCandidate = z.infer<typeof AlternativeCandidateSchema>;
+export type StoredRecoveryOption = z.infer<typeof StoredRecoveryOptionSchema>;
 
-export const GoalAlternativesSchema = z.object({
-  /** Id of the `alternatives` record. */
+/** One "Find a way to use it" run, bound to the evaluation it was computed for. */
+export const GoalRecoverySchema = z.object({
+  /** Id of the `alternatives` record holding the plan. */
   id: z.string(),
-  forKey: z.string(),
   forEvaluationId: z.string(),
-  requestedAt: iso,
-  /** The blocking use the resolver searched replacements for. */
-  intent: PublishIntentSchema,
-  query: z.string(),
-  blocker: BlockerSchema,
-  /** Empty when the blocker is CAMPAIGN-scoped: another clip cannot fix it. */
-  candidates: z.array(AlternativeCandidateSchema),
-  /** CAMPAIGN blockers only: the licensed subset of the campaign's uses REROUTE proposes to keep. */
-  remedy: z.object({ territories: z.array(z.string()).optional(), platforms: z.array(z.string()).optional(), usage: UsageSchema.optional() }).optional(),
+  forKey: z.string(),
+  generatedAt: iso,
+  scope: z.enum(["CLIP", "CAMPAIGN", "MIXED"]),
+  headline: z.string(),
+  problems: z.array(SourcedLineSchema),
+  options: z.array(StoredRecoveryOptionSchema),
+  recommendedId: z.string().optional(),
+  noPathMessage: z.string().optional(),
+  /** MediaRefs the plan's evidence came through (source + replacements). */
+  media: z.array(MediaRefSchema),
 });
-export type GoalAlternatives = z.infer<typeof GoalAlternativesSchema>;
+export type GoalRecovery = z.infer<typeof GoalRecoverySchema>;
+
+/** An applied recovery option: which evaluation it fixed and which campaign version it produced. */
+export const AppliedRecoverySchema = z.object({
+  recoveryId: z.string(),
+  optionId: z.string(),
+  kind: RecoveryKindSchema,
+  title: z.string(),
+  fromEvaluationId: z.string(),
+  fromKey: z.string(),
+  campaignVersion: z.number().int().positive(),
+  at: iso,
+});
+export type AppliedRecovery = z.infer<typeof AppliedRecoverySchema>;
 
 /** A campaign version. `campaignId` is stable; every change saves a new `version` (campaigns repo). */
 export const GoalCampaignSchema = CampaignDraftSchema.extend({
@@ -793,8 +919,10 @@ export const GoalCampaignSchema = CampaignDraftSchema.extend({
   plan: GoalPlanSchema,
   /** Every channel × territory REROUTE is asked about. */
   intents: z.array(PublishIntentSchema).min(1),
-  /** Why this version exists. */
-  origin: z.enum(["PROPOSAL", "SELECTED", "DESTINATION", "ALTERNATIVE", "REMEDY"]),
+  /** Why this version exists (EDIT = a derived cut of the same source, see `edl`). */
+  origin: z.enum(["PROPOSAL", "SELECTED", "DESTINATION", "ALTERNATIVE", "REMEDY", "EDIT"]),
+  /** Set when this version publishes a derived cut of its source moment: an edit PLAN, not a rendered file. */
+  edl: EdlSchema.optional(),
 });
 export type GoalCampaign = z.infer<typeof GoalCampaignSchema>;
 
@@ -828,14 +956,19 @@ export const GoalRunSchema = z.object({
   attempts: MediaLookupSchema.shape.attempts,
   /** Every ranked moment, diverse assets first; the first three are the recommendations. */
   pool: z.array(RecommendationSchema),
-  /** Moments swapped in from "Find another way" (outside the ranked pool). */
+  /** Moments swapped in by a recovery (outside the ranked pool). */
   adopted: z.array(RecommendationSchema).default([]),
   selectedKey: z.string().optional(),
   campaign: GoalCampaignSchema.optional(),
   /** When the first proposal was built (automatically, before any user think-time). */
   proposalAt: iso.optional(),
   evaluations: z.array(GoalEvaluationSchema).default([]),
-  alternatives: z.array(GoalAlternativesSchema).default([]),
+  /** "Find a way to use it" plans, each bound to the evaluation it was computed for. */
+  recoveries: z.array(GoalRecoverySchema).default([]),
+  /** Applied recovery options, oldest first. */
+  applied: z.array(AppliedRecoverySchema).default([]),
+  /** The rule package the run is evaluated against (Policy Center); absent = the club's default package. */
+  policy: PolicyContextSchema.optional(),
   review: z.object({ receiptId: z.string(), submittedAt: iso, campaignVersion: z.number().int().positive(), evaluationId: z.string() }).optional(),
   /** Merged provenance of every upstream read made by this run's actions; absent until one made a read. */
   dataOrigin: RunProvenanceSchema.optional(),
@@ -940,32 +1073,14 @@ export const GoalViewSchema = z.object({
   selected: RecommendationViewSchema.optional(),
   campaign: GoalCampaignSchema.extend({ checklist: z.array(ChecklistItemSchema) }).optional(),
   rights: RightsViewSchema,
-  /** Why the latest evaluation is not ALLOWED, classified by REROUTE's resolver (after "Find another way"). */
-  blocker: BlockerSchema.optional(),
-  /** "Find another way" for the LATEST evaluation only (stale searches are never shown or usable). */
-  alternatives: GoalAlternativesSchema.optional(),
-  /** CAMPAIGN blocker only: restrict the campaign to its licensed uses (`applyRemedy`), then check again. */
-  remedy: z
-    .object({
-      label: z.string(),
-      description: z.string(),
-      territories: z.array(z.string()).optional(),
-      platforms: z.array(z.string()).optional(),
-      usage: UsageSchema.optional(),
-    })
-    .optional(),
-  /**
-   * CAMPAIGN blocker whose licensed subset within the campaign is EMPTY (e.g. a Mexico campaign under a
-   * policy that does not license MX): there is no remedy to apply — the next step is a licence request.
-   */
-  licenceGap: z
-    .object({
-      label: z.string(),
-      description: z.string(),
-      territories: z.array(z.string()),
-      platforms: z.array(z.string()),
-    })
-    .optional(),
+  /** "Find a way to use it" for the LATEST evaluation: ranked, independently re-checked recovery options. */
+  recovery: RecoveryViewSchema.optional(),
+  /** The current campaign version is a derived cut of its source (edit plan, not rendered). */
+  edit: EditTimelineSchema.optional(),
+  /** Latest applied recovery: what changed and REROUTE's verdict before and after. */
+  beforeAfter: BeforeAfterSchema.optional(),
+  /** The rule package this run is evaluated against. */
+  policy: PolicyContextSchema.optional(),
   /** Audit trail of every recorded evaluation, oldest first. */
   evaluations: z.array(
     z.object({
@@ -1013,9 +1128,10 @@ export const GoalActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("select"), ...onRun, key: z.string() }),
   z.object({ action: z.literal("draft"), ...onRun, commerceUrl: httpsUrl.optional() }),
   z.object({ action: z.literal("checkRights"), ...onRun }),
-  z.object({ action: z.literal("findAlternatives"), ...onRun }),
-  z.object({ action: z.literal("useAlternative"), ...onRun, key: z.string() }),
-  z.object({ action: z.literal("applyRemedy"), ...onRun }),
+  z.object({ action: z.literal("findRecovery"), ...onRun }),
+  z.object({ action: z.literal("applyRecovery"), ...onRun, optionId: z.string() }),
+  /** Evaluate this run against another rule package (Policy Center); the next rights check uses it. */
+  z.object({ action: z.literal("setPolicy"), ...onRun, packageId: z.string() }),
   z.object({ action: z.literal("submitForReview"), ...onRun }),
 ]);
 export type GoalAction = z.infer<typeof GoalActionSchema>;

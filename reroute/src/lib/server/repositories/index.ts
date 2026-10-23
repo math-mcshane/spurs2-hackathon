@@ -45,5 +45,6 @@ export const receiptRecords = forward("receipts", {
   listReviews: true,
 });
 export const humanObservationRecords = forward("humanObservations", { add: true, list: true });
+export const policyPackages = forward("policyPackages", { insert: true, list: true, get: true, getSelection: true, setSelection: true });
 
 export type * from "./types";

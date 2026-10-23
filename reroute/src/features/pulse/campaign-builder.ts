@@ -123,6 +123,8 @@ export type ComposeInput = {
   rationale: string[];
   evidenceLabels: string[];
   destination?: CommerceDestination;
+  /** Set when the post runs as organic content (a recovery changed the use): no store/ticketing call to action. */
+  organicNote?: string;
   now: Date;
   previous?: CampaignDraft;
 };
@@ -130,7 +132,7 @@ export type ComposeInput = {
 export function composeCampaign(input: ComposeInput): CampaignDraft {
   const { objective, candidate, hooks, destination, now, previous } = input;
   const product = objective.product?.key;
-  const templated: Templated = product ?? "default";
+  const templated: Templated = input.organicNote ? "default" : (product ?? "default");
   const club = CLUBS[input.club].label;
   const language: Language = objective.market ? LANGUAGE_BY_MARKET[objective.market.code] : "en";
   const copyLanguage: Language = BODY[templated][language] && hooks[language] ? language : "en";
@@ -139,9 +141,9 @@ export function composeCampaign(input: ComposeInput): CampaignDraft {
   const ctaText = CTA[templated][copyLanguage]!;
   const segment = input.reroute.edit.segments[0];
 
-  const commerceKind = product ? PRODUCTS[product].commerce : undefined;
+  const commerceKind = product && !input.organicNote ? PRODUCTS[product].commerce : undefined;
   const cta: CampaignDraft["cta"] = !commerceKind
-    ? { text: ctaText, status: "NOT_APPLICABLE", note: "This objective has no store or ticketing link." }
+    ? { text: ctaText, status: "NOT_APPLICABLE", note: input.organicNote ?? "This objective has no store or ticketing link." }
     : destination
       ? {
           text: ctaText,

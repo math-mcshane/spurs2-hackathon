@@ -3,6 +3,7 @@
  */
 import { z } from "zod";
 import { isEvidenceLinkable, type DataOrigin, type Evidence, type MediaMappingMethod, type MediaRef, type SearchHit } from "@/lib/contracts";
+import { PRODUCT_RUN } from "./runs";
 
 /** user_metadata keys under which an index may claim a ScorePlay media id (first match wins). */
 const CLAIM_KEYS = ["custom_id", "customId", "scoreplay_id", "scoreplayMediaId", "scoreplay_media_id"] as const;
@@ -73,7 +74,8 @@ export function mapSearchClips(
 
 export const OBSERVATION_CATEGORIES = ["sponsor_brand", "person", "broadcaster", "onscreen_graphic"] as const;
 
-const LABEL_PREFIX: Record<(typeof OBSERVATION_CATEGORIES)[number], string> = {
+/** Evidence label prefix per category; shared with recorded runs so every run uses one label space. */
+export const LABEL_PREFIX: Record<(typeof OBSERVATION_CATEGORIES)[number], string> = {
   sponsor_brand: "brand",
   person: "person",
   broadcaster: "broadcaster",
@@ -169,8 +171,9 @@ export class PegasusParseError extends Error {
 }
 
 /**
- * Parse Pegasus JSON into Evidence. Whole-output malformation throws PegasusParseError; individual
- * malformed observations are dropped (reported in `dropped`). Nothing is synthesized.
+ * Parse the product's Pegasus JSON (live or cached raw output) into Evidence tagged `analysisRun: PRODUCT_RUN`.
+ * Whole-output malformation throws PegasusParseError; individual malformed observations are dropped (reported in
+ * `dropped`). Nothing is synthesized.
  */
 export function parsePegasusObservations(
   raw: string,
@@ -206,6 +209,7 @@ export function parsePegasusObservations(
       label: `${LABEL_PREFIX[o.category]}:${slug}`,
       confidence: o.confidence,
       origin,
+      analysisRun: PRODUCT_RUN,
     });
   }
 
@@ -219,11 +223,12 @@ export function parsePegasusObservations(
         source: "TWELVELABS",
         label: `rubric:${question}:${answer}`,
         origin,
+        analysisRun: PRODUCT_RUN,
       });
     }
   }
   if (top.data.summary?.trim()) {
-    evidence.push({ scoreplayMediaId, observation: top.data.summary.trim(), source: "TWELVELABS", label: "summary", origin });
+    evidence.push({ scoreplayMediaId, observation: top.data.summary.trim(), source: "TWELVELABS", label: "summary", origin, analysisRun: PRODUCT_RUN });
   }
   return { evidence, dropped };
 }

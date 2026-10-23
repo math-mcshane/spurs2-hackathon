@@ -8,6 +8,7 @@ export {
   clearanceOf,
   evaluateEdit,
   evaluateSegment,
+  matchesPattern,
   normalizeLabel,
   worstVerdict,
   type AnalysisStatus,

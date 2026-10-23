@@ -1,0 +1,3946 @@
+{
+  "run": {
+    "id": "pegasus:audit-2026-10-23",
+    "model": "pegasus1.6",
+    "recordedAt": "2026-10-23T03:11:15Z",
+    "window": "2026-10-23 03:05–03:11 UTC",
+    "index": {
+      "id": "6ad911d5500e82756f2eb468",
+      "name": "premiere-league"
+    },
+    "source": "docs/demo/media-intelligence-catalog.json (pulse.media-intelligence-catalog/v1, generated 2026-10-23T03:32:10Z)",
+    "note": "Second, independent TwelveLabs Pegasus analysis of the same indexed videos with the product's prompt and JSON schema, recorded during the media audit. AI observations — evidence, not facts; none human-verified. Served alongside the product run so the rights engine sees both (conservative union)."
+  },
+  "videos": {
+    "130851266": {
+      "twelvelabsVideoId": "6ad911e09c038876f358af94",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_MNU_0_3_TOT_PL_18_19_HIGHLIGHTS.mp4",
+      "observations": [
+        {
+          "kind": "broadcaster",
+          "entity": "Premier League",
+          "start": 1,
+          "end": 92.3,
+          "confidence": 1,
+          "description": "Premier League lion logo visible in the center of the scorebug overlay throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Scorebug",
+          "start": 1,
+          "end": 92.3,
+          "confidence": 1,
+          "description": "Persistent scorebug at bottom center showing Man Utd vs Tottenham score, Premier League logo, and goal scorer info."
+        },
+        {
+          "kind": "brand",
+          "entity": "The Betting App",
+          "start": 2,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "LED advertising board visible behind the goal in the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "MoPlay",
+          "start": 3,
+          "end": 6,
+          "confidence": 0.95,
+          "description": "LED advertising board visible behind the goal in the live picture."
+        },
+        {
+          "kind": "person",
+          "entity": "Harry Kane",
+          "start": 5,
+          "end": 13,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Harry Kane 50'' on the scorebug and jersey name/number 'KANE 10'."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 8,
+          "end": 13,
+          "confidence": 0.98,
+          "description": "Prominent sponsor logo on the front of the Tottenham Hotspur jersey worn by Harry Kane."
+        },
+        {
+          "kind": "person",
+          "entity": "Christian Eriksen",
+          "start": 13,
+          "end": 14,
+          "confidence": 0.95,
+          "description": "Identified by jersey name 'ERIKSEN' and number 23 visible during celebration."
+        },
+        {
+          "kind": "person",
+          "entity": "Phil Jones",
+          "start": 18,
+          "end": 21,
+          "confidence": 0.9,
+          "description": "Identified by commentary naming 'Phil Jones' while showing Manchester United player number 4."
+        },
+        {
+          "kind": "person",
+          "entity": "Lucas Moura",
+          "start": 36,
+          "end": 45,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Lucas Moura 52'' on the scorebug and jersey number 27."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 38,
+          "end": 45,
+          "confidence": 0.98,
+          "description": "Prominent sponsor logo on the front of the Tottenham Hotspur jersey worn by Lucas Moura."
+        },
+        {
+          "kind": "person",
+          "entity": "Matic",
+          "start": 54,
+          "end": 56,
+          "confidence": 0.95,
+          "description": "Identified by jersey name 'MATIC' and number 31."
+        },
+        {
+          "kind": "person",
+          "entity": "Valencia",
+          "start": 55,
+          "end": 57,
+          "confidence": 0.95,
+          "description": "Identified by jersey name 'VALENCIA' and number 25."
+        },
+        {
+          "kind": "brand",
+          "entity": "adidas",
+          "start": 58,
+          "end": 61,
+          "confidence": 0.9,
+          "description": "Logo visible on the LED advertising boards around the pitch perimeter."
+        },
+        {
+          "kind": "brand",
+          "entity": "adidas",
+          "start": 71,
+          "end": 74,
+          "confidence": 0.9,
+          "description": "Logo visible on the LED advertising boards behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Lucas Moura",
+          "start": 72,
+          "end": 80,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Lucas Moura 84'' on the scorebug and jersey number 27."
+        }
+      ]
+    },
+    "130851267": {
+      "twelvelabsVideoId": "6ad911e00ca748ea3c0aa5dc",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_MNU_1_6_TOT_20_21_HIGHLIGHTS.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "adidas",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.9,
+          "description": "Adidas logo visible on the red stadium seating cover in the background."
+        },
+        {
+          "kind": "brand",
+          "entity": "Chevrolet",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.9,
+          "description": "Chevrolet logo visible on the red stadium seating cover."
+        },
+        {
+          "kind": "brand",
+          "entity": "yabo",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.95,
+          "description": "LED advertising boards around the pitch display the 'yabo' logo and Chinese text."
+        },
+        {
+          "kind": "graphic",
+          "entity": "scorebug",
+          "start": 1,
+          "end": 159.2,
+          "confidence": 1,
+          "description": "Persistent scorebug at bottom center showing Manchester United vs Tottenham score, Premier League logo, and goal scorer info."
+        },
+        {
+          "kind": "person",
+          "entity": "Bruno Fernandes",
+          "start": 6,
+          "end": 9,
+          "confidence": 1,
+          "description": "Identified by on-screen graphic 'Bruno Fernandes 2'' below the scorebug after scoring."
+        },
+        {
+          "kind": "person",
+          "entity": "Rashford",
+          "start": 8,
+          "end": 10,
+          "confidence": 0.95,
+          "description": "Manchester United player wearing jersey number 10 with name 'RASHFORD' visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Tanguy Ndombele",
+          "start": 19,
+          "end": 27,
+          "confidence": 1,
+          "description": "Identified by on-screen graphic 'Tanguy Ndombele 4'' below the scorebug after scoring."
+        },
+        {
+          "kind": "person",
+          "entity": "Maguire",
+          "start": 23,
+          "end": 26,
+          "confidence": 0.95,
+          "description": "Manchester United player wearing jersey number 5 with name 'MAGUIRE' visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "TAG HEUER",
+          "start": 32,
+          "end": 35,
+          "confidence": 0.9,
+          "description": "TAG HEUER logo visible on the LED advertising board behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Heung-Min Son",
+          "start": 35,
+          "end": 44,
+          "confidence": 1,
+          "description": "Identified by on-screen graphic 'Heung-Min Son 7'' below the scorebug after scoring."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 36,
+          "end": 40,
+          "confidence": 0.95,
+          "description": "AIA logo visible on the front of Tottenham Hotspur jerseys."
+        },
+        {
+          "kind": "person",
+          "entity": "De Gea",
+          "start": 40,
+          "end": 44,
+          "confidence": 0.95,
+          "description": "Manchester United goalkeeper wearing jersey number 1 with name 'DE GEA' visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "Swissquote",
+          "start": 47,
+          "end": 54,
+          "confidence": 0.95,
+          "description": "Swissquote logo visible on the LED advertising boards surrounding the pitch."
+        },
+        {
+          "kind": "brand",
+          "entity": "Kohler",
+          "start": 55,
+          "end": 67,
+          "confidence": 0.95,
+          "description": "Kohler logo visible on the LED advertising boards surrounding the pitch."
+        },
+        {
+          "kind": "person",
+          "entity": "A. Martial",
+          "start": 72,
+          "end": 75,
+          "confidence": 1,
+          "description": "Identified by on-screen graphic 'A. Martial - Red Card 28'' below the scorebug."
+        },
+        {
+          "kind": "brand",
+          "entity": "Melitta",
+          "start": 81,
+          "end": 90,
+          "confidence": 0.95,
+          "description": "Melitta logo visible on the LED advertising boards behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Harry Kane",
+          "start": 91,
+          "end": 96,
+          "confidence": 1,
+          "description": "Identified by on-screen graphic 'Harry Kane 30'' below the scorebug after scoring."
+        },
+        {
+          "kind": "person",
+          "entity": "Serge Aurier",
+          "start": 129,
+          "end": 137,
+          "confidence": 1,
+          "description": "Identified by on-screen graphic 'Serge Aurier 51'' below the scorebug after scoring."
+        },
+        {
+          "kind": "brand",
+          "entity": "Gulf",
+          "start": 143,
+          "end": 145,
+          "confidence": 0.95,
+          "description": "Gulf logo visible on the LED advertising boards behind the goal."
+        },
+        {
+          "kind": "brand",
+          "entity": "Aeroflot",
+          "start": 145,
+          "end": 153,
+          "confidence": 0.95,
+          "description": "Aeroflot logo visible on the LED advertising boards behind the goal."
+        }
+      ]
+    },
+    "130851268": {
+      "twelvelabsVideoId": "6ad911e165b4aff96dc7bac4",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_MNU_1_6_TOT_20_21_HIGHLIGHTS_2.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "adidas",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.95,
+          "description": "Adidas logo visible on the red stadium seating cover in the background."
+        },
+        {
+          "kind": "brand",
+          "entity": "Chevrolet",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.95,
+          "description": "Chevrolet logo visible on the red stadium seating cover."
+        },
+        {
+          "kind": "brand",
+          "entity": "yabo",
+          "start": 0,
+          "end": 6,
+          "confidence": 0.98,
+          "description": "yabo logo and Chinese text on the blue LED advertising boards surrounding the pitch."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Scorebug",
+          "start": 1,
+          "end": 159.2,
+          "confidence": 1,
+          "description": "Persistent scorebug at the bottom center showing Manchester United vs Tottenham Hotspur score, Premier League logo, and goalscorer info."
+        },
+        {
+          "kind": "person",
+          "entity": "Bruno Fernandes",
+          "start": 6,
+          "end": 10,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Bruno Fernandes 2'' on the scorebug overlay after scoring."
+        },
+        {
+          "kind": "person",
+          "entity": "Bashford",
+          "start": 8,
+          "end": 10,
+          "confidence": 0.95,
+          "description": "Player wearing Manchester United jersey number 10 with 'BASHFORD' visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Maguire",
+          "start": 8,
+          "end": 10,
+          "confidence": 0.95,
+          "description": "Player wearing Manchester United jersey number 18 with 'MAGUIRE' visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "Melita",
+          "start": 10,
+          "end": 21,
+          "confidence": 0.9,
+          "description": "Melita logo visible on the advertising boards behind the goal."
+        },
+        {
+          "kind": "brand",
+          "entity": "Man Utd",
+          "start": 11,
+          "end": 15,
+          "confidence": 0.95,
+          "description": "Manchester United website URL 'MANUTD.COM/MANJIM' visible on the advertising hoardings."
+        },
+        {
+          "kind": "person",
+          "entity": "Tanguy Ndombele",
+          "start": 19,
+          "end": 27,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Tanguy Ndombele 4'' on the scorebug overlay."
+        },
+        {
+          "kind": "person",
+          "entity": "Sergio Reguilon",
+          "start": 22,
+          "end": 23,
+          "confidence": 0.95,
+          "description": "Player wearing Tottenham jersey number 3 with 'REGUILON' visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "TAG Heuer",
+          "start": 32,
+          "end": 36,
+          "confidence": 0.9,
+          "description": "TAG Heuer logo visible on the advertising boards behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Heung-Min Son",
+          "start": 35,
+          "end": 45,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Heung-Min Son 7'' on the scorebug overlay."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 36,
+          "end": 159.2,
+          "confidence": 0.98,
+          "description": "AIA logo visible on the front of Tottenham Hotspur jerseys throughout the clip."
+        },
+        {
+          "kind": "person",
+          "entity": "De Gea",
+          "start": 40,
+          "end": 44,
+          "confidence": 0.95,
+          "description": "Goalkeeper wearing jersey number 1 with 'DE GEA' visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "Swissquote",
+          "start": 47,
+          "end": 54,
+          "confidence": 0.95,
+          "description": "Swissquote logo visible on the orange LED advertising boards."
+        },
+        {
+          "kind": "brand",
+          "entity": "Kohler",
+          "start": 55,
+          "end": 67,
+          "confidence": 0.95,
+          "description": "Kohler logo visible on the advertising boards surrounding the pitch."
+        },
+        {
+          "kind": "person",
+          "entity": "A. Martial",
+          "start": 72,
+          "end": 80,
+          "confidence": 1,
+          "description": "Identified by name graphic 'A. Martial - Red Card 28'' on the scorebug overlay."
+        },
+        {
+          "kind": "person",
+          "entity": "Harry Kane",
+          "start": 91,
+          "end": 97,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Harry Kane 30'' on the scorebug overlay."
+        },
+        {
+          "kind": "person",
+          "entity": "Serge Aurier",
+          "start": 129,
+          "end": 137,
+          "confidence": 1,
+          "description": "Identified by name graphic 'Serge Aurier 51'' on the scorebug overlay."
+        },
+        {
+          "kind": "brand",
+          "entity": "Gulf",
+          "start": 143,
+          "end": 145,
+          "confidence": 0.9,
+          "description": "Gulf logo visible on the light blue advertising boards."
+        },
+        {
+          "kind": "brand",
+          "entity": "Aeroflot",
+          "start": 145,
+          "end": 159.2,
+          "confidence": 0.95,
+          "description": "Aeroflot logo visible on the blue LED advertising boards."
+        }
+      ]
+    },
+    "130851269": {
+      "twelvelabsVideoId": "6ad911e24a68f3b40321d5f2",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261008_Men_Pre Match Man Utd A_FPL Pick_9x16.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Fantasy Football Scout",
+          "start": 0,
+          "end": 5.76,
+          "confidence": 0.95,
+          "description": "Brand name spoken by the presenter and displayed in the subtitle overlay as a partner for the fantasy team pick segment."
+        },
+        {
+          "kind": "graphic",
+          "entity": "subtitle_overlay",
+          "start": 0,
+          "end": 42.4,
+          "confidence": 0.95,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, displaying the spoken dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "Sávio",
+          "start": 5.76,
+          "end": 42.4,
+          "confidence": 0.9,
+          "description": "Player named in the spoken commentary and subtitles as the fantasy football pick being discussed."
+        },
+        {
+          "kind": "person",
+          "entity": "Andy Robertson",
+          "start": 19.5,
+          "end": 22.96,
+          "confidence": 0.9,
+          "description": "Player named in the spoken commentary and subtitles as a comparison for crossing statistics."
+        }
+      ]
+    },
+    "130851320": {
+      "twelvelabsVideoId": "6ad911e365b4aff96dc7bacd",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Fans clap Man United A 9x16.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 2.5,
+          "confidence": 0.95,
+          "description": "The 'AIA' sponsor logo is visible on the front of the Tottenham Hotspur player's jersey (number 17)."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 2.5,
+          "confidence": 0.95,
+          "description": "The Nike swoosh logo is visible on the right chest of the player's jersey and on the shorts."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #17",
+          "start": 0,
+          "end": 2.5,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 17 on shorts."
+        },
+        {
+          "kind": "brand",
+          "entity": "KRAKEN",
+          "start": 2.5,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "The 'KRAKEN' logo is visible on the sleeve of the player's jersey (number 16)."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #16",
+          "start": 2.5,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 16 on shorts."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 5,
+          "end": 7,
+          "confidence": 0.95,
+          "description": "The 'AIA' sponsor logo is visible on the front of the player's jersey (number 18)."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #18",
+          "start": 5,
+          "end": 7,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 18 on shorts."
+        },
+        {
+          "kind": "brand",
+          "entity": "Manchester United",
+          "start": 9,
+          "end": 14.5,
+          "confidence": 0.9,
+          "description": "The Manchester United club crest is visible on the red advertising hoarding in the foreground of the crowd shot."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #20",
+          "start": 15,
+          "end": 17,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 20 on shorts."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #8",
+          "start": 15,
+          "end": 17,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 8 on shorts."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 17,
+          "end": 20.5,
+          "confidence": 0.95,
+          "description": "The 'AIA' sponsor logo is visible on the front of the player's jersey (number 6)."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #6",
+          "start": 17,
+          "end": 20.5,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 6 on shorts."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #5",
+          "start": 20.5,
+          "end": 23,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by jersey number 5 on shorts."
+        }
+      ]
+    },
+    "130851321": {
+      "twelvelabsVideoId": "6ad911e40ca748ea3c0aa5f2",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Solanke Goal.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 4,
+          "end": 6,
+          "confidence": 0.95,
+          "description": "AIA logo visible on the front of the dark blue jersey worn by the attacking player."
+        },
+        {
+          "kind": "brand",
+          "entity": "SumUp",
+          "start": 16,
+          "end": 25,
+          "confidence": 0.9,
+          "description": "SumUp branding visible on the LED advertising boards surrounding the pitch."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 29,
+          "end": 34,
+          "confidence": 0.95,
+          "description": "AIA logo visible on the front of the dark blue jerseys worn by celebrating players."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 35,
+          "end": 38,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'JOHNSON' and number 17 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Yves Bissouma",
+          "start": 37,
+          "end": 44,
+          "confidence": 0.9,
+          "description": "Player identified by the name 'BISSEMA' (partially visible as BISSOUMA) and number 22 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Son Heung-min",
+          "start": 39,
+          "end": 43,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'SON' and number 10 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betway",
+          "start": 40,
+          "end": 47,
+          "confidence": 0.9,
+          "description": "Betway logo visible on the red LED advertising boards in the background."
+        },
+        {
+          "kind": "person",
+          "entity": "Dejan Kulusevski",
+          "start": 45,
+          "end": 47,
+          "confidence": 0.95,
+          "description": "Player identified by the name 'KULUSEVSKI' and number 21 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Pedro Porro",
+          "start": 45,
+          "end": 47,
+          "confidence": 0.95,
+          "description": "Player identified by the name 'PORRO' and number 23 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Richarlison",
+          "start": 45,
+          "end": 47,
+          "confidence": 0.95,
+          "description": "Player identified by the name 'RICHARLISON' and number 9 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 48,
+          "end": 50,
+          "confidence": 0.95,
+          "description": "AIA logo visible on the front of the dark blue jersey worn by player number 17 near the corner flag."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 48,
+          "end": 50,
+          "confidence": 0.95,
+          "description": "Player identified by number 17 on the back of his dark blue jersey near the corner flag."
+        },
+        {
+          "kind": "person",
+          "entity": "Richarlison",
+          "start": 50,
+          "end": 58,
+          "confidence": 0.95,
+          "description": "Player identified by the name 'RICHARLISON' and number 9 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Son Heung-min",
+          "start": 50,
+          "end": 58,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'SON' and number 10 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Yves Bissouma",
+          "start": 50,
+          "end": 58,
+          "confidence": 0.9,
+          "description": "Player identified by the name 'BISSEMA' and number 22 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 55,
+          "end": 58,
+          "confidence": 0.85,
+          "description": "Player identified by number 17 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Dejan Kulusevski",
+          "start": 55,
+          "end": 58,
+          "confidence": 0.85,
+          "description": "Player identified by number 21 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "James Maddison",
+          "start": 55,
+          "end": 58,
+          "confidence": 0.85,
+          "description": "Player identified by number 10 on the back of his dark blue jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Pedro Porro",
+          "start": 55,
+          "end": 58,
+          "confidence": 0.85,
+          "description": "Player identified by number 23 on the back of his dark blue jersey."
+        }
+      ]
+    },
+    "130851322": {
+      "twelvelabsVideoId": "6ad911e5500e82756f2eb4d6",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "We didn’t deserve to lose De Zerbi proud of togetherness in Man United draw.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Manchester United",
+          "start": 0,
+          "end": 214.5,
+          "confidence": 0.98,
+          "description": "The Manchester United club crest is prominently displayed on the red wall behind the interviewee throughout the clip."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "PLAY",
+          "start": 0,
+          "end": 214.5,
+          "confidence": 0.95,
+          "description": "A microphone flag with the word 'PLAY' and a soccer ball logo is visible throughout the interview, held by the interviewer."
+        },
+        {
+          "kind": "person",
+          "entity": "Roberto",
+          "start": 0.32,
+          "end": 214.5,
+          "confidence": 0.9,
+          "description": "The interviewee is identified as 'Roberto' by the interviewer in the opening line of the transcript."
+        },
+        {
+          "kind": "person",
+          "entity": "Rodrigo",
+          "start": 13.04,
+          "end": 17.28,
+          "confidence": 0.85,
+          "description": "The interviewee mentions 'Rodrigo' by name when discussing the red card incident."
+        },
+        {
+          "kind": "person",
+          "entity": "Dominic Solanke",
+          "start": 162.48,
+          "end": 170.16,
+          "confidence": 0.85,
+          "description": "The interviewer mentions 'Dominic Salenki' (Solanke) by name while discussing his performance in the game."
+        }
+      ]
+    },
+    "130851323": {
+      "twelvelabsVideoId": "6ad911e59c038876f358afb4",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "IMG_2434.MOV",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 19.1,
+          "confidence": 0.95,
+          "description": "A white Nike swoosh logo is visible on the lower right chest area of the player's dark training top throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 19.1,
+          "confidence": 0.9,
+          "description": "The Tottenham Hotspur club crest (cockerel and ball) is visible on the left chest of the player's training top."
+        },
+        {
+          "kind": "person",
+          "entity": "James Maddison",
+          "start": 0,
+          "end": 19.1,
+          "confidence": 0.85,
+          "description": "The player speaking to the camera is identifiable as James Maddison based on facial recognition and context of wearing Tottenham training gear, though no name graphic is displayed on screen."
+        }
+      ]
+    },
+    "130851324": {
+      "twelvelabsVideoId": "6ad911e6960d8ea7bdd04cba",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "The mentality is something to build on Solanke on his late equaliser and captaincy against Red Devils.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 152,
+          "confidence": 0.95,
+          "description": "White AIA sponsor logo printed across the center of the player's jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Manchester United",
+          "start": 0,
+          "end": 152,
+          "confidence": 0.98,
+          "description": "Large Manchester United club crest displayed on the red wall behind the interview subject."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 152,
+          "confidence": 0.95,
+          "description": "White Nike swoosh logo visible on the right chest of the player's dark training jersey throughout the interview."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "SPORTSFM",
+          "start": 0,
+          "end": 152,
+          "confidence": 0.98,
+          "description": "Black microphone flag with purple and white SPORTSFM logo held by the interviewer."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 0,
+          "end": 152,
+          "confidence": 0.85,
+          "description": "Player identified by context as Tottenham Hotspur player wearing the club kit with AIA sponsor. No name graphic is visible on screen."
+        }
+      ]
+    },
+    "130851358": {
+      "twelvelabsVideoId": "6ad911e765b4aff96dc7baeb",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_MNU_1_1_TOT_HIGHLIGHTS.mp4",
+      "observations": [
+        {
+          "kind": "broadcaster",
+          "entity": "Premier League",
+          "start": 1,
+          "end": 119.4,
+          "confidence": 1,
+          "description": "The Premier League lion logo is present in the center of the scorebug overlay throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Scorebug",
+          "start": 1,
+          "end": 119.4,
+          "confidence": 1,
+          "description": "A persistent scorebug overlay at the bottom center of the screen showing Manchester United vs Tottenham Hotspur logos, the Premier League lion logo, and the score. It updates to show goalscorer names and times (e.g., 'Br"
+        },
+        {
+          "kind": "person",
+          "entity": "Dominic Solanke",
+          "start": 5,
+          "end": 8,
+          "confidence": 0.8,
+          "description": "Tottenham player mentioned in commentary as 'Selanki' (Solanke)."
+        },
+        {
+          "kind": "person",
+          "entity": "Savio",
+          "start": 8,
+          "end": 10,
+          "confidence": 0.9,
+          "description": "Tottenham player mentioned in commentary as 'Savio' during a play near the corner."
+        },
+        {
+          "kind": "brand",
+          "entity": "DHL",
+          "start": 8,
+          "end": 14,
+          "confidence": 1,
+          "description": "Yellow and red DHL logo visible on the LED advertising boards behind the goal."
+        },
+        {
+          "kind": "brand",
+          "entity": "betway",
+          "start": 15,
+          "end": 21,
+          "confidence": 1,
+          "description": "White 'betway' text logo on the black LED advertising boards along the sideline."
+        },
+        {
+          "kind": "brand",
+          "entity": "sumup",
+          "start": 23,
+          "end": 26,
+          "confidence": 1,
+          "description": "White 'sumup' logo on the LED advertising boards in the background."
+        },
+        {
+          "kind": "person",
+          "entity": "Conor Gallagher",
+          "start": 24,
+          "end": 27,
+          "confidence": 0.8,
+          "description": "Manchester United player mentioned in commentary as 'Connor Gallagher' (likely Conor Gallagher)."
+        },
+        {
+          "kind": "brand",
+          "entity": "adidas",
+          "start": 27,
+          "end": 31,
+          "confidence": 1,
+          "description": "White 'adidas' logo repeated on the LED advertising boards behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Xavi Simons",
+          "start": 36,
+          "end": 39,
+          "confidence": 0.8,
+          "description": "Tottenham player mentioned in commentary as 'Xavio' (Xavi Simons)."
+        },
+        {
+          "kind": "brand",
+          "entity": "VEDESTEIN TYRES",
+          "start": 36,
+          "end": 42,
+          "confidence": 1,
+          "description": "Red and white 'VEDESTEIN TYRES' logo on the LED advertising boards."
+        },
+        {
+          "kind": "brand",
+          "entity": "eFootball",
+          "start": 43,
+          "end": 45,
+          "confidence": 1,
+          "description": "Blue 'eFootball' logo on the LED advertising boards."
+        },
+        {
+          "kind": "brand",
+          "entity": "MLILY",
+          "start": 46,
+          "end": 48,
+          "confidence": 0.9,
+          "description": "Blue LED board with 'MLILY' and Chinese characters visible behind the goal."
+        },
+        {
+          "kind": "brand",
+          "entity": "prime",
+          "start": 53,
+          "end": 58,
+          "confidence": 1,
+          "description": "Red and white 'prime' logo on the LED advertising boards."
+        },
+        {
+          "kind": "brand",
+          "entity": "Snapdragon",
+          "start": 61,
+          "end": 62,
+          "confidence": 1,
+          "description": "White 'Snapdragon' sponsor logo visible on the front of the Manchester United red jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 65,
+          "end": 66,
+          "confidence": 1,
+          "description": "White 'AIA' sponsor logo on the front of the Tottenham Hotspur dark blue jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Premier League",
+          "start": 67,
+          "end": 71,
+          "confidence": 1,
+          "description": "'Premier League' branding visible on the LED boards behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Bryan Mbeumo",
+          "start": 70,
+          "end": 74,
+          "confidence": 1,
+          "description": "Manchester United player identified by the on-screen graphic 'Bryan Mbeumo 73'' after scoring a goal. He is seen celebrating."
+        },
+        {
+          "kind": "brand",
+          "entity": "betway SCORES",
+          "start": 75,
+          "end": 81,
+          "confidence": 1,
+          "description": "'betway SCORES' text on the LED advertising boards."
+        },
+        {
+          "kind": "person",
+          "entity": "Luke Shaw",
+          "start": 83,
+          "end": 86,
+          "confidence": 0.9,
+          "description": "Manchester United player mentioned in commentary as 'Shaw' involved in the foul leading to the red card."
+        },
+        {
+          "kind": "person",
+          "entity": "Rodrigo Bentancur",
+          "start": 87,
+          "end": 92,
+          "confidence": 1,
+          "description": "Tottenham player identified by the on-screen graphic 'Red Card - Bentancur 78''. He is seen receiving a red card from the referee."
+        },
+        {
+          "kind": "person",
+          "entity": "Lisandro Martinez",
+          "start": 104,
+          "end": 108,
+          "confidence": 0.9,
+          "description": "Manchester United player mentioned in commentary as 'Martinez' during the goal sequence."
+        },
+        {
+          "kind": "person",
+          "entity": "Dominic Solanke",
+          "start": 106,
+          "end": 116,
+          "confidence": 1,
+          "description": "Tottenham player identified by the on-screen graphic 'Dominic Solanke 90+2'' after scoring. He is seen celebrating with teammates."
+        },
+        {
+          "kind": "person",
+          "entity": "Bruno Fernandes",
+          "start": 118,
+          "end": 119,
+          "confidence": 1,
+          "description": "Tottenham player seen from behind with 'FERNANDES' and number 8 on his jersey."
+        }
+      ]
+    },
+    "130851359": {
+      "twelvelabsVideoId": "6ad911e865b4aff96dc7baf2",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "16x9_MNU_1_1_TOT_KEY_HIGHLIGHTS.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "Match Intro Graphic",
+          "start": 0,
+          "end": 1,
+          "confidence": 1,
+          "description": "Opening graphic showing Manchester United and Tottenham Hotspur logos with the Premier League logo and season text '2026/27' in the center."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Half Indicator",
+          "start": 1,
+          "end": 32,
+          "confidence": 1,
+          "description": "Lower left blue box graphic reading 'First half'."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Scorebug",
+          "start": 1,
+          "end": 121.8,
+          "confidence": 1,
+          "description": "Top left corner scorebug displaying Manchester United and Tottenham Hotspur logos with the score. Includes Premier League logo. Updates to show goalscorer names and times."
+        },
+        {
+          "kind": "person",
+          "entity": "Martinez",
+          "start": 7,
+          "end": 8,
+          "confidence": 1,
+          "description": "Manchester United goalkeeper identified by name 'MARTINEZ' on the back of his yellow jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "DHL",
+          "start": 8,
+          "end": 14,
+          "confidence": 1,
+          "description": "Yellow and red DHL advertising boards visible behind the goal area."
+        },
+        {
+          "kind": "brand",
+          "entity": "betway",
+          "start": 15,
+          "end": 21,
+          "confidence": 1,
+          "description": "betway advertising boards visible along the sideline."
+        },
+        {
+          "kind": "person",
+          "entity": "Garnacho",
+          "start": 22,
+          "end": 23,
+          "confidence": 1,
+          "description": "Manchester United player identified by name 'GARNACHO' and number 17 on the back of his red jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "sumup",
+          "start": 23,
+          "end": 26,
+          "confidence": 1,
+          "description": "sumup advertising boards visible along the sideline."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Half Indicator",
+          "start": 32,
+          "end": 37,
+          "confidence": 1,
+          "description": "Lower left blue box graphic reading 'Second half'."
+        },
+        {
+          "kind": "brand",
+          "entity": "Vedstein Tyres",
+          "start": 36,
+          "end": 43,
+          "confidence": 1,
+          "description": "Vedstein Tyres advertising boards visible along the sideline."
+        },
+        {
+          "kind": "brand",
+          "entity": "EA SPORTS FC",
+          "start": 44,
+          "end": 49,
+          "confidence": 1,
+          "description": "EA SPORTS FC advertising boards visible along the sideline."
+        },
+        {
+          "kind": "brand",
+          "entity": "Amazon Prime",
+          "start": 54,
+          "end": 61,
+          "confidence": 1,
+          "description": "Amazon Prime advertising boards visible along the sideline."
+        },
+        {
+          "kind": "brand",
+          "entity": "Snapdragon",
+          "start": 62,
+          "end": 63,
+          "confidence": 1,
+          "description": "Snapdragon logo visible on the front of the Manchester United player's jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Onana",
+          "start": 65,
+          "end": 67,
+          "confidence": 1,
+          "description": "Manchester United player identified by name 'ONANA' and number 10 on the back of his red jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Premier League",
+          "start": 67,
+          "end": 73,
+          "confidence": 1,
+          "description": "Premier League branding on the advertising boards behind the goal."
+        },
+        {
+          "kind": "person",
+          "entity": "Mbeumo",
+          "start": 70,
+          "end": 77,
+          "confidence": 1,
+          "description": "Manchester United player identified by the scorebug graphic 'Bryan Mbeumo 73''."
+        },
+        {
+          "kind": "person",
+          "entity": "Bentancur",
+          "start": 84,
+          "end": 92,
+          "confidence": 1,
+          "description": "Tottenham player identified by name 'BENTANCUR' and number 30 on the back of his jersey, and by the scorebug graphic 'Red Card - Bentancur 78''."
+        },
+        {
+          "kind": "person",
+          "entity": "Shaw",
+          "start": 86,
+          "end": 95,
+          "confidence": 1,
+          "description": "Manchester United player identified by name 'SHAW' and number 23 on the back of his red jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 88,
+          "end": 95,
+          "confidence": 1,
+          "description": "AIA sponsor logo visible on the front of Tottenham Hotspur jerseys."
+        },
+        {
+          "kind": "person",
+          "entity": "Solanke",
+          "start": 108,
+          "end": 119,
+          "confidence": 1,
+          "description": "Tottenham player identified by name 'SOLANKE' and number 19 on the back of his jersey, and by the scorebug graphic 'Dominic Solanke 90+2''."
+        },
+        {
+          "kind": "person",
+          "entity": "Tonali",
+          "start": 119,
+          "end": 121,
+          "confidence": 1,
+          "description": "Tottenham player identified by name 'TONALI' and number 16 on the back of his jersey."
+        }
+      ]
+    },
+    "130851382": {
+      "twelvelabsVideoId": "6ad911ea9c038876f358afcf",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_RDZ_ON_DEKI.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 23.9,
+          "confidence": 0.95,
+          "description": "The word 'Betano' appears on the backdrop behind the speaker and on the speaker's t-shirt. It is part of the live picture backdrop."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 23.9,
+          "confidence": 0.9,
+          "description": "The Nike swoosh logo is visible on the speaker's t-shirt below the THFC text. Part of the live picture."
+        },
+        {
+          "kind": "graphic",
+          "entity": "subtitles",
+          "start": 0,
+          "end": 23.9,
+          "confidence": 1,
+          "description": "White text subtitles with black background overlay appear at the bottom of the screen transcribing the speaker's dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "Deke Kulusevski",
+          "start": 0,
+          "end": 23.9,
+          "confidence": 0.95,
+          "description": "Identified by name in the on-screen subtitles as the subject of the speaker's comments regarding his reaction to injury."
+        }
+      ]
+    },
+    "130851383": {
+      "twelvelabsVideoId": "6ad911eb500e82756f2eb4ff",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_RDZ_ON_FERNANDES.mp4",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "Mateus Fernandes",
+          "start": 0,
+          "end": 5.4,
+          "confidence": 0.9,
+          "description": "Identified via the subtitle text '[Mateus] Fernandes is a great player.' The speaker is discussing this player."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 48.9,
+          "confidence": 0.95,
+          "description": "The word 'Betano' appears as a white logo on the blue backdrop behind the speaker and also printed on the speaker's navy blue shirt. It is part of the live picture background."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 48.9,
+          "confidence": 0.9,
+          "description": "A white Nike swoosh logo is visible on the right chest area of the speaker's navy blue jacket. It is part of the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "THFC",
+          "start": 0,
+          "end": 48.9,
+          "confidence": 0.95,
+          "description": "The letters 'THFC' appear in multi-colored gradient text on the front of the speaker's navy blue shirt. This is part of the live picture."
+        },
+        {
+          "kind": "graphic",
+          "entity": "subtitle",
+          "start": 0,
+          "end": 48.9,
+          "confidence": 1,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, transcribing the speaker's words."
+        }
+      ]
+    },
+    "130851384": {
+      "twelvelabsVideoId": "6ad911ec960d8ea7bdd04cd3",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_TEAM_NEWS_MAN_UTD_2.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 0.95,
+          "description": "The Betano logo appears on the backdrop behind the speaker and on the speaker's t-shirt throughout the clip. This is part of the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 0.95,
+          "description": "The Nike swoosh logo is visible on the left chest of the speaker's jacket and on his t-shirt. This is part of the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 0.95,
+          "description": "The Tottenham Hotspur club crest is visible on the right chest of the speaker's jacket and on the backdrop. This is part of the live picture."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Subtitles",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 1,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, transcribing the speaker's words."
+        },
+        {
+          "kind": "person",
+          "entity": "Micky van de Ven",
+          "start": 2,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "Identified by the on-screen subtitle text 'Micky [van de Ven] played'."
+        },
+        {
+          "kind": "person",
+          "entity": "J.P. van Hecke",
+          "start": 6,
+          "end": 8,
+          "confidence": 0.9,
+          "description": "Identified by the on-screen subtitle text 'J.P. [van Hecke] played just'."
+        },
+        {
+          "kind": "person",
+          "entity": "James Maddison",
+          "start": 24,
+          "end": 26,
+          "confidence": 0.9,
+          "description": "Identified by the on-screen subtitle text '[James] Maddison has the'."
+        },
+        {
+          "kind": "person",
+          "entity": "Pedro Porro",
+          "start": 27,
+          "end": 29,
+          "confidence": 0.9,
+          "description": "Identified by the on-screen subtitle text 'and [Pedro] Porro and'."
+        },
+        {
+          "kind": "person",
+          "entity": "Mykhailo Mudryk",
+          "start": 28,
+          "end": 30,
+          "confidence": 0.9,
+          "description": "Identified by the on-screen subtitle text 'Mykhailo [Mudryk]'."
+        },
+        {
+          "kind": "person",
+          "entity": "Dejan Kulusevski",
+          "start": 41,
+          "end": 43,
+          "confidence": 0.9,
+          "description": "Identified by the on-screen subtitle text '[Kulusevski] is working well'."
+        }
+      ]
+    },
+    "130851385": {
+      "twelvelabsVideoId": "6ad911ec2cc348c0bd2011ef",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Press Conference: De Zerbi speaks to the media ahead of Manchester United trip.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 1,
+          "description": "The AIA logo appears repeatedly on the press conference backdrop behind the speaker."
+        },
+        {
+          "kind": "brand",
+          "entity": "Alipay+",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 1,
+          "description": "The Alipay+ logo is visible on the lower portion of the press backdrop."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 1,
+          "description": "The Betano logo is visible on the press backdrop and on the speaker's shirt."
+        },
+        {
+          "kind": "brand",
+          "entity": "Kraken",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 1,
+          "description": "The Kraken logo is visible on the press backdrop."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 1,
+          "description": "The Nike swoosh logo appears on the backdrop and on the speaker's jacket."
+        },
+        {
+          "kind": "brand",
+          "entity": "Sports Illustrated",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 1,
+          "description": "The Sports Illustrated logo appears on the press backdrop."
+        },
+        {
+          "kind": "person",
+          "entity": "Roberto De Zerbi",
+          "start": 0,
+          "end": 725.5,
+          "confidence": 0.95,
+          "description": "The man speaking at the press conference is identified by the transcript as 'Alberto' (likely a mishearing of Roberto) and contextually refers to himself as the Tottenham manager."
+        },
+        {
+          "kind": "person",
+          "entity": "Micky van de Ven",
+          "start": 5.92,
+          "end": 14.08,
+          "confidence": 1,
+          "description": "Named in the transcript by the interviewer regarding his injury status."
+        },
+        {
+          "kind": "person",
+          "entity": "Yangel Herrera",
+          "start": 5.92,
+          "end": 14.08,
+          "confidence": 0.9,
+          "description": "Named in the transcript by the interviewer (as 'Yampul van Hecker' due to transcription error) regarding his injury status."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 24.4,
+          "end": 27.76,
+          "confidence": 0.85,
+          "description": "Referred to as 'JP' in the transcript by the speaker."
+        },
+        {
+          "kind": "person",
+          "entity": "Pierre-Emile Højbjerg",
+          "start": 30.72,
+          "end": 32,
+          "confidence": 0.85,
+          "description": "Referred to as 'PG' in the transcript by the speaker."
+        },
+        {
+          "kind": "person",
+          "entity": "James Maddison",
+          "start": 191.52,
+          "end": 227.28,
+          "confidence": 1,
+          "description": "Named in the transcript by the interviewer and the speaker regarding his potential to start."
+        },
+        {
+          "kind": "person",
+          "entity": "Pedro Porro",
+          "start": 267.28,
+          "end": 285.44,
+          "confidence": 1,
+          "description": "Named in the transcript by the interviewer and the speaker regarding his injury status."
+        },
+        {
+          "kind": "person",
+          "entity": "Dejan Kulusevski",
+          "start": 290.72,
+          "end": 331.36,
+          "confidence": 1,
+          "description": "Named in the transcript by the interviewer and speaker regarding his recovery."
+        },
+        {
+          "kind": "person",
+          "entity": "Cristian Romero",
+          "start": 448.8,
+          "end": 454.48,
+          "confidence": 0.8,
+          "description": "Referred to as 'Marcos Senesi' in the transcript by the speaker (likely a mishearing of Romero)."
+        },
+        {
+          "kind": "person",
+          "entity": "Dominic Solanke",
+          "start": 448.8,
+          "end": 459.76,
+          "confidence": 1,
+          "description": "Named in the transcript by the speaker."
+        },
+        {
+          "kind": "person",
+          "entity": "Savio",
+          "start": 448.8,
+          "end": 459.76,
+          "confidence": 1,
+          "description": "Named in the transcript by the speaker."
+        },
+        {
+          "kind": "person",
+          "entity": "Rodrigo Bentancur",
+          "start": 497.84,
+          "end": 505.68,
+          "confidence": 0.9,
+          "description": "Referred to as 'Bettencourt' in the transcript by the speaker."
+        },
+        {
+          "kind": "person",
+          "entity": "Pape Matar Sarr",
+          "start": 509.12,
+          "end": 526.4,
+          "confidence": 0.8,
+          "description": "Referred to as 'Fernandez' in the transcript by the interviewer, but contextually refers to Sarr based on the speaker's response about a central midfielder signed in the summer."
+        }
+      ]
+    },
+    "130851386": {
+      "twelvelabsVideoId": "6ad911ed2cc348c0bd2011f2",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "9x16_TEAM_NEWS_MAN_UTD.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 0.95,
+          "description": "The word 'Betano' appears as a sponsor logo on the backdrop behind the speaker and on his t-shirt throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 0.95,
+          "description": "The Nike swoosh logo is visible on the left chest of the speaker's jacket and t-shirt."
+        },
+        {
+          "kind": "graphic",
+          "entity": "subtitle",
+          "start": 0,
+          "end": 52.4,
+          "confidence": 1,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, transcribing the speaker's words."
+        },
+        {
+          "kind": "person",
+          "entity": "Micky van de Ven",
+          "start": 2,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "Identified by name in the subtitle text: 'Micky [van de Ven] played'."
+        },
+        {
+          "kind": "person",
+          "entity": "JP van Hecke",
+          "start": 6,
+          "end": 15,
+          "confidence": 0.9,
+          "description": "Identified by name in the subtitle text: 'JP [van Hecke] played just'."
+        },
+        {
+          "kind": "person",
+          "entity": "James Maddison",
+          "start": 23,
+          "end": 26,
+          "confidence": 0.9,
+          "description": "Identified by name in the subtitle text: '[James] Maddison has the'."
+        },
+        {
+          "kind": "person",
+          "entity": "Pedro Porro",
+          "start": 26,
+          "end": 35,
+          "confidence": 0.9,
+          "description": "Identified by name in the subtitle text: 'and [Pedro] Porro and'."
+        },
+        {
+          "kind": "person",
+          "entity": "Mykhailo Mudryk",
+          "start": 28,
+          "end": 41,
+          "confidence": 0.9,
+          "description": "Identified by name in the subtitle text: 'Mykhailo [Mudryk]'."
+        },
+        {
+          "kind": "person",
+          "entity": "Dejan Kulusevski",
+          "start": 41,
+          "end": 44,
+          "confidence": 0.9,
+          "description": "Identified by name in the subtitle text: '[Kulusevski] is working well'."
+        }
+      ]
+    },
+    "130851412": {
+      "twelvelabsVideoId": "6ad911ee2cc348c0bd2011f7",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 1 - Goal.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "DHL",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "DHL logo visible on the LED advertising boards surrounding the pitch in the background."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 17",
+          "start": 0,
+          "end": 13,
+          "confidence": 0.9,
+          "description": "Player wearing jersey number 17 visible celebrating with teammates."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 20,
+          "confidence": 0.95,
+          "description": "The letters 'AIA' appear prominently on the front of the Tottenham Hotspur players' jerseys throughout the clip."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 20,
+          "confidence": 0.95,
+          "description": "Tottenham Hotspur club crest logo appears in the bottom right corner of the on-screen graphic overlay."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Scorebug",
+          "start": 0,
+          "end": 20,
+          "confidence": 0.98,
+          "description": "Overlay graphic showing '90+2'' in top left, 'GOAL' in top center, '19 SCLANKE' bottom left, '1-1' bottom center, and a Tottenham Hotspur crest logo bottom right."
+        },
+        {
+          "kind": "person",
+          "entity": "19 SCLANKE",
+          "start": 0,
+          "end": 20,
+          "confidence": 0.95,
+          "description": "Player wearing jersey number 19 identified by the on-screen graphic '19 SCLANKE' at the bottom left."
+        },
+        {
+          "kind": "brand",
+          "entity": "SUMUP",
+          "start": 3,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "SUMUP logo visible on the LED advertising boards behind the goal area."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 14",
+          "start": 4,
+          "end": 20,
+          "confidence": 0.9,
+          "description": "Player wearing jersey number 14 visible celebrating with teammates."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 22",
+          "start": 13,
+          "end": 20,
+          "confidence": 0.9,
+          "description": "Player wearing jersey number 22 visible celebrating with teammates."
+        }
+      ]
+    },
+    "130851413": {
+      "twelvelabsVideoId": "6ad911ef500e82756f2eb512",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 2 -Players Out for Warm Ups.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Manchester United",
+          "start": 0,
+          "end": 4.5,
+          "confidence": 0.95,
+          "description": "Large red signage reading 'MANCHESTER UNITED' is visible in the background tunnel area on the left side of the split screen."
+        },
+        {
+          "kind": "brand",
+          "entity": "Alipay+",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.9,
+          "description": "The Alipay+ logo and text are visible on the sleeve of the player on the right side of the split screen."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.95,
+          "description": "The word 'Betano' appears prominently on the front of the players' navy blue training jerseys."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.9,
+          "description": "The Tottenham Hotspur cockerel logo is visible in the top left corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Player Name/Number Overlays",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.95,
+          "description": "Text overlays identifying players '19 SOLANKE' (bottom left) and '37 VAN DE VEN' (top right) are present throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "WARM UPS",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.95,
+          "description": "Text label 'WARM UPS' appears at the bottom center of the screen."
+        },
+        {
+          "kind": "person",
+          "entity": "19 SOLANKE",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.95,
+          "description": "Player identified by the on-screen graphic label '19 SOLANKE' at the bottom left of the frame."
+        },
+        {
+          "kind": "person",
+          "entity": "37 VAN DE VEN",
+          "start": 0,
+          "end": 9.6,
+          "confidence": 0.95,
+          "description": "Player identified by the on-screen graphic label '37 VAN DE VEN' at the top right of the frame."
+        }
+      ]
+    },
+    "130851414": {
+      "twelvelabsVideoId": "6ad911ef65b4aff96dc7bb23",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 3 - Warm Ups.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "The word 'Betano' is visible as a sponsor logo on the front of the player's training jersey on the right side of the split screen."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "The Nike swoosh logo is visible on the lower left side of the goalkeeper's shorts on the left panel."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "The Tottenham Hotspur cockerel logo is visible in the bottom right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "MUNTCT",
+          "start": 0,
+          "end": 5,
+          "confidence": 1,
+          "description": "Text graphic 'MUNTCT' appears in the top left corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "WARMUPS",
+          "start": 0,
+          "end": 5,
+          "confidence": 1,
+          "description": "Text graphic 'WARMUPS' appears in the bottom center/right area of the frame."
+        },
+        {
+          "kind": "person",
+          "entity": "31 KINSKY",
+          "start": 0,
+          "end": 5,
+          "confidence": 1,
+          "description": "Player identified by the on-screen graphic label '31 KINSKY' in the bottom left corner of the left panel."
+        },
+        {
+          "kind": "person",
+          "entity": "8 GALLAGHER",
+          "start": 0,
+          "end": 5,
+          "confidence": 1,
+          "description": "Player identified by the on-screen graphic label '8 GALLAGHER' in the top right corner of the right panel and by the number 8 on his shorts."
+        }
+      ]
+    },
+    "130851415": {
+      "twelvelabsVideoId": "6ad911f0960d8ea7bdd04ced",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 6 - Away End Singing Pre-KO.mov",
+      "observations": [
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 10,
+          "confidence": 0.9,
+          "description": "Small Tottenham Hotspur cockerel logo visible in the top right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "AWAY END",
+          "start": 0,
+          "end": 10,
+          "confidence": 0.95,
+          "description": "Text overlay at the bottom center of the frame reading 'AWAY END'."
+        },
+        {
+          "kind": "graphic",
+          "entity": "OLD TRAFFORD",
+          "start": 0,
+          "end": 10,
+          "confidence": 0.95,
+          "description": "Text overlay in the top left corner of the frame reading 'OLD TRAFFORD'."
+        }
+      ]
+    },
+    "130851416": {
+      "twelvelabsVideoId": "6ad911f15411fa6e602f45e4",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 5 - Savio to Camera.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.95,
+          "description": "The word 'Betano' is visible as the main sponsor logo on the front of the player's training top throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.95,
+          "description": "The Nike swoosh logo is visible on the upper right chest of the player's training top."
+        },
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.95,
+          "description": "The Tottenham Hotspur cockerel crest is visible on the left chest of the player's training top and shorts."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.9,
+          "description": "A small Tottenham Hotspur crest logo is visible in the top right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "17 SAVIO",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.98,
+          "description": "Text '17 SAVIO' appears in the bottom right corner identifying the player."
+        },
+        {
+          "kind": "graphic",
+          "entity": "MUNTOT",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.98,
+          "description": "Text 'MUNTOT' appears in the bottom left corner of the frame as part of an edited overlay."
+        },
+        {
+          "kind": "graphic",
+          "entity": "WARM UPS",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.98,
+          "description": "Text 'WARM UPS' appears in the bottom center/right area as part of an edited overlay."
+        },
+        {
+          "kind": "person",
+          "entity": "Savio",
+          "start": 0,
+          "end": 5.2,
+          "confidence": 0.98,
+          "description": "Player identified by the on-screen graphic label '17 SAVIO' in the bottom right corner. The player is wearing jersey number 17."
+        }
+      ]
+    },
+    "130851417": {
+      "twelvelabsVideoId": "6ad911f2960d8ea7bdd04cfe",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 4 - Dad with his boy.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 5.7,
+          "confidence": 0.9,
+          "description": "The Tottenham Hotspur club crest (cockerel logo) is visible on the scarf being held by the fan and on the large banner draped over the barrier in the foreground."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 5.7,
+          "confidence": 0.98,
+          "description": "A small Tottenham Hotspur cockerel logo bug is visible in the top right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "COYS",
+          "start": 0,
+          "end": 5.7,
+          "confidence": 0.95,
+          "description": "Text overlay 'COYS' appears in the bottom left corner of the frame throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "OLD TRAFFORD",
+          "start": 0,
+          "end": 5.7,
+          "confidence": 0.95,
+          "description": "Text overlay 'OLD TRAFFORD' appears in the bottom right corner of the frame throughout the clip."
+        }
+      ]
+    },
+    "130851418": {
+      "twelvelabsVideoId": "6ad911f165b4aff96dc7bb2f",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 7 - Teams Out.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 0,
+          "end": 7.1,
+          "confidence": 0.95,
+          "description": "The word 'Betano' is visible as a sponsor logo on the front of the blue training jacket worn by the player in the left panel."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur FC",
+          "start": 0,
+          "end": 7.1,
+          "confidence": 0.9,
+          "description": "The Tottenham Hotspur FC cockerel logo is visible in the top right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "19 SOLANKE",
+          "start": 0,
+          "end": 7.1,
+          "confidence": 0.98,
+          "description": "Lower third graphic in the bottom left corner identifying the player as '19 SOLANKE'."
+        },
+        {
+          "kind": "graphic",
+          "entity": "MUNTOT",
+          "start": 0,
+          "end": 7.1,
+          "confidence": 0.95,
+          "description": "Text 'MUNTOT' appears in the top left corner of the frame as an overlay graphic."
+        },
+        {
+          "kind": "graphic",
+          "entity": "TEAMS OUT",
+          "start": 0,
+          "end": 7.1,
+          "confidence": 0.95,
+          "description": "Text 'TEAMS OUT' appears in the bottom right corner of the right panel as an overlay graphic."
+        },
+        {
+          "kind": "person",
+          "entity": "Solanke",
+          "start": 0,
+          "end": 7.1,
+          "confidence": 0.98,
+          "description": "A player is identified by the on-screen graphic text '19 SOLANKE' displayed in the bottom left corner of the left panel."
+        }
+      ]
+    },
+    "130851421": {
+      "twelvelabsVideoId": "6ad911f32cc348c0bd20121c",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Goal Slo Mo Man United 9x16 (A) v1.mp4",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "Fernandes",
+          "start": 0,
+          "end": 4,
+          "confidence": 0.9,
+          "description": "Tottenham player identified by the name 'FERNANDES' and number 22 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "McTominay",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.98,
+          "description": "Manchester United player identified by the name 'McTominay' and number 5 on the back of his red jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "SUMU",
+          "start": 0,
+          "end": 14,
+          "confidence": 0.95,
+          "description": "LED advertising board visible along the sideline showing the brand name 'SUMU' in white text on a black background."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 46,
+          "confidence": 0.98,
+          "description": "Sponsor logo 'AIA' printed on the front of the dark blue Tottenham Hotspur jerseys worn by multiple players."
+        },
+        {
+          "kind": "person",
+          "entity": "Solanke",
+          "start": 5,
+          "end": 46,
+          "confidence": 0.99,
+          "description": "Tottenham player identified by the name 'SOLANKE' and number 19 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Porro",
+          "start": 15,
+          "end": 21,
+          "confidence": 0.85,
+          "description": "Tottenham player identified by the number 17 on his shorts during the celebration."
+        },
+        {
+          "kind": "brand",
+          "entity": "kraken",
+          "start": 15,
+          "end": 46,
+          "confidence": 0.9,
+          "description": "Kraken logo visible on the sleeve of the Tottenham players' jerseys during the celebration sequence."
+        },
+        {
+          "kind": "person",
+          "entity": "March",
+          "start": 26,
+          "end": 36,
+          "confidence": 0.95,
+          "description": "Tottenham player identified by the name 'MARCH' and number 22 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Maddison",
+          "start": 33,
+          "end": 46,
+          "confidence": 0.98,
+          "description": "Tottenham player identified by the name 'MADDISON' and number 10 on the back of his jersey."
+        }
+      ]
+    },
+    "130851422": {
+      "twelvelabsVideoId": "6ad911f365b4aff96dc7bb3e",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Dom United Subs.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 43.1,
+          "confidence": 0.95,
+          "description": "White 'AIA' sponsor logo visible on the front center of the player's jersey throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 43.1,
+          "confidence": 0.95,
+          "description": "White Nike swoosh logo visible on the upper right chest of the player's training jersey throughout the clip."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "SPURS TV",
+          "start": 0,
+          "end": 43.1,
+          "confidence": 0.98,
+          "description": "Purple and white 'SPURS TV' logo with '#COYS' hashtag visible on the microphone flag held by the interviewer."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Subtitles",
+          "start": 0.7,
+          "end": 43.1,
+          "confidence": 1,
+          "description": "White text subtitles with black background overlay appear at the bottom of the screen transcribing the player's speech."
+        }
+      ]
+    },
+    "130851423": {
+      "twelvelabsVideoId": "6ad911f4968fe117efe70655",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Goal Man United 9x16 (A) v1.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.95,
+          "description": "AIA logo visible on the front of the dark blue jersey worn by player number 16."
+        },
+        {
+          "kind": "brand",
+          "entity": "Kraken",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.9,
+          "description": "Kraken logo visible on the sleeve of the dark blue jersey worn by player number 16."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #16",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.95,
+          "description": "Player wearing dark blue jersey with number 16 on shorts, identified by jersey number."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 30.6,
+          "confidence": 0.95,
+          "description": "Nike swoosh logo visible on shorts and socks of players throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 6,
+          "end": 11,
+          "confidence": 0.95,
+          "description": "AIA logo visible on the front of the dark blue jerseys worn by celebrating players."
+        },
+        {
+          "kind": "brand",
+          "entity": "Kraken",
+          "start": 6,
+          "end": 11,
+          "confidence": 0.9,
+          "description": "Kraken logo visible on the sleeve of the dark blue jerseys worn by celebrating players."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Premier League",
+          "start": 12,
+          "end": 21,
+          "confidence": 0.95,
+          "description": "Premier League patch logo visible on the sleeve of the players' jerseys."
+        },
+        {
+          "kind": "person",
+          "entity": "Marmoush",
+          "start": 12,
+          "end": 21,
+          "confidence": 0.98,
+          "description": "Player identified by name 'MARMoush' and number 22 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Maddison",
+          "start": 16,
+          "end": 29,
+          "confidence": 0.98,
+          "description": "Player identified by name 'MADDISON' and number 10 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Solanke",
+          "start": 18,
+          "end": 30.6,
+          "confidence": 0.98,
+          "description": "Player identified by name 'SOLANKE' and number 19 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Van de Ven",
+          "start": 19,
+          "end": 21,
+          "confidence": 0.9,
+          "description": "Player identified by partial name 'VAN DE' and number 37 on the back of his jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Savo",
+          "start": 24,
+          "end": 30.6,
+          "confidence": 0.98,
+          "description": "Player identified by name 'SAVO' and number 17 on the back of his jersey."
+        }
+      ]
+    },
+    "130851424": {
+      "twelvelabsVideoId": "6ad911f49c038876f358b01a",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Archie tackle.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Sky",
+          "start": 0,
+          "end": 13.6,
+          "confidence": 0.95,
+          "description": "The Sky logo appears on the LED advertising boards around the stadium perimeter as part of the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "Sky Bet",
+          "start": 0,
+          "end": 13.6,
+          "confidence": 0.95,
+          "description": "LED advertising boards surrounding the pitch display 'Sky Bet' and 'Saturday Night Live' branding repeatedly along the perimeter."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Sky Sports",
+          "start": 0,
+          "end": 13.6,
+          "confidence": 0.85,
+          "description": "Sky branding is visible on the stadium LED boards, indicating Sky Sports as the broadcaster."
+        },
+        {
+          "kind": "person",
+          "entity": "Archie Gray",
+          "start": 4,
+          "end": 10.2,
+          "confidence": 0.9,
+          "description": "Player identified by name in the commentary track ('Archie Gray just stopped United in their tracks'). Visually corresponds to the player in the dark kit who performs the tackle."
+        }
+      ]
+    },
+    "130851425": {
+      "twelvelabsVideoId": "6ad911f55411fa6e602f45f7",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "kudus chance_1.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "DHL",
+          "start": 0,
+          "end": 13,
+          "confidence": 0.95,
+          "description": "Yellow LED advertising boards displaying the DHL logo are visible along the perimeter of the pitch in the live picture."
+        },
+        {
+          "kind": "person",
+          "entity": "Savio",
+          "start": 6.5,
+          "end": 12,
+          "confidence": 0.9,
+          "description": "Player identified by commentary as 'Savio' during the attacking sequence."
+        },
+        {
+          "kind": "person",
+          "entity": "Xavier",
+          "start": 6.5,
+          "end": 12,
+          "confidence": 0.9,
+          "description": "Player identified by commentary as 'Xavier' during the attacking sequence."
+        },
+        {
+          "kind": "person",
+          "entity": "Kudus",
+          "start": 13.5,
+          "end": 15,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'KUDUS' printed on the back of his dark jersey in a close-up shot."
+        },
+        {
+          "kind": "brand",
+          "entity": "DHL",
+          "start": 19,
+          "end": 26,
+          "confidence": 0.95,
+          "description": "Yellow LED advertising boards with the DHL logo visible along the sideline during the replay sequence."
+        },
+        {
+          "kind": "person",
+          "entity": "Tonali",
+          "start": 19,
+          "end": 26,
+          "confidence": 0.9,
+          "description": "Player identified by commentary as 'Tonali' during the replay sequence."
+        }
+      ]
+    },
+    "130851426": {
+      "twelvelabsVideoId": "6ad911f665b4aff96dc7bb4b",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Gallagher.mp4",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "Player 10",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.9,
+          "description": "Player wearing red jersey with number 10 visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 13",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.9,
+          "description": "Player wearing dark jersey with number 13 visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 16",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.9,
+          "description": "Player wearing red jersey with number 16 visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 19",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.9,
+          "description": "Player wearing red jersey with number 19 visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "sumup",
+          "start": 0,
+          "end": 3,
+          "confidence": 0.95,
+          "description": "LED advertising boards along the sideline display the 'sumup' logo repeatedly."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 20",
+          "start": 0,
+          "end": 3,
+          "confidence": 0.9,
+          "description": "Player wearing dark jersey with number 20 visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 57",
+          "start": 0,
+          "end": 3,
+          "confidence": 0.9,
+          "description": "Player wearing red jersey with number 57 visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 18",
+          "start": 2,
+          "end": 4,
+          "confidence": 0.9,
+          "description": "Player wearing red jersey with number 18 visible on the back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 8",
+          "start": 2,
+          "end": 12,
+          "confidence": 0.9,
+          "description": "Player wearing dark jersey with number 8 visible on shorts and back."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 6",
+          "start": 6,
+          "end": 8,
+          "confidence": 0.9,
+          "description": "Player wearing red jersey with number 6 visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "adidas",
+          "start": 6,
+          "end": 11,
+          "confidence": 0.9,
+          "description": "LED advertising boards behind the goal area show the 'adidas' logo and trefoil symbol."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 17",
+          "start": 6,
+          "end": 11,
+          "confidence": 0.9,
+          "description": "Player wearing dark jersey with number 17 visible on the back."
+        },
+        {
+          "kind": "brand",
+          "entity": "No room for racism",
+          "start": 13,
+          "end": 14,
+          "confidence": 0.9,
+          "description": "Sleeve patch on the away player's jersey showing the 'No room for racism' campaign logo."
+        },
+        {
+          "kind": "person",
+          "entity": "Gallagher",
+          "start": 16,
+          "end": 18,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'GALLAGHER' printed on the back of his dark jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 21,
+          "end": 25,
+          "confidence": 0.95,
+          "description": "The dark away jersey displays the 'AIA' sponsor logo across the chest."
+        },
+        {
+          "kind": "brand",
+          "entity": "Snapdragon",
+          "start": 22,
+          "end": 23,
+          "confidence": 0.95,
+          "description": "The red home jersey displays the 'Snapdragon' sponsor logo across the chest."
+        },
+        {
+          "kind": "person",
+          "entity": "Martinez",
+          "start": 25,
+          "end": 26.1,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'MARTINEZ' and number 6 on the back of his red jersey."
+        }
+      ]
+    },
+    "130851427": {
+      "twelvelabsVideoId": "6ad911f60ca748ea3c0aa65d",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Limbs Man United 9x16 (A) v2.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "Stadium Scoreboard",
+          "start": 14,
+          "end": 17.2,
+          "confidence": 0.95,
+          "description": "An electronic stadium scoreboard is visible showing team names 'MANCHESTER UNITED' and 'TOTTENHAM HOTSPUR', a score of 1-1, and a match timer reading 92:29 through 92:32. This is a physical arena display, not a broadcast"
+        }
+      ]
+    },
+    "130851428": {
+      "twelvelabsVideoId": "6ad911f765b4aff96dc7bb5e",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 8 - Can't Smile without you Pre-KO.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "COYS",
+          "start": 0,
+          "end": 13.8,
+          "confidence": 0.95,
+          "description": "The text 'COYS' appears in the bottom left corner of the frame throughout the clip. This is an added edit overlay, not part of the live broadcast picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur Crest",
+          "start": 0,
+          "end": 13.8,
+          "confidence": 0.95,
+          "description": "A small Tottenham Hotspur club crest logo is visible in the bottom right corner of the frame. This appears to be an added edit watermark."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Split Screen Layout",
+          "start": 0,
+          "end": 13.8,
+          "confidence": 1,
+          "description": "The video is presented as a split-screen graphic, showing players huddling on the left and fans in the stands on the right. This is a produced feature/edit overlay."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #13",
+          "start": 0,
+          "end": 13.8,
+          "confidence": 0.9,
+          "description": "A player wearing a dark blue jersey with the number 13 visible on the back is seen in the huddle on the left side of the split screen."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #3",
+          "start": 0,
+          "end": 13.8,
+          "confidence": 0.9,
+          "description": "A player wearing a dark blue jersey with the number 3 visible on the back is seen in the huddle on the left side of the split screen."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #8",
+          "start": 0,
+          "end": 13.8,
+          "confidence": 0.9,
+          "description": "A player wearing a dark blue jersey with the number 8 visible on the back is seen in the huddle on the left side of the split screen."
+        }
+      ]
+    },
+    "130851429": {
+      "twelvelabsVideoId": "6ad911f79c038876f358b02f",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 9 - KO.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "Sponsor logo 'AIA' visible on the front of the player's jersey."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "Tottenham Hotspur club crest logo visible in the top right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "KICK OFF",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.98,
+          "description": "Text overlay 'KICK OFF' appears at the bottom right of the screen."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Timer",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.98,
+          "description": "Timer graphic showing '0'' in the top left corner of the screen."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #8",
+          "start": 0,
+          "end": 5,
+          "confidence": 0.95,
+          "description": "Player identified by jersey number 8 visible on shorts and back of shirt."
+        }
+      ]
+    },
+    "130851430": {
+      "twelvelabsVideoId": "6ad911f8960d8ea7bdd04d32",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 10 - Gray Tackle.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 6.5,
+          "confidence": 0.95,
+          "description": "Sponsor logo 'AIA' visible on the front of the Tottenham Hotspur player's jersey (number 14) in the left panel."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 6.5,
+          "confidence": 0.95,
+          "description": "Nike swoosh logo visible on the shorts of the Tottenham player (number 14) in the left panel."
+        },
+        {
+          "kind": "brand",
+          "entity": "TeamViewer",
+          "start": 0,
+          "end": 6.5,
+          "confidence": 0.9,
+          "description": "TeamViewer sponsor logo visible on the chest of the Manchester United players' red jerseys in the right panel."
+        },
+        {
+          "kind": "graphic",
+          "entity": "14 GRAY",
+          "start": 0,
+          "end": 6.5,
+          "confidence": 0.95,
+          "description": "Text graphic '14 GRAY' appears in the bottom left corner of the frame, identifying the player."
+        },
+        {
+          "kind": "graphic",
+          "entity": "MUNTOT",
+          "start": 0,
+          "end": 6.5,
+          "confidence": 0.95,
+          "description": "Text graphic 'MUNTOT' appears in the top left corner of the frame, likely an edited overlay."
+        },
+        {
+          "kind": "person",
+          "entity": "14 GRAY",
+          "start": 0,
+          "end": 6.5,
+          "confidence": 0.98,
+          "description": "Player identified by on-screen graphic text '14 GRAY' at bottom left and jersey number 14 on the Tottenham player in the left panel."
+        }
+      ]
+    },
+    "130851431": {
+      "twelvelabsVideoId": "6ad911f9960d8ea7bdd04d3e",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 11 - Senesi.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 6.4,
+          "confidence": 0.95,
+          "description": "The sponsor logo 'AIA' is visible on the front of the dark blue jersey worn by the player in the left panel throughout the clip."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Spurs TV",
+          "start": 0,
+          "end": 6.4,
+          "confidence": 0.9,
+          "description": "A small Tottenham Hotspur crest logo (Spurs TV branding) is visible in the top right corner of the frame."
+        },
+        {
+          "kind": "graphic",
+          "entity": "5 SENESI",
+          "start": 0,
+          "end": 6.4,
+          "confidence": 0.95,
+          "description": "Text label '5 SENESI' appears in the bottom right corner of the right panel throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "COYS",
+          "start": 0,
+          "end": 6.4,
+          "confidence": 0.95,
+          "description": "Text watermark 'COYS' appears in the bottom left corner of the left panel throughout the clip."
+        },
+        {
+          "kind": "person",
+          "entity": "SENESI",
+          "start": 0,
+          "end": 6.4,
+          "confidence": 0.98,
+          "description": "Player identified by the name 'SENESI' and number '5' printed on the back of his jersey in the right panel."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 16",
+          "start": 5.5,
+          "end": 6.4,
+          "confidence": 0.85,
+          "description": "A player wearing jersey number 16 is partially visible in the background of the right panel."
+        }
+      ]
+    },
+    "130851432": {
+      "twelvelabsVideoId": "6ad911f85411fa6e602f4610",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 12 - Bergvall.mov",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "Player #3",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.9,
+          "description": "Tottenham player wearing jersey number 3 visible in the right panel during the initial frames."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 7.8,
+          "confidence": 0.98,
+          "description": "The 'AIA' sponsor logo is visible on the front of the Tottenham Hotspur jerseys worn by players in the live action footage."
+        },
+        {
+          "kind": "brand",
+          "entity": "MUNTOT",
+          "start": 0,
+          "end": 7.8,
+          "confidence": 0.95,
+          "description": "Text 'MUNTOT' appears in the top left corner of the screen throughout the clip. This appears to be an added overlay or watermark rather than part of the live broadcast picture."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Spurs TV Logo",
+          "start": 0,
+          "end": 7.8,
+          "confidence": 0.85,
+          "description": "A small Tottenham Hotspur cockerel logo is visible in the bottom right corner of the screen."
+        },
+        {
+          "kind": "graphic",
+          "entity": "15 BERGVALL",
+          "start": 0,
+          "end": 7.8,
+          "confidence": 0.99,
+          "description": "Text graphic '15 BERGVALL' displayed in the bottom left corner of the screen throughout the clip."
+        },
+        {
+          "kind": "person",
+          "entity": "BERGVALL",
+          "start": 0,
+          "end": 7.8,
+          "confidence": 0.99,
+          "description": "Player identified by the name 'BERGVALL' and number '15' printed on the back of his Tottenham jersey. Also identified by the text overlay '15 BERGVALL' at the bottom left."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #5",
+          "start": 1,
+          "end": 4.5,
+          "confidence": 0.9,
+          "description": "Tottenham player wearing jersey number 5 visible in the right panel."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #13",
+          "start": 3,
+          "end": 5,
+          "confidence": 0.9,
+          "description": "Tottenham player wearing jersey number 13 visible in the right panel."
+        }
+      ]
+    },
+    "130851433": {
+      "twelvelabsVideoId": "6ad911f95411fa6e602f4621",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 13 - Kinsky.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 5.3,
+          "confidence": 0.95,
+          "description": "The 'AIA' logo is visible on the chest of the Tottenham Hotspur players' dark kits throughout the sequence."
+        },
+        {
+          "kind": "brand",
+          "entity": "sky",
+          "start": 0,
+          "end": 5.3,
+          "confidence": 0.95,
+          "description": "The word 'sky' appears on the LED advertising boards surrounding the pitch, visible in the background throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "TeamViewer",
+          "start": 0,
+          "end": 5.3,
+          "confidence": 0.95,
+          "description": "The 'TeamViewer' logo is visible on the chest of the Manchester United players' red kits throughout the sequence."
+        },
+        {
+          "kind": "graphic",
+          "entity": "31KINKSY watermark",
+          "start": 0,
+          "end": 5.3,
+          "confidence": 1,
+          "description": "A text watermark '31KINKSY' appears in the bottom right corner of the frame throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "GK watermark",
+          "start": 0,
+          "end": 5.3,
+          "confidence": 1,
+          "description": "A small text watermark 'GK' appears in the bottom left corner of the frame throughout the clip."
+        },
+        {
+          "kind": "person",
+          "entity": "Bruno Fernandes",
+          "start": 1,
+          "end": 2.5,
+          "confidence": 0.98,
+          "description": "Identified by the name 'FERNANDES' and number '8' on the back of his red Manchester United jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Sven Botman",
+          "start": 2,
+          "end": 5.3,
+          "confidence": 0.9,
+          "description": "Identified by the number '51' on the back of his green goalkeeper kit."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 2.5,
+          "end": 4.5,
+          "confidence": 0.9,
+          "description": "Identified by the name 'JOHNSON' and number '13' on the back of his dark Tottenham kit."
+        },
+        {
+          "kind": "person",
+          "entity": "Amad Diallo",
+          "start": 4,
+          "end": 5.3,
+          "confidence": 0.98,
+          "description": "Identified by the name 'AMAD' and number '16' on the back of his red Manchester United jersey."
+        }
+      ]
+    },
+    "130851434": {
+      "twelvelabsVideoId": "6ad911fa65b4aff96dc7bb70",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 14 - Savio.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.98,
+          "description": "AIA sponsor logo visible on the front of the dark blue jersey worn by player 17 in both panels."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.95,
+          "description": "Nike swoosh logo visible on the shorts of the player in the dark blue kit (left panel) throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "TeamViewer",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.95,
+          "description": "TeamViewer sponsor logo visible on the front of the red Manchester United jerseys in the right panel."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.9,
+          "description": "Small Tottenham Hotspur cockerel logo visible at the top center of the frame throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "17 SAVIO",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.99,
+          "description": "Text label '17 SAVIO' appears in the bottom right corner of the right panel throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "MUNTOT",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.99,
+          "description": "Text label 'MUNTOT' appears in the bottom left corner of the left panel throughout the clip."
+        },
+        {
+          "kind": "person",
+          "entity": "Savio",
+          "start": 0,
+          "end": 11.3,
+          "confidence": 0.98,
+          "description": "Player identified by name 'SAVIO' and number '17' on the back of his jersey in the left panel (visible clearly at 0:10-0:11) and by number 17 on shorts in both panels."
+        }
+      ]
+    },
+    "130851435": {
+      "twelvelabsVideoId": "6ad911fa4a68f3b40321d6aa",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 15 - CG.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 7.6,
+          "confidence": 0.95,
+          "description": "The sponsor logo 'AIA' is visible on the front of the Tottenham Hotspur player's jersey throughout the clip. This is part of the live picture on the player's kit."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 7.6,
+          "confidence": 0.95,
+          "description": "The Tottenham Hotspur club crest logo appears in the top left corner of the frame as a watermark/bug."
+        },
+        {
+          "kind": "graphic",
+          "entity": "8 GALLAGHER",
+          "start": 0,
+          "end": 7.6,
+          "confidence": 0.99,
+          "description": "A static text overlay in the bottom right corner reading '8 GALLAGHER', added by the edit."
+        },
+        {
+          "kind": "person",
+          "entity": "Gallagher",
+          "start": 0,
+          "end": 7.6,
+          "confidence": 0.98,
+          "description": "Player identified by the on-screen graphic text '8 GALLAGHER' in the bottom right corner of the frame."
+        },
+        {
+          "kind": "person",
+          "entity": "Amad Diallo",
+          "start": 3,
+          "end": 7.6,
+          "confidence": 0.85,
+          "description": "Manchester United player wearing jersey number 21, visible challenging for the ball on the right side of the frame."
+        }
+      ]
+    },
+    "130851436": {
+      "twelvelabsVideoId": "6ad911fb65b4aff96dc7bb78",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 16 -Tonali.mov",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "SANCHO",
+          "start": 0,
+          "end": 0.5,
+          "confidence": 0.9,
+          "description": "In the right panel, a Manchester United player wearing jersey number 25 has 'SANCHO' printed on the back of his shirt."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 4.9,
+          "confidence": 0.95,
+          "description": "The 'AIA' sponsor logo is visible on the front of the Tottenham Hotspur player's jersey in both the left portrait shot and the right action footage."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 4.9,
+          "confidence": 0.95,
+          "description": "The Nike swoosh logo is visible on the chest of the Tottenham player's jersey in the left panel and on the kits in the right panel."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 4.9,
+          "confidence": 0.95,
+          "description": "The Tottenham Hotspur cockerel crest logo appears in the top left corner of the frame throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Player ID Overlay",
+          "start": 0,
+          "end": 4.9,
+          "confidence": 0.98,
+          "description": "A static text graphic in the bottom right corner of the frame displays '16 TCHALY'."
+        },
+        {
+          "kind": "person",
+          "entity": "TCHALY",
+          "start": 0,
+          "end": 4.9,
+          "confidence": 0.98,
+          "description": "A text overlay in the bottom right corner reads '16 TCHALY', identifying the player shown in the left panel and the player wearing number 16 in the right panel."
+        }
+      ]
+    },
+    "130851437": {
+      "twelvelabsVideoId": "6ad911fb500e82756f2eb574",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 17 - Stadium GV.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "STRETFORD END",
+          "start": 0,
+          "end": 7.5,
+          "confidence": 0.95,
+          "description": "Large red text signage reading 'STRETFORD END' visible on the upper tier of the stadium stand. This is part of the live picture arena signage."
+        },
+        {
+          "kind": "graphic",
+          "entity": "OLD TRAFFORD",
+          "start": 0,
+          "end": 7.5,
+          "confidence": 0.98,
+          "description": "Text overlay in the bottom left corner reading 'OLD TRAFFORD'. This appears to be an added edit graphic rather than part of the live broadcast feed."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Tottenham Logo",
+          "start": 0,
+          "end": 7.5,
+          "confidence": 0.95,
+          "description": "Small black and white Tottenham Hotspur cockerel logo visible in the bottom right corner of the frame. This is an added edit watermark."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #53",
+          "start": 0,
+          "end": 7.5,
+          "confidence": 0.9,
+          "description": "A player wearing a red jersey with the number 53 visible on the back, walking on the pitch near the sideline. Identified by jersey number."
+        }
+      ]
+    },
+    "130851438": {
+      "twelvelabsVideoId": "6ad911fd2cc348c0bd20125c",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 18 - Away End FT.mov",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 7,
+          "confidence": 0.95,
+          "description": "The Tottenham Hotspur club crest (cockerel logo) and the word 'TOTTENHAM' are visible on a white banner held by fans in the lower portion of the stand. This is part of the live picture, displayed on fan merchandise."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Banner text",
+          "start": 0,
+          "end": 7,
+          "confidence": 0.9,
+          "description": "Text on the fan banner reads 'DA15 ON TOUR'. This is visible in the live picture on the banner itself."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Scorebug overlay",
+          "start": 0,
+          "end": 7,
+          "confidence": 0.98,
+          "description": "A white overlay frame surrounds the video footage. Text in the top left reads 'MUNTOT', top right reads 'AWAY END'. Bottom left reads 'FULL-TIME', bottom center shows the score '1-1', and a small Tottenham crest logo app"
+        }
+      ]
+    },
+    "130851439": {
+      "twelvelabsVideoId": "6ad911fc0ca748ea3c0aa687",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Slide 19 - Players Clapping Fans.mov",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "Player #16",
+          "start": 0,
+          "end": 2.5,
+          "confidence": 0.95,
+          "description": "Tottenham player wearing jersey number 16 is visible clapping on the pitch."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 15.3,
+          "confidence": 0.95,
+          "description": "The 'AIA' sponsor logo is visible on the front of the Tottenham Hotspur player jerseys throughout the clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 15.3,
+          "confidence": 0.9,
+          "description": "The Nike swoosh logo is visible on the shorts and socks of the players on the pitch."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur Logo",
+          "start": 0,
+          "end": 15.3,
+          "confidence": 0.9,
+          "description": "A small Tottenham Hotspur cockerel logo is visible in the top left corner of the frame throughout the clip."
+        },
+        {
+          "kind": "graphic",
+          "entity": "MUNTOT / AWAY END / COYS",
+          "start": 0,
+          "end": 15.3,
+          "confidence": 1,
+          "description": "Text overlays reading 'MUNTOT' (top left), 'AWAY END' (top right), and 'COYS' (bottom left) are present as part of the edited split-screen layout."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #10",
+          "start": 2.5,
+          "end": 4.5,
+          "confidence": 0.95,
+          "description": "Tottenham player wearing jersey number 10 is visible clapping and acknowledging the crowd."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #15",
+          "start": 4.5,
+          "end": 10,
+          "confidence": 0.95,
+          "description": "Tottenham player wearing jersey number 15 is visible clapping and hugging a teammate."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #6",
+          "start": 7.5,
+          "end": 10.5,
+          "confidence": 0.95,
+          "description": "Tottenham player wearing jersey number 6 is visible hugging player #15."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #17",
+          "start": 10.5,
+          "end": 13.5,
+          "confidence": 0.95,
+          "description": "Tottenham player wearing jersey number 17 is visible clapping on the pitch."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #22",
+          "start": 13.5,
+          "end": 15.3,
+          "confidence": 0.95,
+          "description": "Tottenham player wearing jersey number 22 is visible clapping on the pitch."
+        }
+      ]
+    },
+    "130851440": {
+      "twelvelabsVideoId": "6ad911fd968fe117efe70691",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "RDZ United.mp4",
+      "observations": [
+        {
+          "kind": "broadcaster",
+          "entity": "Tottenham Hotspur",
+          "start": 0,
+          "end": 59.1,
+          "confidence": 0.95,
+          "description": "The microphone held by the interviewer features the Tottenham Hotspur Football Club cockerel logo on its foam windscreen."
+        },
+        {
+          "kind": "graphic",
+          "entity": "Subtitles",
+          "start": 0,
+          "end": 59.1,
+          "confidence": 1,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, transcribing the speaker's dialogue."
+        },
+        {
+          "kind": "brand",
+          "entity": "Manchester United",
+          "start": 22,
+          "end": 59.1,
+          "confidence": 0.85,
+          "description": "A portion of the Manchester United club crest is visible on the red wall in the background behind the interviewee."
+        }
+      ]
+    },
+    "130851441": {
+      "twelvelabsVideoId": "6ad911fe0ca748ea3c0aa69a",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Savio cele Man United 9x16 (A) v2.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 0,
+          "end": 13.4,
+          "confidence": 0.98,
+          "description": "The letters 'AIA' appear as the main chest sponsor logo on the front of the player's dark blue jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "EA SPORTS",
+          "start": 0,
+          "end": 13.4,
+          "confidence": 0.92,
+          "description": "The EA SPORTS logo appears on the left sleeve of the player's jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 0,
+          "end": 13.4,
+          "confidence": 0.95,
+          "description": "The Nike swoosh logo is visible on the right chest of the player's jersey and on the socks."
+        },
+        {
+          "kind": "person",
+          "entity": "Player #17",
+          "start": 0,
+          "end": 13.4,
+          "confidence": 0.99,
+          "description": "A male football player wearing jersey number 17 is the central focus of the clip, celebrating on the pitch."
+        }
+      ]
+    },
+    "130851442": {
+      "twelvelabsVideoId": "6ad911ff0ca748ea3c0aa69d",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "savio chance.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Tiger",
+          "start": 0,
+          "end": 4.5,
+          "confidence": 0.95,
+          "description": "LED advertising board along the sideline displays 'UNCAGE YOUR TIGER' with the Tiger beer logo. This is part of the live picture."
+        },
+        {
+          "kind": "person",
+          "entity": "Tanali",
+          "start": 4.5,
+          "end": 6,
+          "confidence": 0.85,
+          "description": "Player identified by commentary as 'Tanali' who springs into the gap after a foul."
+        },
+        {
+          "kind": "person",
+          "entity": "Savio",
+          "start": 4.5,
+          "end": 12,
+          "confidence": 0.9,
+          "description": "Player identified by commentary as 'Savio' who breaks in behind the defense and cuts the ball back."
+        },
+        {
+          "kind": "brand",
+          "entity": "Vredestein Tyres",
+          "start": 8.5,
+          "end": 19.1,
+          "confidence": 0.95,
+          "description": "LED advertising boards along the touchline display 'VREDESTEIN TYRES'. This is part of the live picture."
+        },
+        {
+          "kind": "person",
+          "entity": "Solanki",
+          "start": 12,
+          "end": 15.5,
+          "confidence": 0.9,
+          "description": "Player identified by commentary as 'Solanki' who attempts to reach the cut-back pass."
+        },
+        {
+          "kind": "brand",
+          "entity": "Snapdragon",
+          "start": 13,
+          "end": 15,
+          "confidence": 0.9,
+          "description": "LED advertising board visible at the bottom of the frame showing 'Snapdragon'. Part of the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "sumup",
+          "start": 14.5,
+          "end": 17,
+          "confidence": 0.9,
+          "description": "LED advertising board visible at the bottom of the frame showing 'sumup' logo. Part of the live picture."
+        }
+      ]
+    },
+    "130851443": {
+      "twelvelabsVideoId": "6ad911fe5411fa6e602f4640",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Solanke early chance.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Lammens",
+          "start": 7.5,
+          "end": 12.5,
+          "confidence": 0.95,
+          "description": "Sponsor name 'LAMMENS' visible on the back of the yellow goalkeeper jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Philips",
+          "start": 7.5,
+          "end": 12.5,
+          "confidence": 0.9,
+          "description": "Philips logo visible on the sleeve of the yellow goalkeeper jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Goalkeeper",
+          "start": 7.5,
+          "end": 12.5,
+          "confidence": 0.9,
+          "description": "Goalkeeper in yellow kit identified by jersey number 1 visible at 11.5s."
+        },
+        {
+          "kind": "brand",
+          "entity": "Adidas",
+          "start": 10,
+          "end": 12.5,
+          "confidence": 0.9,
+          "description": "Adidas three-stripe logo visible on the goalkeeper's yellow jersey sleeve and shorts."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 13,
+          "end": 14,
+          "confidence": 0.95,
+          "description": "Nike swoosh logo visible on the chest of the dark blue Tottenham jersey."
+        },
+        {
+          "kind": "brand",
+          "entity": "Tottenham Hotspur",
+          "start": 13,
+          "end": 14,
+          "confidence": 0.95,
+          "description": "Tottenham Hotspur cockerel crest visible on the left chest of the player's jersey."
+        },
+        {
+          "kind": "person",
+          "entity": "Dominic Solanke",
+          "start": 13,
+          "end": 19.6,
+          "confidence": 0.9,
+          "description": "Player identified by commentary as 'Dominic Zalanki' (Solanke) and by jersey number 19 visible at 16.5s."
+        },
+        {
+          "kind": "person",
+          "entity": "Player 37",
+          "start": 14.5,
+          "end": 16,
+          "confidence": 0.9,
+          "description": "Player in red kit identified by jersey number 37 visible on back."
+        }
+      ]
+    },
+    "130851444": {
+      "twelvelabsVideoId": "6ad91200968fe117efe706a5",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "solanke late goal.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Cashback",
+          "start": 0,
+          "end": 2,
+          "confidence": 0.95,
+          "description": "LED advertising board visible on the sideline showing '5% Cashback' text."
+        },
+        {
+          "kind": "brand",
+          "entity": "sumup",
+          "start": 0,
+          "end": 9,
+          "confidence": 0.98,
+          "description": "LED advertising boards along the sideline displaying the 'sumup' logo repeatedly."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 10,
+          "end": 19,
+          "confidence": 0.99,
+          "description": "Prominent sponsor logo 'AIA' visible on the front of the dark blue/purple Tottenham Hotspur jerseys during the celebration."
+        },
+        {
+          "kind": "person",
+          "entity": "Dominic Solanke",
+          "start": 12.72,
+          "end": 14.64,
+          "confidence": 0.95,
+          "description": "Commentator explicitly names 'Dominic Solanke' as getting the credit for the goal."
+        },
+        {
+          "kind": "brand",
+          "entity": "DHL",
+          "start": 15,
+          "end": 17,
+          "confidence": 0.9,
+          "description": "DHL logo visible on the LED advertising boards in the background during the player celebration."
+        },
+        {
+          "kind": "person",
+          "entity": "Tonalí",
+          "start": 19,
+          "end": 23,
+          "confidence": 0.98,
+          "description": "Player identified by name 'TONALI' and number 16 on the back of his jersey during the free kick replay."
+        },
+        {
+          "kind": "person",
+          "entity": "Solanke",
+          "start": 27,
+          "end": 29,
+          "confidence": 0.98,
+          "description": "Player identified by name 'SOLANKE' and number 19 on the back of his dark jersey during the replay."
+        },
+        {
+          "kind": "brand",
+          "entity": "Snapdragon",
+          "start": 28,
+          "end": 29,
+          "confidence": 0.95,
+          "description": "Snapdragon logo visible on the front of the red Manchester United jersey worn by the defender."
+        }
+      ]
+    },
+    "130851446": {
+      "twelvelabsVideoId": "6ad912012cc348c0bd201279",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261008_Men_Pre Match Man Utd A_Left Back Dilemma_9x16.mp4",
+      "observations": [
+        {
+          "kind": "person",
+          "entity": "Destiny Udogie",
+          "start": 0,
+          "end": 33.5,
+          "confidence": 0.9,
+          "description": "The speaker (SPEAKER_02) mentions 'Destiny' who didn't hook up with Italy and has been training. Identified via commentary only."
+        },
+        {
+          "kind": "person",
+          "entity": "Roberto De Zerbi",
+          "start": 0,
+          "end": 33.5,
+          "confidence": 0.95,
+          "description": "The speaker (SPEAKER_02) refers to 'Roberto' and later 'Roberto De Zerbi' in the commentary while discussing team selection dilemmas. No visual image of Roberto De Zerbi is shown."
+        },
+        {
+          "kind": "graphic",
+          "entity": "subtitle_overlay",
+          "start": 0,
+          "end": 118.6,
+          "confidence": 1,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, transcribing the spoken dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "Roberto Firmino",
+          "start": 11,
+          "end": 22,
+          "confidence": 0.95,
+          "description": "The speaker (SPEAKER_02) refers to 'Robbo' as an ex-Liverpool player returning to Old Trafford. Identified via commentary only."
+        },
+        {
+          "kind": "person",
+          "entity": "Rodrigo Bentancur",
+          "start": 88,
+          "end": 94,
+          "confidence": 0.95,
+          "description": "The speaker (SPEAKER_01) explicitly names 'Rodrigo Bentancur' as captaining Uruguay and traveling to Asia. Identified via commentary only."
+        }
+      ]
+    },
+    "130851447": {
+      "twelvelabsVideoId": "6ad912039c038876f358b092",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261008_Men_Pre Match Man Utd A_Mo Kudus_9x16.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "subtitle_overlay",
+          "start": 0,
+          "end": 67.4,
+          "confidence": 1,
+          "description": "White text subtitles with black background appear at the bottom of the screen throughout the clip, transcribing the spoken dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "Mo Kudus",
+          "start": 2,
+          "end": 12,
+          "confidence": 0.95,
+          "description": "Player Mo Kudus is identified by name in the spoken commentary and subtitles as the subject of the discussion regarding his rehab and absence from Ghana."
+        },
+        {
+          "kind": "person",
+          "entity": "Carlos Queiroz",
+          "start": 5,
+          "end": 7,
+          "confidence": 0.95,
+          "description": "Carlos Queiroz is identified by name in the subtitles and commentary as the head coach of the Ghana national team."
+        },
+        {
+          "kind": "person",
+          "entity": "Roberto",
+          "start": 19,
+          "end": 21,
+          "confidence": 0.9,
+          "description": "Roberto is identified by name in the subtitles and commentary as someone Mo Kudus was working with during his rehab."
+        },
+        {
+          "kind": "person",
+          "entity": "De Zerbi",
+          "start": 27,
+          "end": 29,
+          "confidence": 0.95,
+          "description": "De Zerbi is identified by name in the subtitles and commentary as the manager/coach under whom Mo Kudus is now working."
+        }
+      ]
+    },
+    "130851448": {
+      "twelvelabsVideoId": "6ad91202968fe117efe706ae",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261008_Men_Pre Match Man Utd A_Podcast Mathys Tel_9x16.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "Subtitle Overlay",
+          "start": 0,
+          "end": 118.4,
+          "confidence": 1,
+          "description": "Continuous white text subtitles with black background appear at the bottom center of the screen throughout the clip, transcribing the spoken dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "Mathys Tel",
+          "start": 6,
+          "end": 16,
+          "confidence": 0.95,
+          "description": "Player Mathys Tel is identified by name in the on-screen subtitle text during the commentary discussion."
+        },
+        {
+          "kind": "person",
+          "entity": "Omar Marmoush",
+          "start": 64,
+          "end": 67,
+          "confidence": 0.95,
+          "description": "Player Omar Marmoush is identified by name in the on-screen subtitle text during the commentary."
+        }
+      ]
+    },
+    "130851449": {
+      "twelvelabsVideoId": "6ad912059c038876f358b09a",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261008_Men_Pre Match Man Utd A_Utd Line Up_9x16.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "subtitle_overlay",
+          "start": 0,
+          "end": 93.4,
+          "confidence": 1,
+          "description": "White text with black outline subtitles appear at the bottom of the screen throughout the clip, transcribing the spoken dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "Bruno Fernandes",
+          "start": 4,
+          "end": 6,
+          "confidence": 0.95,
+          "description": "Named in the on-screen subtitle text as '(Bruno) Fernandes' during the discussion of midfield options."
+        },
+        {
+          "kind": "person",
+          "entity": "Michael Carrick",
+          "start": 16,
+          "end": 18,
+          "confidence": 0.95,
+          "description": "Named in the on-screen subtitle text as 'Michael Carrick' while discussing midfield knowledge."
+        },
+        {
+          "kind": "person",
+          "entity": "Gus Poyet",
+          "start": 30,
+          "end": 32,
+          "confidence": 0.95,
+          "description": "Named in the on-screen subtitle text as 'Gus (Poyet)' during the discussion of squad options."
+        },
+        {
+          "kind": "person",
+          "entity": "Lucas Moura",
+          "start": 78,
+          "end": 80,
+          "confidence": 0.95,
+          "description": "Named in the on-screen subtitle text as 'Lucas Moura' when referencing a past match result."
+        }
+      ]
+    },
+    "130851450": {
+      "twelvelabsVideoId": "6ad912040ca748ea3c0aa6bd",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261009_Men_De Zerbi Pre Match Man Utd A_9x16 CLIP.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "subtitles",
+          "start": 0,
+          "end": 25.9,
+          "confidence": 1,
+          "description": "Yellow and white subtitle text overlays appear at the bottom of the screen throughout the clip, transcribing the spoken dialogue."
+        },
+        {
+          "kind": "person",
+          "entity": "SPEAKER_01",
+          "start": 0,
+          "end": 25.9,
+          "confidence": 0.95,
+          "description": "A man with short dark hair and a beard is shown in a close-up interview shot. He is identified as SPEAKER_01 via the transcript labels."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 7,
+          "end": 25.9,
+          "confidence": 0.95,
+          "description": "The word 'Betano' is visible as a sponsor logo printed on the front of the man's navy blue jacket/shirt."
+        },
+        {
+          "kind": "brand",
+          "entity": "Nike",
+          "start": 7,
+          "end": 25.9,
+          "confidence": 0.9,
+          "description": "A small Nike swoosh logo is visible on the upper left chest area of the man's navy blue jacket."
+        }
+      ]
+    },
+    "130851451": {
+      "twelvelabsVideoId": "6ad91206968fe117efe706d1",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "261009_Men_De Zerbi Pre Match Man Utd A_16x9.mp4",
+      "observations": [
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 10,
+          "end": 26,
+          "confidence": 0.95,
+          "description": "The word 'Betano' appears as a sponsor logo on the front of the interviewee's navy blue training top."
+        },
+        {
+          "kind": "person",
+          "entity": "Roberto De Zerbi",
+          "start": 27,
+          "end": 29,
+          "confidence": 1,
+          "description": "A nameplate on a wooden door reads 'ROBERTO DE ZERBI', identifying the interview subject."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 29,
+          "end": 33,
+          "confidence": 0.9,
+          "description": "The 'Betano' logo is visible on the chest of the training kit worn by the player in the background."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 45,
+          "end": 72,
+          "confidence": 0.95,
+          "description": "The 'Betano' sponsor logo is clearly visible on the front of Roberto De Zerbi's training top during the interview."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 76,
+          "end": 81,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo appears on the interviewee's navy blue training top."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 81,
+          "end": 85,
+          "confidence": 0.95,
+          "description": "The 'Betano' sponsor logo is visible on the chest of the training shirt worn by the player jogging in the gym."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 85,
+          "end": 88,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo is visible on the interviewee's training top."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 88,
+          "end": 97,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo is visible on the training kits of multiple players during gym and pitch training scenes."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 107,
+          "end": 115,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo is visible on the interviewee's training top."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 115,
+          "end": 120,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo is visible on the training shirts of players on the pitch."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 126,
+          "end": 131,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo is visible on the training shirts of players during the pitch drill."
+        },
+        {
+          "kind": "brand",
+          "entity": "Betano",
+          "start": 133,
+          "end": 243,
+          "confidence": 0.95,
+          "description": "The 'Betano' logo remains visible on the interviewee's training top throughout the remainder of the interview segment."
+        }
+      ]
+    },
+    "130851452": {
+      "twelvelabsVideoId": "6ad912052cc348c0bd201298",
+      "twelvelabsIndexId": "6ad911d5500e82756f2eb468",
+      "filename": "Man Utd (A) Previously Against.mp4",
+      "observations": [
+        {
+          "kind": "graphic",
+          "entity": "PREVIOUSLY AGAINST",
+          "start": 0,
+          "end": 3.5,
+          "confidence": 0.95,
+          "description": "Large title card overlay reading 'PREVIOUSLY AGAINST' with diagonal stripes, presented by PRAVHA."
+        },
+        {
+          "kind": "brand",
+          "entity": "PRAVHA",
+          "start": 0,
+          "end": 18.5,
+          "confidence": 0.95,
+          "description": "PRAVHA logo appears in the top right corner throughout the clip as a broadcast overlay/watermark. Also appears in the center overlay graphic with text 'presented by LIGHTER TASTING PILSNER PRAVHA'."
+        },
+        {
+          "kind": "broadcaster",
+          "entity": "PRAVHA",
+          "start": 0,
+          "end": 18.5,
+          "confidence": 0.95,
+          "description": "PRAVHA logo bug present in the top right corner of the screen throughout the entire clip."
+        },
+        {
+          "kind": "brand",
+          "entity": "BETFRED",
+          "start": 4,
+          "end": 9,
+          "confidence": 0.9,
+          "description": "BETFRED advertising boards visible along the perimeter of the pitch in the live picture."
+        },
+        {
+          "kind": "brand",
+          "entity": "AIA",
+          "start": 10,
+          "end": 18.5,
+          "confidence": 0.95,
+          "description": "AIA sponsor logo visible on the front of the white Tottenham Hotspur jerseys worn by players."
+        },
+        {
+          "kind": "person",
+          "entity": "Dejan Kulusevski",
+          "start": 15,
+          "end": 17,
+          "confidence": 0.85,
+          "description": "Player identified by the name 'KULUSEVSKI' and number '21' partially visible on the back of his white jersey during the celebration."
+        },
+        {
+          "kind": "person",
+          "entity": "Micky van de Ven",
+          "start": 15,
+          "end": 17,
+          "confidence": 0.9,
+          "description": "Player identified by the name 'VAN DE VEN' and number '37' on the back of his white jersey during the celebration. Also mentioned in commentary."
+        },
+        {
+          "kind": "graphic",
+          "entity": "PREVIOUSLY AGAINST",
+          "start": 15,
+          "end": 18.5,
+          "confidence": 0.95,
+          "description": "Title card overlay reading 'PREVIOUSLY AGAINST' reappears over the player celebration footage."
+        },
+        {
+          "kind": "person",
+          "entity": "Brennan Johnson",
+          "start": 17,
+          "end": 18.5,
+          "confidence": 0.95,
+          "description": "Player identified by the name 'JOHNSON' and number '22' on the back of his white jersey during the celebration."
+        }
+      ]
+    }
+  }
+}

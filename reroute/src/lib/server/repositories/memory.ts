@@ -10,8 +10,10 @@ import type {
   CampaignRecord,
   CampaignVersion,
   EvaluationRecord,
+  PolicySelectionRecord,
   Repositories,
   ReviewRecord,
+  StoredPolicyPackage,
   WritebackAttempt,
 } from "./types";
 
@@ -37,6 +39,8 @@ export function memoryRepositories(): Repositories {
   let receiptSeq = 0;
   const reviews: (ReviewRecord & { receiptId: string })[] = [];
   const observations: Evidence[] = [];
+  const packages: StoredPolicyPackage[] = [];
+  const selections = new Map<string, PolicySelectionRecord>();
 
   function campaignOf(id: string): Campaign {
     const c = campaigns.get(id);
@@ -284,6 +288,33 @@ export function memoryRepositories(): Repositories {
       },
       async list(scoreplayMediaId) {
         return z.array(EvidenceSchema).parse(clone(observations.filter((e) => e.scoreplayMediaId === scoreplayMediaId)));
+      },
+    },
+
+    policyPackages: {
+      async insert(pkg) {
+        if (packages.some((p) => p.id === pkg.id && p.version === pkg.version)) {
+          throw new AppError("CONFLICT", `Policy package ${pkg.id} version ${pkg.version} already exists`);
+        }
+        const stored: StoredPolicyPackage = { ...clone(pkg), kind: "DEMO", createdAt: now() };
+        packages.push(stored);
+        return clone(stored);
+      },
+      async list() {
+        return clone(packages).reverse();
+      },
+      async get(id, version) {
+        const found = packages.filter((p) => p.id === id && (version === undefined || p.version === version)).at(-1);
+        return found ? clone(found) : null;
+      },
+      async getSelection(club) {
+        const s = selections.get(club);
+        return s ? clone(s) : null;
+      },
+      async setSelection(selection) {
+        const record: PolicySelectionRecord = { ...selection, selectedAt: now() };
+        selections.set(selection.club, record);
+        return clone(record);
       },
     },
   };

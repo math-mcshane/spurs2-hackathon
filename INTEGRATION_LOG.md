@@ -117,7 +117,7 @@ long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is i
 - **Migrations:** `20261023000000_reroute_policy_packages` (tables `reroute_policy_packages`, `reroute_policy_selection`) applied to **local Docker Supabase only**. It is **not applied to the shared Supabase project** — that needs explicit user approval. Without it, policy uploads and the per-club workspace default answer `NOT_CONFIGURED`; bundled presets and the per-run package switch still work.
 - **Checks (reported by the coordinator, 2026-10-23 ≈ 04:50 UTC):** vitest 33 files — 406 passed / 15 skipped; `tsc` clean; `eslint` clean; `next build` passes. Security review: no critical/high findings; remaining low: anonymous library GET loads all stored packages (F7), in-memory per-instance rate limits on serverless, Pegasus outputs truncated with `finish_reason=length` are not cached.
 - **Verified flows:** see `docs/demo/DEMO_EVIDENCE.md` (API, 04:25–04:36 UTC; Studio production walkthrough ≈ 04:41; desk trim ≈ 04:50; Policy Center ≈ 04:47).
-- **Preview (Ready, verified ≈ 04:58 UTC):** https://spurs2-hackathon-rxkituveo-merlins-projects-2b20d832.vercel.app —
+- **Preview (Ready; latest build 54acc68 verified ≈ 05:30 UTC — S1 run with 3 moments + 3 photos):** https://spurs2-hackathon-2q50cxsxd-merlins-projects-2b20d832.vercel.app —
   public (no Deployment Protection), same Preview env; uses the shared Supabase **without** the policy-packages migration,
   so `/api/policies` reports `uploadsAvailable: false` (presets + per-run switching work). S1 verified there via API
   (LIVE, BLOCKED → ★ REPLACE → ALLOWED/DEMO). Production untouched.

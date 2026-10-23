@@ -2,7 +2,7 @@
 
 State as of 2026-10-23 ≈ 05:00 UTC, branch `hackathon-integration` at `e2d0492` (+ docs). Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) — §1/§1a are my own API runs (04:25–04:36), §1b lists later runs with who ran them (*(mine)* vs *(reported)* by other agents). Not a prediction of scores.
 
-Environments: local production build (`next start`), Vercel Preview https://spurs2-hackathon-rxkituveo-merlins-projects-2b20d832.vercel.app (public, no Deployment Protection; shared Supabase **without** the policy-packages migration), local dev `:3300` (restarted after serving stale wording at ≈ 04:52).
+Environments: local production build (`next start`), Vercel Preview https://spurs2-hackathon-2q50cxsxd-merlins-projects-2b20d832.vercel.app (commit 54acc68; public, no Deployment Protection; shared Supabase **without** the policy-packages migration), local dev `:3300` (restarted after serving stale wording at ≈ 04:52).
 
 ## Status table
 

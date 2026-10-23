@@ -9,7 +9,7 @@
 | Environment | State | Notes |
 |---|---|---|
 | Local production build | `next build` passes; S1 walked through in Chromium ≈ 04:41 UTC (reported): moments 3.96 s, check 0.5 s, find 1.28 s, approve, writeback dry run, no page errors | Local Supabase with the policy-packages migration: uploads + workspace default work |
-| Vercel Preview | https://spurs2-hackathon-rxkituveo-merlins-projects-2b20d832.vercel.app — Ready, S1 verified via API ≈ 04:58 UTC (reported): run 3.84 s LIVE, find 1.67 s, ★ REPLACE → ALLOWED/DEMO | **Public — no Deployment Protection** (user decision): anyone with the link can use it; previews stay off, writeback dry-run. Uses the shared Supabase **without** the policy-packages migration: `/api/policies` shows the 3 presets with `uploadsAvailable: false` — no JSON upload or workspace default there; per-run preset switching (Sponsor beat) works. |
+| Vercel Preview | https://spurs2-hackathon-2q50cxsxd-merlins-projects-2b20d832.vercel.app (commit 54acc68) — Ready, S1 run verified via API ≈ 05:30 UTC (3 moments + 3 photos; 4.8 s cold, 1.6 s warm). Earlier preview (rxkituveo, e2d0492) verified S1 recovery end to end ≈ 04:58 UTC: run 3.84 s LIVE, find 1.67 s, ★ REPLACE → ALLOWED/DEMO | **Public — no Deployment Protection** (user decision): anyone with the link can use it; previews stay off, writeback dry-run. Uses the shared Supabase **without** the policy-packages migration: `/api/policies` shows the 3 presets with `uploadsAvailable: false` — no JSON upload or workspace default there; per-run preset switching (Sponsor beat) works. |
 | Local dev `:3300` | restarted by the coordinator; v2 wording confirmed 04:54 UTC | development only |
 
 ## Backup order

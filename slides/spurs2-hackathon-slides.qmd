@@ -88,3 +88,112 @@ Novelty · 15 pts.
 Le moteur ne se contente pas de bloquer un contenu : il trouve une correction, vérifie indépendamment le nouveau plan et laisse la décision finale à un humain.
 Le 0/3 → 3/3 vaut uniquement sous la politique illustrative du scénario Solanke.
 :::
+
+
+### {.unnumbered .statement .center}
+
+[[04]{.n} / Under the hood]{.kicker}
+
+[Two partners. One pipeline.]{.headline}
+
+::: pipeline
+::: {.stage .sp}
+[1]{.i}
+
+![](images/logos/scoreplay.svg){.mark fig-alt="ScorePlay"}
+
+[Search]{.what}
+
+Tags and squads narrow the library to the clips that fit the goal.
+:::
+
+::: {.stage .tl}
+[2]{.i}
+
+![](images/logos/twelvelabs.svg){.mark fig-alt="TwelveLabs"}
+
+[Find the moment]{.what}
+
+Marengo search returns the exact seconds, linked back to the ScorePlay asset.
+:::
+
+::: {.stage .tl}
+[3]{.i}
+
+![](images/logos/twelvelabs.svg){.mark fig-alt="TwelveLabs"}
+
+[Observe]{.what}
+
+Pegasus lists what is on screen and when: brands, crests, players. Evidence, never a licence.
+:::
+
+::: {.stage .engine}
+[4]{.i}
+
+[PULSE rules]{.mark-text}
+
+[Decide]{.what}
+
+ScorePlay facts plus TwelveLabs evidence, checked per channel × market. No LLM in the verdict.
+:::
+
+::: {.stage .tl}
+[5]{.i}
+
+![](images/logos/twelvelabs.svg){.mark fig-alt="TwelveLabs"}
+
+[Find a way]{.what}
+
+A cut, or a replacement moment from Marengo, re-checked by the same rules.
+:::
+
+::: {.stage .sp}
+[6]{.i}
+
+![](images/logos/scoreplay.svg){.mark fig-alt="ScorePlay"}
+
+[Write back]{.what}
+
+After human approval, the decision returns as timecoded video logs (dry run today).
+:::
+:::
+
+::: notes
+Order of use in the Solanke demo: ScorePlay narrows to the 15 videos tagged with Solanke; Marengo finds 0:09–0:20; Pegasus sees the DHL board at 15–17 s; the rules engine blocks 0 of 3 uses; the cut 0:14.5–0:17.5 is re-checked 3 of 3; a named reviewer approves and the log is prepared for ScorePlay as a dry run.
+TwelveLabs videos are linked to ScorePlay assets by filename + duration (58/58 Tottenham videos).
+:::
+
+
+### {.unnumbered .statement .center}
+
+[[05]{.n} / Vision]{.kicker}
+
+[Clubs already own the content.]{.headline .dim}
+
+[PULSE makes sure they can use it.]{.headline}
+
+::: horizon
+::: {.h .now}
+[Today]{.when}
+
+Goal → moments → rights → a way forward → human sign-off, on live ScorePlay and TwelveLabs data.
+:::
+
+::: {.h .next}
+[Pilot · 90 days]{.when}
+
+One club, one partner campaign. The club's own rules replace the demo rules; ScorePlay write-back switched on.
+:::
+
+::: {.h .then}
+[Scale]{.when}
+
+Every club on ScorePlay. Music, player-status, betting-partner and AI-image checks.
+:::
+:::
+
+[One club. One partner. One pilot.]{.ask}
+
+::: notes
+Closing: clubs already own the content; PULSE makes sure they can actually use it — and when they can't, it finds the way that works and shows exactly why.
+:::

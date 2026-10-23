@@ -1,6 +1,6 @@
 # Demo script — 3 minutes, Studio (`/`)
 
-Flows and outputs re-verified via the API at 2026-10-23 04:25–04:54 UTC; S1 also walked through in the Studio on a production build (≈ 04:41) and the desk trim in the UI (≈ 04:50), both reported by other agents ([`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) §1b). Button labels are from the code at ≈ 04:30 UTC — **do one full timed rehearsal on a fresh server (production build `next start` or the preview) and fix any label below that changed.**
+Flows and outputs re-verified via the API at 2026-10-23 04:25–04:54 UTC; the S1 beat below was rehearsed end to end in Chromium on a fresh production build at ≈ 05:25 UTC (moments 4.4 s cold, Find a way 1.2 s, apply 0.5 s, review + approve + writeback preview < 1 s each, 0 page errors; labels as in the table). The desk trim was verified in the UI at ≈ 04:50 UTC ([`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) §1b). Pre-run S1 once before the jury: the first run of the day can skip the photo row (1.2 s budget on a cold photo cache).
 
 ## Before the jury (5 min)
 
@@ -22,7 +22,7 @@ Flows and outputs re-verified via the API at 2026-10-23 04:25–04:54 UTC; S1 al
 | 0:15 | Chip **Sell merchandise** | Goal field: "Promote Tottenham merchandise to UK supporters" · Tottenham | "A real goal from a club's commercial team." |
 | 0:20 | **Find opportunities** | ~2 s, three real moments from the club's ScorePlay library, each with TwelveLabs timestamps: Slide 18 · **Fans clap Man United 0:07–0:15** · Slide 6 | "Real footage, real timestamps — linked one-to-one to ScorePlay assets." |
 | 0:35 | On **Fans clap** → **Use this moment** | Campaign: Commercial · United Kingdom · Instagram, Facebook, X | "It's the best emotional moment. Can we use it?" |
-| 0:40 | **Check rights** | "Can't be used as planned · 0 of 3 uses allowed" | "No — and here's why." |
+| 0:40 | **Check rights** | "Can’t be used as planned · 0 of 3 uses allowed" | "No — and here's why." |
 | 0:45 | **Find a way to use it** | Editor headline "In the footage: Player #18 (0:06.9–0:07.0); the Manchester United logo (0:09.0–0:14.5)", range track with two marks; "Player #18 … Can't be matched to the club's registered squad in ScorePlay, so image rights can't be confirmed (AI identification — a reviewer must confirm)"; Manchester United logo — partner exclusivity (demo rule) | "PULSE knows *where* in the clip the problem is, and which rule it breaks — and it says when the identification is AI and needs a person." |
 | 1:00 | Point at **What PULSE tried first** | "Remove 2 flagged parts … **Rejected:** it would leave 1.0 s of 7.8 s — below the 3.1 s minimum for this post." | "First it tried the obvious fix — cut the bad seconds. One second of footage isn't a post, so it rejected its own idea." |
 | 1:10 | Point at **Suggested correction · Recommended** | "Use Slide 6 - Away End Singing Pre-KO 0:01.1–0:08.9" — independently re-checked, allowed for 3 of 3 uses (demo) | "So it found another real moment for the same goal — and re-checked it before showing it." |

@@ -33,7 +33,7 @@ Environments: local production build (`next start`), Vercel Preview https://spur
 | ScorePlay photos in the Studio | **Fully working** (metadata only) | Discover step shows ≤ 3 real ScorePlay photos per goal, matched on captions / person tags / event / orientation, each rights-checked by the engine (S1 at ≈ 05:20 UTC: CK1_9648.JPG, CK3_4457.JPG, PC1_3663.JPG — NEEDS_REVIEW 0/3: "the photo was not analysed"). Not visually analysed; no image URL in any response; included in the CACHED recording (154 files, re-recorded ≈ 05:22 UTC). Inventory: `PHOTO_INVENTORY.md` |
 | Build / tests / types / lint | **Fully working** | `next build` passes; vitest 413 passed / 15 skipped (34 files); tsc + eslint clean (≈ 05:20 UTC) |
 | Security review | **Fully working**, low items open | no critical/high; open low: anonymous library GET loads all stored packages (F7), in-memory per-instance rate limits on serverless, truncated Pegasus outputs not cached |
-| Full timed rehearsal of DEMO_SCRIPT | **Untested** | content ready; do it on a fresh server |
+| Full timed rehearsal of DEMO_SCRIPT (S1) | **Fully working** (automated browser run, production build, ≈ 05:25 UTC) | chip → moments 4.4 s (cold) → Use this moment → Check rights "Can’t be used as planned · 0 of 3" → Find a way 1.2 s (headline, "First, PULSE tried … Rejected", Slide 6 recommended 3/3) → Use revised plan 0.5 s ("Before: Blocked") → Send for human review → Approve → ScorePlay record "Live write refused"; 0 page errors. Photos row appears once the photo cache is warm (the first run of the day can skip it: 1.2 s budget) — pre-run S1 once. Second beat and close not rehearsed in the browser in this pass. |
 
 ## Per criterion
 

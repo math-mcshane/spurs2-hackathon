@@ -1,5 +1,6 @@
 import type { EditPlan, PublishIntent } from "@/lib/contracts";
 import { edlToEditPlan, type Edl } from "@/lib/rights/recovery/edl";
+import { timecode } from "@/lib/rights/recovery/plan";
 import { composeCampaign } from "./campaign-builder";
 import { CLUBS } from "./clubs";
 import { clock } from "./moment-ranking";
@@ -77,7 +78,10 @@ export function buildGoalCampaign(input: {
   const primary = rec.matches[0];
   const start = edl ? edl.retained[0].start : (rec.candidate.startSeconds ?? 0);
   const seconds = Math.round(edl ? edl.durationSec : (rec.candidate.endSeconds ?? 0) - (rec.candidate.startSeconds ?? 0));
-  const cut = edl ? `an edited ${seconds}-second cut (${edl.retained.map((r) => `${clock(r.start)}–${clock(r.end)}`).join(" + ")})` : `the ${seconds}-second moment at ${clock(start)}`;
+  // Edited cuts quote tenths: whole-second rounding would put "0:15" inside a cut that starts at 0:14.5.
+  const cut = edl
+    ? `an edited ${edl.durationSec.toFixed(1)}-second cut (${edl.retained.map((r) => `${timecode(r.start)}–${timecode(r.end)}`).join(" + ")})`
+    : `the ${seconds}-second moment at ${clock(start)}`;
   const organic = plan.usage === "ORGANIC" || plan.usage === "EDITORIAL";
   const draft = composeCampaign({
     id: input.campaignId,

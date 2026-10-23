@@ -11,14 +11,14 @@ import { utc } from "@/components/reroute/shared";
 import type { GoalView } from "../types";
 import { CHANNEL_LABEL, duration } from "./parts";
 
-const OUTCOME_CLS: Record<Reason["outcome"], string> = { DENY: "text-red-300", MISSING: "text-amber-300", PERMIT: "text-emerald-300" };
+const OUTCOME_CLS: Record<Reason["outcome"], string> = { DENY: "text-status-blocked", MISSING: "text-status-review", PERMIT: "text-status-clear" };
 
 function H({ children }: { children: React.ReactNode }) {
-  return <h4 className="mb-1 text-[10px] font-semibold tracking-[0.16em] text-zinc-400 uppercase">{children}</h4>;
+  return <h4 className="mb-2 text-eyebrow font-medium text-ink-muted uppercase">{children}</h4>;
 }
 
 /** `/desk` deep link for the current cut and first checked use. */
-function deskHref(goal: GoalView): string {
+export function deskHref(goal: GoalView): string {
   const c = goal.campaign;
   if (!c) return "/desk";
   const i = c.intents[0];
@@ -50,11 +50,11 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
   const r = goal.run;
   const c = goal.campaign;
   return (
-    <details className="group min-w-0 rounded-xl border border-white/8 bg-zinc-950/40 text-[11px] break-words text-zinc-400">
-      <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-xs text-zinc-400 hover:text-zinc-200">
-        <WrenchIcon className="size-3.5" aria-hidden /> Diagnostics — how this was decided
+    <details className="group min-w-0 rounded-xl text-meta break-words text-ink-muted ring-1 ring-line ring-inset">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-6 py-4 text-small text-ink-muted transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
+        <WrenchIcon className="size-3.5" aria-hidden /> Technical detail — data provenance, media links, scoring, raw ids
       </summary>
-      <div className="space-y-5 border-t border-white/5 px-4 py-4">
+      <div className="space-y-6 border-t border-line px-6 py-6">
         <section>
           <H>Data provenance</H>
           <ul className="space-y-1">
@@ -78,6 +78,11 @@ export function Diagnostics({ goal }: { goal: GoalView }) {
             <li>
               Search: {r.search.status}
               {r.search.code && ` [${r.search.code}]`} — {r.search.message} ({duration(goal.timing.toRecommendationsSec)})
+            </li>
+            <li>
+              Timing (server-measured from goal submission): moments in {duration(goal.timing.toRecommendationsSec)}
+              {goal.timing.toProposalSec !== undefined && `, first campaign draft in ${duration(goal.timing.toProposalSec)}`}. No manual baseline is assumed, so
+              no time saving is claimed.
             </li>
           </ul>
         </section>

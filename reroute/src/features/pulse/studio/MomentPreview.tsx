@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FilmIcon, RefreshCwIcon } from "lucide-react";
+import { LockKeyholeIcon, RefreshCwIcon } from "lucide-react";
 import { reviewApi } from "@/components/reroute/reviewer";
 import { cn } from "@/lib/utils";
 import { MEDIA_PREVIEW_DISABLED_NOTE } from "../flags";
@@ -36,15 +36,24 @@ export type MomentPreviewSource = {
   note: string;
 };
 
+/** stage = Campaign Studio, lead = first moment in the gallery, compact = secondary moment, thumb = alternative row. */
+export type FrameSize = "stage" | "lead" | "compact" | "thumb";
+
+const TIMECODE: Record<FrameSize, string> = {
+  stage: "text-[clamp(2.5rem,1.5rem+3vw,4.25rem)]",
+  lead: "text-[clamp(2.25rem,1.4rem+2.6vw,3.75rem)]",
+  compact: "text-[1.625rem]",
+  thumb: "text-[0.8125rem] whitespace-nowrap",
+};
+
 /**
- * Plays exactly one moment from its authorized stream (ScorePlay proxy or the TwelveLabs index HLS):
- * seeks to the TwelveLabs start and pauses once at its end. Nothing is downloaded or stored. The
- * player is (re)initialised only when the stream URL or start changes — never because a parent
- * re-rendered with an equal preview — and the fallback appears only after a real playback error.
- * Without a stream (always while MEDIA_PREVIEW_ENABLED is off) it renders a neutral, static placeholder:
- * the exact segment, the asset title and its ScorePlay id — no player, no thumbnail, no spinner.
+ * One match moment. With an authorized stream (MEDIA_PREVIEW_ENABLED and a reviewer session) it plays exactly
+ * that segment: seeks to the TwelveLabs start and pauses once at its end; nothing is downloaded or stored. The
+ * player is (re)initialised only when the stream URL or start changes, and the fallback appears only after a
+ * real playback error. Without a stream it renders the moment as a static frame — timecode, its place in the
+ * asset, and why there is no picture — never a thumbnail, stock image or URL.
  */
-export function MomentPreview({ source: s, className }: { source: MomentPreviewSource; className?: string }) {
+export function MomentPreview({ source: s, size = "compact", label, className }: { source: MomentPreviewSource; size?: FrameSize; label?: string; className?: string }) {
   const video = useRef<HTMLVideoElement>(null);
   const stopped = useRef(false);
   /** True while the effect tears the player down: errors fired then are not playback failures. */
@@ -112,46 +121,49 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
   }, [url]);
 
   const span = segmentLabel(start, s.end, s.durationSec);
+  const frame = cn("relative overflow-hidden rounded-lg bg-surface ring-1 ring-line ring-inset", size === "thumb" ? "aspect-[4/3]" : "aspect-video", className);
+
   if (!s.preview || failed) {
-    // Compact card (~100 px): segment, title, asset id, one-line note — no empty video-sized box.
+    const note = failed ? `This stream could not be played in your browser. Open ScorePlay asset ${s.scoreplayAssetId} at ${span}.` : previewsOn ? s.note : MEDIA_PREVIEW_DISABLED_NOTE;
+    const short = failed ? "Can't play in this browser" : previewsOn ? "Preview for signed-in reviewers" : "Preview off · awaiting playback rights";
+    const big = size === "stage" || size === "lead";
     return (
-      <div
-        role="note"
-        aria-label={`${s.title}, moment ${span}`}
-        className={cn("flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-lg border border-white/10 bg-zinc-900 p-3 text-[11px] text-zinc-300", className)}
-      >
-        <FilmIcon className="mt-0.5 size-5 shrink-0 text-zinc-500" aria-hidden />
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="font-mono text-xs text-zinc-100">{span}</p>
-          <p className="truncate font-medium text-zinc-200" title={s.title}>
-            {s.title}
-          </p>
-          <p className="font-mono text-[10px] text-zinc-500">ScorePlay asset {s.scoreplayAssetId}</p>
-          <p className={cn("text-zinc-400", !failed && "truncate")} title={failed ? undefined : previewsOn ? s.note : MEDIA_PREVIEW_DISABLED_NOTE}>
-            {failed
-              ? `This stream could not be played in your browser. To watch it, open ScorePlay asset ${s.scoreplayAssetId} at ${span}.`
-              : previewsOn
-                ? s.note
-                : MEDIA_PREVIEW_DISABLED_NOTE}
-          </p>
-        {failed && (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 self-start text-sky-300 underline-offset-2 hover:underline"
-            onClick={() => {
-              setFailed(false);
-              setAttempt((n) => n + 1);
-            }}
-          >
-            <RefreshCwIcon className="size-3" aria-hidden /> Try again
-          </button>
+      <figure role="img" aria-label={`${s.title}, moment ${span}. ${note}`} title={note} className={cn(frame, "bg-linear-to-b from-surface-raised to-surface")}>
+        {big && <FrameCorners inset="0.75rem" />}
+        {label && size !== "thumb" && (
+          <figcaption className={cn("absolute text-eyebrow font-medium text-ink-muted uppercase", big ? "top-7 left-7 sm:left-8" : "top-3.5 left-4")}>{label}</figcaption>
         )}
+        <div className={cn("absolute inset-x-0 flex items-center", size === "thumb" ? "inset-y-0 justify-center" : "top-1/2 -translate-y-1/2", big ? "px-6 sm:px-8" : "px-4")}>
+          <Timecode start={start} end={s.end} durationSec={s.durationSec} className={TIMECODE[size]} />
         </div>
-      </div>
+        {size !== "thumb" && (
+          <div className={cn("absolute inset-x-0 bottom-0 space-y-2.5", big ? "px-6 pb-6 sm:px-8" : "px-4 pb-3.5")}>
+            {s.durationSec !== undefined && <SegmentTrack start={start} end={s.end ?? start} total={s.durationSec} labels={big} />}
+            {(big || failed) && (
+              <p className="flex items-center gap-1.5 text-meta text-ink-muted">
+                <LockKeyholeIcon className="size-3 shrink-0" aria-hidden />
+                {short}
+                {failed && (
+                  <button
+                    type="button"
+                    className="ml-2 inline-flex items-center gap-1 text-ink underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setFailed(false);
+                      setAttempt((n) => n + 1);
+                    }}
+                  >
+                    <RefreshCwIcon className="size-3" aria-hidden /> Try again
+                  </button>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+      </figure>
     );
   }
   return (
-    <div className={cn("relative overflow-hidden rounded-lg border border-white/10 bg-black", className)}>
+    <div className={cn(frame, "bg-black")}>
       <video
         key={attempt}
         ref={video}
@@ -160,7 +172,7 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
         muted
         playsInline
         preload="metadata"
-        className="aspect-video w-full object-contain"
+        className="size-full object-contain"
         aria-label={`${s.title}, moment ${span}`}
         onLoadedMetadata={(e) => {
           if (Math.abs(e.currentTarget.currentTime - start) > 0.5) e.currentTarget.currentTime = start;
@@ -178,7 +190,51 @@ export function MomentPreview({ source: s, className }: { source: MomentPreviewS
           setFailed(true);
         }}
       />
-      <span className="pointer-events-none absolute top-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-zinc-200">{span}</span>
+      <span className="tabular pointer-events-none absolute top-3 left-3 rounded bg-obsidian/80 px-1.5 py-0.5 font-mono text-meta text-ink">{span}</span>
+    </div>
+  );
+}
+
+/** "0:07 – 0:15" in the editorial face: the moment itself is the headline of the frame. */
+function Timecode({ start, end, durationSec, className }: { start: number; end?: number; durationSec?: number; className?: string }) {
+  const cap = (t: number) => (durationSec === undefined ? t : Math.min(t, durationSec));
+  return (
+    <p className={cn("tabular font-display leading-none font-medium tracking-[-0.03em] text-ink", className)} aria-hidden>
+      {clock(cap(start))}
+      <span className="px-[0.18em] text-ink-muted/70">–</span>
+      {clock(cap(end ?? start))}
+    </p>
+  );
+}
+
+/** Where the moment sits in its asset: the full clip as a hairline, the moment as a solid bar. */
+export function SegmentTrack({ start, end, total, labels = false, className }: { start: number; end: number; total: number; labels?: boolean; className?: string }) {
+  const left = total > 0 ? Math.min(100, (start / total) * 100) : 0;
+  const width = total > 0 ? Math.max(1.5, Math.min(100 - left, ((Math.min(end, total) - start) / total) * 100)) : 100;
+  return (
+    <div className={className} aria-hidden>
+      <div className="relative h-[3px] rounded-full bg-line-strong">
+        <div className="absolute inset-y-0 rounded-full bg-ink" style={{ left: `${left}%`, width: `${width}%` }} />
+      </div>
+      {labels && (
+        <div className="tabular mt-1.5 hidden justify-between font-mono text-meta text-ink-muted sm:flex">
+          <span>0:00</span>
+          <span>{clock(total)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Broadcast-style corner marks that frame the moment. */
+function FrameCorners({ inset }: { inset: string }) {
+  const c = "absolute size-3 border-line-strong";
+  return (
+    <div className="pointer-events-none absolute" style={{ inset }} aria-hidden>
+      <span className={cn(c, "top-0 left-0 border-t border-l")} />
+      <span className={cn(c, "top-0 right-0 border-t border-r")} />
+      <span className={cn(c, "bottom-0 left-0 border-b border-l")} />
+      <span className={cn(c, "right-0 bottom-0 border-r border-b")} />
     </div>
   );
 }

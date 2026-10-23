@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2Icon, LogInIcon, LogOutIcon, UserCheckIcon } from "lucide-react";
+import { Loader2Icon, LogInIcon, LogOutIcon } from "lucide-react";
 import { z } from "zod";
 import { ApiErrorSchema, WritebackResponseSchema } from "@/lib/contracts";
 import { ApiClientError, ReceiptViewSchema } from "@/lib/api-client";
@@ -180,24 +180,30 @@ export function ReviewerControl({
 }) {
   const [busy, setBusy] = useState(false);
   if (!session) return null;
-  if (!session.enabled) return <span className="text-[11px] text-zinc-500">Reviewer sign-in not configured</span>;
+  if (!session.enabled) return <span className="hidden text-meta text-ink-muted sm:inline">Reviewer sign-in not configured</span>;
   if (!session.reviewer)
     return (
-      <Button size="sm" variant="outline" onClick={onSignIn}>
-        <LogInIcon /> Reviewer sign-in
+      <Button size="sm" variant="ghost" className="text-ink-soft" onClick={onSignIn}>
+        <LogInIcon /> <span className="hidden sm:inline">Reviewer sign-in</span>
+        <span className="sm:hidden">Sign in</span>
       </Button>
     );
+  const name = session.reviewer.name;
   return (
-    <span className="inline-flex items-center gap-2 text-xs text-zinc-300">
-      <UserCheckIcon className="size-3.5 text-sky-300" aria-hidden />
-      <span>
-        Reviewer: <strong className="text-zinc-100">{session.reviewer.name}</strong>
+    <span className="inline-flex items-center gap-2 text-small text-ink-soft" title={`Signed in as reviewer: ${name}`}>
+      <span className="flex size-6 items-center justify-center rounded-full bg-surface-raised font-display text-meta font-semibold text-ink ring-1 ring-line-strong" aria-hidden>
+        {name.trim().charAt(0).toUpperCase()}
+      </span>
+      <span className="hidden max-w-[14rem] truncate lg:inline">
+        <span className="sr-only">Reviewer: </span>
+        {name}
       </span>
       <Button
-        size="xs"
+        size="icon-sm"
         variant="ghost"
+        className="text-ink-muted"
         disabled={busy}
-        aria-label="Sign out"
+        aria-label={`Sign out ${name}`}
         onClick={async () => {
           setBusy(true);
           try {

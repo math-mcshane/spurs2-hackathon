@@ -4,12 +4,87 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * PULSE design tokens (docs/design/DESIGN_SYSTEM.md). Dark is the only theme.
+ * Signal lime is the brand accent: primary actions and focus only — never a rights status.
+ * Rights statuses use their own semantic colours, always paired with an icon and a word.
+ */
+@theme {
+  --color-obsidian: #111514;
+  --color-surface: #1c2321;
+  --color-surface-raised: #232b29;
+  --color-ink: #f3f1e9;
+  --color-ink-soft: #bcc2bb;
+  --color-ink-muted: #86928b;
+  --color-line: rgb(243 241 233 / 0.08);
+  --color-line-strong: rgb(243 241 233 / 0.16);
+  --color-signal: #d4fb77;
+  --color-signal-ink: #111514;
+
+  --color-status-clear: #7fd6a4;
+  --color-status-provisional: #ddd0a0;
+  --color-status-review: #f0b65e;
+  --color-status-blocked: #f0907e;
+  --color-status-idle: #86928b;
+
+  /* Type scale: display / title / headline in the editorial face, the rest in the interface face. */
+  --text-display: clamp(2.5rem, 1.6rem + 3.2vw, 4rem);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.035em;
+  --text-title: clamp(1.625rem, 1.3rem + 1vw, 2.125rem);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.025em;
+  --text-headline: 1.375rem;
+  --text-headline--line-height: 1.2;
+  --text-headline--letter-spacing: -0.015em;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.6;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.5;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.4;
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.12em;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /*
+   * Legacy bridge: the advanced desk (`components/reroute/*`) and the flagged signal board still use
+   * Tailwind's zinc/sky classes. Re-pointing those two scales at PULSE neutrals and signal lime keeps
+   * them on-brand without rewriting them. New code uses the PULSE tokens above, never zinc/sky.
+   */
+  --color-zinc-50: #f3f1e9;
+  --color-zinc-100: #e6e6df;
+  --color-zinc-200: #d2d5ce;
+  --color-zinc-300: #bcc2bb;
+  --color-zinc-400: #9aa39d;
+  --color-zinc-500: #86928b;
+  --color-zinc-600: #5e6964;
+  --color-zinc-700: #3c4542;
+  --color-zinc-800: #2a3230;
+  --color-zinc-900: #1c2321;
+  --color-zinc-950: #141917;
+  --color-sky-50: #f7fee9;
+  --color-sky-100: #f0fdd6;
+  --color-sky-200: #e6fcb5;
+  --color-sky-300: #dcfb94;
+  --color-sky-400: #d4fb77;
+  --color-sky-500: #b5dc58;
+  --color-sky-600: #8fb23c;
+  --color-sky-700: #6b8a2a;
+  --color-sky-800: #4a611d;
+  --color-sky-900: #2e3d13;
+  --color-sky-950: #1a240a;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-display: var(--font-space-grotesk);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,93 +123,79 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
+/* shadcn semantic tokens, mapped onto the PULSE palette (dark only). */
+:root,
 .dark {
-  /* Broadcast control room: near-black with a cool blue cast. */
-  --background: oklch(0.13 0.008 255);
-  --foreground: oklch(0.96 0.005 255);
-  --card: oklch(0.18 0.01 255);
-  --card-foreground: oklch(0.96 0.005 255);
-  --popover: oklch(0.2 0.012 255);
-  --popover-foreground: oklch(0.96 0.005 255);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.26 0.012 255);
-  --secondary-foreground: oklch(0.96 0.005 255);
-  --muted: oklch(0.25 0.01 255);
-  --muted-foreground: oklch(0.7 0.01 255);
-  --accent: oklch(0.27 0.014 255);
-  --accent-foreground: oklch(0.96 0.005 255);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.13 235);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #111514;
+  --foreground: #f3f1e9;
+  --card: #1c2321;
+  --card-foreground: #f3f1e9;
+  --popover: #1c2321;
+  --popover-foreground: #f3f1e9;
+  --primary: #d4fb77;
+  --primary-foreground: #111514;
+  --secondary: #232b29;
+  --secondary-foreground: #f3f1e9;
+  --muted: #1c2321;
+  --muted-foreground: #86928b;
+  --accent: #232b29;
+  --accent-foreground: #f3f1e9;
+  --destructive: #f0907e;
+  --border: rgb(243 241 233 / 0.09);
+  --input: rgb(243 241 233 / 0.14);
+  --ring: #d4fb77;
+  --chart-1: #f3f1e9;
+  --chart-2: #bcc2bb;
+  --chart-3: #86928b;
+  --chart-4: #5e6964;
+  --chart-5: #3c4542;
+  --radius: 0.5rem;
+  --sidebar: #1c2321;
+  --sidebar-foreground: #f3f1e9;
+  --sidebar-primary: #d4fb77;
+  --sidebar-primary-foreground: #111514;
+  --sidebar-accent: #232b29;
+  --sidebar-accent-foreground: #f3f1e9;
+  --sidebar-border: rgb(243 241 233 / 0.09);
+  --sidebar-ring: #d4fb77;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: rgb(212 251 119 / 0.28);
+    color: #f3f1e9;
+  }
+  :focus-visible {
+    outline-color: var(--ring);
   }
 }
 
-@layer base {
-  html.dark {
-    color-scheme: dark;
+@layer utilities {
+  /* Timecodes and counts never jitter while they update. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
-  ::selection {
-    background: oklch(0.55 0.15 235 / 45%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

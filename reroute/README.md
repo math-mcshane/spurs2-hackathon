@@ -1,8 +1,9 @@
-# PULSE × REROUTE — rights-aware sports media campaigns
+# PULSE — rights-aware sports media campaigns
 
-Spurs² Hackathon · Rights & Compliance. **Turn business objectives into actionable, rights-aware sports media campaigns.**
-One goal → three relevant real moments → one campaign checked by REROUTE for every channel × territory.
-Architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Integration history: [`../INTEGRATION_LOG.md`](../INTEGRATION_LOG.md).
+Spurs² Hackathon · Rights & Compliance. **From business goal to rights-aware campaign in seconds.**
+Goal → Discover → Create & clear → Review: one goal, three real moments, one campaign checked by PULSE's rights engine
+(REROUTE, this package) for every channel × territory.
+Architecture: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Design: [`../docs/design/`](../docs/design/). Integration history: [`../INTEGRATION_LOG.md`](../INTEGRATION_LOG.md).
 
 ## Quick start
 

@@ -240,7 +240,7 @@ export function RerouteApp() {
     if (patch.usage) next.usage = patch.usage;
     patchIntent(next);
     setResolve({ status: "idle" });
-    toast.info("Intent limited to REROUTE's licensed path — re-checking.");
+    toast.info("Limited to the licensed path — re-checking.");
   }
 
   function patchSegment(index: number, patch: { start?: number; end?: number }) {
@@ -350,7 +350,7 @@ export function RerouteApp() {
   const playerDetail = playerId ? details[playerId] : undefined;
 
   return (
-    <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,rgba(56,189,248,0.06),transparent_60%)]">
+    <div className="flex min-h-screen flex-col">
       <AppHeader
         policies={policies}
         policiesError={policiesError}
@@ -535,7 +535,7 @@ export function RerouteApp() {
 
           <Panel aria-labelledby="p-reroute">
             <PanelTitle step="05">
-              <span id="p-reroute">Reroute · Marengo alternatives</span>
+              <span id="p-reroute">Find another way · alternatives</span>
             </PanelTitle>
             <ResolvePanel
               blockedIndex={blockedIndex >= 0 && !deciding ? blockedIndex : null}
@@ -567,7 +567,7 @@ export function RerouteApp() {
           />
         </Panel>
       </main>
-      <footer className="px-4 pb-3 font-mono text-[9px] text-zinc-600">
+      <footer className="px-5 pb-4 text-meta text-ink-muted">
         Decisions come from verified rules and metadata only — logo detection, similarity or absence of a deny rule is never permission.
         In-app access gating does not change ScorePlay ACLs.
       </footer>

@@ -6,24 +6,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { policiesApi, type PackageSummary } from "@/features/policies/api";
 import { cn } from "@/lib/utils";
 
-const tagOf = (p: PackageSummary) => (p.sourceType !== "PRESET" ? "Uploaded · unverified" : p.verified ? "Verified" : "Illustrative");
+const tagOf = (p: PackageSummary) =>
+  p.sourceType === "SAMPLE_DOCUMENT_MAPPING" ? "Sample mapping" : p.sourceType !== "PRESET" ? "Uploaded · unverified" : p.verified ? "Verified" : "Illustrative";
 
 /**
  * Compact switch between the club's rule packages (Policy Center library). `value` = the package the run uses;
  * without one, the workspace default is shown. `triggerLabel` replaces the selected title on the trigger (when the
- * title is already shown beside it). Changing it asks the caller to re-evaluate under that package.
+ * title is already shown beside it). Changing it asks the caller to re-evaluate under that package. `runId` makes
+ * the Policy Center link come back to this campaign.
  */
 export function PolicyPicker({
   club,
   value,
   disabled,
   triggerLabel,
+  runId,
   onChange,
 }: {
   club: string;
   value?: string;
   disabled?: boolean;
   triggerLabel?: string;
+  runId?: string;
   onChange(packageId: string): void;
 }) {
   const [packages, setPackages] = useState<PackageSummary[] | null>(null);
@@ -78,7 +82,7 @@ export function PolicyPicker({
         failed && <span className="text-meta text-ink-muted">Rule packages unavailable</span>
       )}
       <Link
-        href={current ? `/policies?${new URLSearchParams({ package: current })}` : "/policies"}
+        href={`/policies?${new URLSearchParams({ ...(current ? { package: current } : {}), ...(runId ? { run: runId } : {}) })}`}
         className="text-meta text-ink-muted underline-offset-4 hover:text-ink hover:underline"
       >
         Policy Center

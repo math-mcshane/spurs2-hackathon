@@ -77,28 +77,40 @@ export function DemoPolicyNote({ label, className }: { label?: string; className
 
 /** What the illustrative setup means, in the order a reviewer meets it. Shown once per screen by `PolicyContext`. */
 const LIMITS = [
-  ["Rules", "An illustrative rule set written for this demo — not a club agreement. “Allowed” is not legal clearance or permission to publish."],
   ["Evidence", "Logos, people and boards on screen come from TwelveLabs video analysis — machine-observed, not human-verified."],
   ["Edits", "Cuts are edit plans with exact timecodes, not rendered video files."],
   ["ScorePlay", "Writeback is a dry run: nothing is published or written to the club library."],
 ] as const;
 
+type SourceType = "PRESET" | "UPLOADED_JSON" | "UPLOADED_CSV" | "SAMPLE_DOCUMENT_MAPPING";
+
+const SOURCE: Record<SourceType, { chip: string; rules: string }> = {
+  PRESET: { chip: "Illustrative rules", rules: "An illustrative rule set written for this demo — not a club agreement. “Allowed” is not legal clearance or permission to publish." },
+  SAMPLE_DOCUMENT_MAPPING: {
+    chip: "Sample mapping",
+    rules: "Rules mapped in advance from the example file — PULSE does not extract rules from legal documents. Illustrative, not a club agreement; “Allowed” is not legal clearance.",
+  },
+  UPLOADED_JSON: { chip: "Uploaded rules · unverified", rules: "A rule package uploaded as JSON and checked only for format — nobody has verified it. “Allowed” is not legal clearance." },
+  UPLOADED_CSV: { chip: "Uploaded rules · unverified", rules: "A rule package uploaded as CSV and checked only for format — nobody has verified it. “Allowed” is not legal clearance." },
+};
+
 /**
  * The single policy-context indicator: which kind of rules the verdicts come from, with the limits of this setup one
- * click away. Verified agreements need no caveat; illustrative and uploaded rules always carry it.
+ * click away. Verified agreements need no caveat; illustrative, sample and uploaded rules always carry it.
  */
-export function PolicyContext({ verified, uploaded, className }: { verified: boolean; uploaded?: boolean; className?: string }) {
+export function PolicyContext({ verified, sourceType = "PRESET", className }: { verified: boolean; sourceType?: SourceType; className?: string }) {
   if (verified) {
     return <span className={cn("inline-flex items-center gap-1 text-meta text-status-clear", className)}>Verified agreement</span>;
   }
+  const s = SOURCE[sourceType];
   return (
     <details className={cn("group/pc relative inline-block", className)}>
       <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-full border border-status-review/40 px-2 py-0.5 text-meta text-status-review transition-colors hover:border-status-review/70 [&::-webkit-details-marker]:hidden">
-        {uploaded ? "Uploaded rules · unverified" : "Illustrative rules"}
+        {s.chip}
         <InfoIcon className="size-3 shrink-0" aria-hidden />
       </summary>
       <div className="absolute left-0 z-30 mt-2 w-80 max-w-[calc(100vw-3rem)] space-y-2.5 rounded-lg bg-surface-raised p-4 text-meta shadow-xl ring-1 ring-line-strong">
-        {LIMITS.map(([k, v]) => (
+        {[["Rules", s.rules] as const, ...LIMITS].map(([k, v]) => (
           <p key={k}>
             <span className="block font-medium text-ink">{k}</span>
             <span className="text-ink-muted">{v}</span>

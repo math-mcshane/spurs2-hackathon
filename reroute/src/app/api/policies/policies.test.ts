@@ -62,7 +62,7 @@ function multipart(name: string, content: string, type: string, session?: string
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
 describe("GET /api/policies", () => {
-  it("lists presets with the workspace default marked; ?club= filters", async () => {
+  it("lists presets and the sample mapping with the workspace default marked; ?club= filters", async () => {
     const res = await list(req("/api/policies"));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -71,6 +71,7 @@ describe("GET /api/policies", () => {
       ["demo-spurs-fr-sponsored", true],
       ["demo-tottenham-pl", true],
       ["demo-tottenham-commercial", false],
+      ["demo-tottenham-international", false],
     ]);
     const spurs = await (await list(req("/api/policies?club=spurs"))).json();
     expect(spurs.policies.map((p: { id: string }) => p.id)).toEqual(["demo-spurs-fr-sponsored"]);

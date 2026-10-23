@@ -69,7 +69,7 @@ export function ReviewView({
           <Reveal>
             <ReceiptDocument
               receipt={receipt}
-              uploaded={!!goal.policy && goal.policy.sourceType !== "PRESET"}
+              sourceType={goal.policy?.sourceType}
               titles={goal.campaign ? { [goal.campaign.media.scoreplayAssetId]: displayTitle(goal.campaign.media.title) } : {}}
             />
           </Reveal>
@@ -285,12 +285,12 @@ function Publish({ goal }: { goal: GoalView }) {
 /** The audit receipt, read as a document. Identifiers and the hash chain sit in a disclosure at the end. */
 function ReceiptDocument({
   receipt,
-  uploaded,
+  sourceType,
   titles,
 }: {
   receipt: AuditedReceipt;
-  /** The run's package was uploaded (not a bundled preset). */
-  uploaded: boolean;
+  /** How the run's package reached the library (preset, sample mapping, upload). */
+  sourceType?: NonNullable<GoalView["policy"]>["sourceType"];
   /** ScorePlay id → display title, when known. */
   titles: Record<string, string>;
 }) {
@@ -321,7 +321,7 @@ function ReceiptDocument({
         <dt>Policy</dt>
         <dd className="text-ink">
           {d.policyId} <span className="text-ink-muted">v{d.policyVersion}</span>
-          <PolicyContext verified={!d.policyFictional} uploaded={uploaded} className="mt-1 block" />
+          <PolicyContext verified={!d.policyFictional} sourceType={sourceType} className="mt-1 block" />
         </dd>
         <dt>Uses covered</dt>
         <dd className="space-y-0.5 text-ink">

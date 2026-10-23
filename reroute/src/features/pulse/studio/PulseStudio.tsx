@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeftIcon, Loader2Icon, PlusIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeftIcon, Loader2Icon, PlusIcon, RefreshCwIcon, ScaleIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Swap } from "@/components/pulse/motion";
 import { CONTAINER, PulseFooter, PulseHeader } from "@/components/pulse/shell";
@@ -222,6 +223,12 @@ export function PulseStudio() {
         nav={goal ? <StepNav goal={goal} view={shown} reached={reached} onView={goPhase} /> : undefined}
         actions={
           <>
+            <Link
+              href={goal ? `/policies?${new URLSearchParams({ run: goal.run.id, ...(goal.policy ? { package: goal.policy.packageId } : {}) })}` : "/policies"}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-small text-ink-soft transition-colors hover:bg-surface hover:text-ink"
+            >
+              <ScaleIcon className="size-4" aria-hidden /> Policies
+            </Link>
             <ReviewerControl session={session} onSignIn={() => setSignInOpen(true)} onSignedOut={setSession} />
             {goal && (
               <Button size="sm" variant="outline" className="bg-transparent" onClick={startOver}>

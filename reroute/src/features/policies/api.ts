@@ -55,7 +55,8 @@ export type PlainRule = z.infer<typeof PlainRuleSchema>;
 const DetailSchema = z.object({ policy: PackageSummarySchema, rules: z.array(PlainRuleSchema) });
 export type PackageDetail = z.infer<typeof DetailSchema>;
 
-const UploadSchema = z.object({ package: PackageSummarySchema.omit({ isDefault: true }), notes: z.array(z.string()) });
+const UploadSchema = z.object({ package: PackageSummarySchema.omit({ isDefault: true }), notes: z.array(z.string()), stored: z.boolean() });
+export type UploadResult = z.infer<typeof UploadSchema>;
 const SelectionSchema = z.object({
   selection: z.object({ club: z.string(), packageId: z.string(), packageVersion: z.string(), selectedBy: z.string(), selectedAt: z.string() }),
 });
@@ -79,6 +80,7 @@ async function call<S extends z.ZodType>(schema: S, path: string, init?: Request
 }
 
 export const SAMPLE_HREF = "/api/policies/sample";
+export const SAMPLE_FILE_NAME = "tottenham-international-window.sample.json";
 
 export const policiesApi = {
   library: (club?: string, signal?: AbortSignal) =>
@@ -89,6 +91,14 @@ export const policiesApi = {
     form.set("file", file);
     return call(UploadSchema, "/api/policies", { method: "POST", body: form });
   },
+  /** Uploads the bundled example file exactly as "Download example file" serves it. */
+  uploadSample: async () => {
+    const res = await fetch(SAMPLE_HREF, { cache: "no-store" }).catch(() => {
+      throw new ApiClientError("NETWORK", "Network error loading the example file", 0);
+    });
+    if (!res.ok) throw new ApiClientError("BAD_RESPONSE", `The example file failed to load (HTTP ${res.status})`, res.status);
+    return policiesApi.upload(new File([await res.blob()], SAMPLE_FILE_NAME, { type: "application/json" }));
+  },
   select: (club: string, packageId: string) =>
     call(SelectionSchema, "/api/policies/select", {
       method: "POST",
@@ -97,10 +107,11 @@ export const policiesApi = {
     }),
 };
 
-/** "Fictional demo policy" / "Uploaded — unverified" / "Verified agreement". */
+/** "Illustrative preset" / "Sample mapping" / "Uploaded — unverified" / "Verified agreement". */
 export function authenticity(p: Pick<PackageSummary, "sourceType" | "verified">): string {
+  if (p.sourceType === "SAMPLE_DOCUMENT_MAPPING") return "Sample mapping";
   if (p.sourceType !== "PRESET") return "Uploaded — unverified";
-  return p.verified ? "Verified agreement" : "Fictional demo policy";
+  return p.verified ? "Verified agreement" : "Illustrative preset";
 }
 
 export const clubLabel = (club: string) => (CLUBS as Record<string, { label: string } | undefined>)[club]?.label ?? club;

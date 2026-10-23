@@ -7,6 +7,7 @@ import type { Repositories } from "@/lib/server/repositories/types";
 import { evaluateEdit, type AnalysisStatus } from "./engine";
 import {
   PRESET_LABEL,
+  SAMPLE_LABEL,
   UPLOAD_LABEL,
   UPLOADS_NOT_CONFIGURED,
   defaultPackageFor,
@@ -94,9 +95,17 @@ describe("presets", () => {
     ]);
   });
 
-  it("the upload sample is a valid DEMO package that is not in the library until uploaded", async () => {
+  it("the example upload file is bundled as a sample mapping until an upload of the same id replaces it", async () => {
     expect(PolicySchema.parse(sample).id).toBe("demo-tottenham-international");
-    expect(await getPolicyPackage("demo-tottenham-international")).toBeNull();
+    expect((await getPolicyPackage("demo-tottenham-international"))?.summary).toMatchObject({
+      sourceType: "SAMPLE_DOCUMENT_MAPPING",
+      kind: "DEMO",
+      verified: false,
+      label: SAMPLE_LABEL,
+    });
+    await upload(sample);
+    expect((await getPolicyPackage("demo-tottenham-international"))?.summary.sourceType).toBe("UPLOADED_JSON");
+    expect((await policyLibrary(now)).packages.filter((p) => p.id === "demo-tottenham-international")).toHaveLength(1);
   });
 
   it("summaries derive licensed uses, partners and term from the rules", async () => {
@@ -186,10 +195,11 @@ describe("upload", () => {
     expect(event).toMatchObject({ type: "POLICY_UPLOADED", actor: "Ed Smith", payload: { declaredKind: "VERIFIED", storedKind: "DEMO", sha256: pkg.sha256 } });
   });
 
-  it("rejects preset ids, a duplicate version and an id owned by another club", async () => {
+  it("rejects preset ids, a changed document under an existing version and an id owned by another club; re-importing the same version is a no-op", async () => {
     await expect(upload({ ...sample, id: "demo-tottenham-pl" })).rejects.toMatchObject({ code: "CONFLICT" });
     await upload(sample);
-    await expect(upload(sample)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await upload(sample)).toMatchObject({ stored: true, notes: ["This version is already in the library."] });
+    await expect(upload({ ...sample, title: "Changed title, same version" })).rejects.toMatchObject({ code: "CONFLICT" });
     const spursDoc = PRESET_POLICIES[0];
     await expect(upload({ ...spursDoc, id: "demo-tottenham-international", version: "2" })).rejects.toMatchObject({ code: "CONFLICT" });
   });
@@ -276,12 +286,23 @@ describe("without the policy tables", () => {
     });
   });
 
-  it("presets still list and evaluate; uploads and the workspace default say they are not set up", async () => {
+  it("presets and the sample mapping still list and evaluate; other uploads and the workspace default say they are not set up", async () => {
     const library = await policyLibrary(now);
     expect(library.uploadsAvailable).toBe(false);
-    expect(library.packages.map((p) => p.id)).toEqual(PRESET_POLICIES.map((p) => p.id));
+    expect(library.packages.map((p) => p.id)).toEqual([...PRESET_POLICIES.map((p) => p.id), "demo-tottenham-international"]);
     expect((await policiesForEvaluation({ club: "tottenham", packageId: "demo-tottenham-commercial" })).package?.id).toBe("demo-tottenham-commercial");
-    await expect(upload(sample)).rejects.toMatchObject({ code: "NOT_CONFIGURED", message: UPLOADS_NOT_CONFIGURED });
+
+    // The example file resolves to its sample mapping (nothing stored) — and selecting it changes the verdict.
+    expect(await upload(sample)).toMatchObject({ stored: false, package: { id: "demo-tottenham-international", sourceType: "SAMPLE_DOCUMENT_MAPPING" } });
+    const run = await policiesForEvaluation({ club: "tottenham", packageId: "demo-tottenham-international" });
+    expect(run.package?.sourceType).toBe("SAMPLE_DOCUMENT_MAPPING");
+    const editorialFr = intent({ territory: "FR" });
+    const editorial = [groupShot, ev("person:solanke")];
+    expect(decide((await policiesForEvaluation({ club: "tottenham" })).policies, editorialFr, editorial).verdict).toBe("NEEDS_REVIEW");
+    expect(decide(run.policies, editorialFr, editorial)).toMatchObject({ verdict: "ALLOWED", clearance: "DEMO", policyId: "demo-tottenham-international" });
+
+    // Any other valid file is validated, then refused: it cannot be stored here.
+    await expect(upload({ ...sample, id: "tottenham-other-window" })).rejects.toMatchObject({ code: "NOT_CONFIGURED", message: /valid rule package .*cannot store uploads/ });
     await expect(selectWorkspaceDefault({ club: "tottenham", packageId: "demo-tottenham-commercial", selectedBy: "ed" })).rejects.toMatchObject({
       code: "NOT_CONFIGURED",
       message: UPLOADS_NOT_CONFIGURED,

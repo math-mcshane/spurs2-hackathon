@@ -7,7 +7,7 @@ import { ClubSchema, type PolicyContext } from "@/features/pulse/types";
 import { events, policyPackages } from "@/lib/server/repositories";
 import type { PolicySelectionRecord, StoredPolicyPackage, UploadedPolicySourceType } from "@/lib/server/repositories";
 import { ASSET_BOUND_MATCH_KEYS, PolicySchema, type Policy, type Rule } from "./policy";
-import { PRESET_POLICIES } from "./registry";
+import { PRESET_POLICIES, SAMPLE_UPLOAD_POLICY } from "./registry";
 
 /**
  * Policy Center: the library of rule packages a campaign can be evaluated against.
@@ -19,6 +19,9 @@ import { PRESET_POLICIES } from "./registry";
  *   package of the same club; `policiesForEvaluation` hands the engine exactly ONE package per club.
  * - Without the tables (a deployment whose database was not migrated) presets still work; uploads and the
  *   workspace default answer NOT_CONFIGURED.
+ * - The example upload file is also bundled as a SAMPLE_DOCUMENT_MAPPING package: its rules were mapped in
+ *   advance (no document extraction). It is always in the library — on a deployment without the tables,
+ *   importing the example file confirms it and a campaign can select it like any package.
  */
 
 export type PolicyPackageSourceType = "PRESET" | UploadedPolicySourceType;
@@ -61,6 +64,8 @@ export type PolicyPackage = { summary: PolicyPackageSummary; policy: Policy };
 
 export const PRESET_LABEL = "Demo policy — not verified legal clearance";
 export const UPLOAD_LABEL = "Uploaded rules — unverified, demo only";
+export const SAMPLE_LABEL = "Sample mapping — rules prepared from the example file, not extracted from a document";
+export const SAMPLE_FILE_NAME = "tottenham-international-window.sample.json";
 export const UPLOADS_NOT_CONFIGURED = "Policy uploads are not set up on this deployment";
 export const MAX_UPLOAD_BYTES = 200 * 1024;
 
@@ -156,10 +161,14 @@ function warningsOf(policy: Policy, uploaded: { by?: string } | null, now: Date)
   return out;
 }
 
-type Origin = { sourceType: "PRESET" } | { sourceType: UploadedPolicySourceType; stored: StoredPolicyPackage };
+type Origin =
+  | { sourceType: "PRESET" }
+  | { sourceType: "SAMPLE_DOCUMENT_MAPPING"; bundled: true }
+  | { sourceType: UploadedPolicySourceType; stored: StoredPolicyPackage };
 
 function toPackage(policy: Policy, origin: Origin, now: Date = new Date()): PolicyPackage {
-  const stored = origin.sourceType === "PRESET" ? null : origin.stored;
+  const stored = "stored" in origin ? origin.stored : null;
+  const sample = "bundled" in origin;
   const a = policy.applicability;
   const usages = licensed(policy, "usage") as Usage[];
   const summary: PolicyPackageSummary = {
@@ -171,7 +180,7 @@ function toPackage(policy: Policy, origin: Origin, now: Date = new Date()): Poli
     sourceType: origin.sourceType,
     verified: !stored && policy.kind === "VERIFIED",
     fictional: stored ? true : policy.kind === "DEMO",
-    label: stored ? UPLOAD_LABEL : policy.kind === "DEMO" ? PRESET_LABEL : "Verified agreement",
+    label: stored ? UPLOAD_LABEL : sample ? SAMPLE_LABEL : policy.kind === "DEMO" ? PRESET_LABEL : "Verified agreement",
     territories: licensed(policy, "territory"),
     territoriesByUsage: territoriesByUsage(policy, usages),
     platforms: licensed(policy, "platform"),
@@ -181,7 +190,7 @@ function toPackage(policy: Policy, origin: Origin, now: Date = new Date()): Poli
     validUntil: a.validUntil,
     uploadedBy: stored?.uploadedBy,
     uploadedAt: stored?.createdAt,
-    fileName: stored?.fileName,
+    fileName: stored?.fileName ?? (sample ? SAMPLE_FILE_NAME : undefined),
     sha256: stored?.sha256,
     warnings: warningsOf(policy, stored && { by: stored.uploadedBy }, now),
     competitions: a.competitions,
@@ -238,11 +247,18 @@ function fromStored(row: StoredPolicyPackage, now?: Date): PolicyPackage | null 
   return toPackage(parsed.data, { sourceType: row.sourceType, stored: row }, now);
 }
 
+/** The bundled sample mapping (the example upload file, mapped in advance). */
+const samplePackage = (now?: Date) => toPackage(SAMPLE_UPLOAD_POLICY, { sourceType: "SAMPLE_DOCUMENT_MAPPING", bundled: true }, now);
+
+/** Same rules as the bundled example file (both sides parsed by PolicySchema, so key order is canonical). */
+const isBundledSample = (policy: Policy) => JSON.stringify(policy) === JSON.stringify(SAMPLE_UPLOAD_POLICY);
+
 async function resolvePackage(id: string, version?: string, now?: Date): Promise<PolicyPackage | null> {
   const preset = PRESET_POLICIES.find((p) => p.id === id);
   if (preset) return toPackage(preset, { sourceType: "PRESET" }, now);
   const row = await optional(() => policyPackages.get(id, version), null);
-  return row ? fromStored(row, now) : null;
+  if (row) return fromStored(row, now);
+  return id === SAMPLE_UPLOAD_POLICY.id && (!version || version === SAMPLE_UPLOAD_POLICY.version) ? samplePackage(now) : null;
 }
 
 async function defaultPackage(club: string, now?: Date): Promise<PolicyPackage | null> {
@@ -279,7 +295,9 @@ export async function policyLibrary(now: Date = new Date()): Promise<PolicyLibra
   const newest = clubRows.filter((row, i) => clubRows.findIndex((r) => r.id === row.id) === i);
   const uploaded = newest.map((row) => fromStored(row, now)).filter((p): p is PolicyPackage => p !== null);
   const presets = PRESET_POLICIES.map((p) => toPackage(p, { sourceType: "PRESET" }, now));
-  const packages = [...presets, ...uploaded];
+  // The bundled sample mapping, unless the same package was uploaded into the tables.
+  const sample = uploaded.some((p) => p.summary.id === SAMPLE_UPLOAD_POLICY.id) ? [] : [samplePackage(now)];
+  const packages = [...presets, ...uploaded, ...sample];
   const clubs = unique(packages.map((p) => p.summary.club));
   const defaults: Record<string, string> = {};
   for (const [club, pkg] of await Promise.all(clubs.map(async (c) => [c, await defaultPackage(c, now)] as const))) {
@@ -385,9 +403,14 @@ export type UploadInput = { text: string; fileName?: string; uploadedBy: string 
 
 /**
  * Validates and stores an uploaded JSON rule package. The stored package is ALWAYS kind DEMO (a declared
- * VERIFIED is downgraded and noted) and carries the demo disclaimer. Returns notes about what was changed.
+ * VERIFIED is downgraded and noted) and carries the demo disclaimer. Returns notes about what was changed and
+ * whether it was stored. Without the policy tables, the bundled example file resolves to the bundled sample
+ * mapping (`stored: false`); any other valid file is refused with NOT_CONFIGURED after full validation.
  */
-export async function uploadPolicyPackage(input: UploadInput, now: Date = new Date()): Promise<{ package: PolicyPackageSummary; notes: string[] }> {
+export async function uploadPolicyPackage(
+  input: UploadInput,
+  now: Date = new Date(),
+): Promise<{ package: PolicyPackageSummary; notes: string[]; stored: boolean }> {
   if (Buffer.byteLength(input.text, "utf8") > MAX_UPLOAD_BYTES) {
     throw new AppError("BAD_REQUEST", `The rule package is larger than ${MAX_UPLOAD_BYTES / 1024} KB`);
   }
@@ -419,9 +442,32 @@ export async function uploadPolicyPackage(input: UploadInput, now: Date = new Da
   if (PRESET_POLICIES.some((p) => p.id === policy.id)) {
     throw new AppError("CONFLICT", `"${policy.id}" is a built-in package; give the uploaded package its own id`);
   }
-  const existing = await required(() => policyPackages.get(policy.id));
+  let existing: StoredPolicyPackage | null;
+  try {
+    existing = await required(() => policyPackages.get(policy.id));
+  } catch (err) {
+    if (!notConfigured(err)) throw err;
+    if (isBundledSample(policy)) {
+      return {
+        package: samplePackage(now).summary,
+        notes: ["This is the bundled example file. This deployment does not store uploads, so PULSE uses the example's prepared sample mapping — the same rules, validated."],
+        stored: false,
+      };
+    }
+    throw new AppError(
+      "NOT_CONFIGURED",
+      `The file is a valid rule package (${policy.rules.length} rules for ${policy.applicability.club}), but this deployment cannot store uploads. Try the example file.`,
+      { cause: err },
+    );
+  }
   if (existing && existing.club !== policy.applicability.club) {
     throw new AppError("CONFLICT", `"${policy.id}" already belongs to a ${existing.club} package; use another id`);
+  }
+  // Re-importing the exact same version is a no-op, not an error (re-parsed: the database may reorder JSON keys).
+  const same = existing?.version === policy.version ? PolicySchema.safeParse(existing.document) : null;
+  if (existing && same?.success && JSON.stringify(same.data) === JSON.stringify(policy)) {
+    const pkg = fromStored(existing, now);
+    if (pkg) return { package: pkg.summary, notes: ["This version is already in the library."], stored: true };
   }
   const sha256 = createHash("sha256").update(input.text, "utf8").digest("hex");
   const stored = await required(() =>
@@ -458,7 +504,7 @@ export async function uploadPolicyPackage(input: UploadInput, now: Date = new Da
   });
   const pkg = fromStored(stored, now);
   if (!pkg) throw new AppError("INTERNAL", "Stored policy package failed validation");
-  return { package: pkg.summary, notes };
+  return { package: pkg.summary, notes, stored: true };
 }
 
 /** Sets the workspace default package of `club` (a preset or an uploaded package of that club). */

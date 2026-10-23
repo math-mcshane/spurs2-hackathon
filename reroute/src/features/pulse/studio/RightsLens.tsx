@@ -182,10 +182,10 @@ function PolicyRow({ goal, disabled, onSetPolicy }: { goal: GoalView; disabled: 
         <ScaleIcon className="mt-0.5 size-3.5 shrink-0 text-ink-muted" aria-hidden />
         <div className="min-w-0">
           <p className="text-small text-ink-soft">{p ? p.title : "Club rights policy"}</p>
-          {p && <PolicyContext verified={p.verified} uploaded={p.sourceType !== "PRESET"} className="mt-1" />}
+          {p && <PolicyContext verified={p.verified} sourceType={p.sourceType} className="mt-1" />}
         </div>
       </div>
-      <PolicyPicker club={goal.run.club} value={p?.packageId} disabled={disabled} triggerLabel="Change rules" onChange={onSetPolicy} />
+      <PolicyPicker club={goal.run.club} value={p?.packageId} disabled={disabled} triggerLabel="Change rules" runId={goal.run.id} onChange={onSetPolicy} />
     </div>
   );
 }

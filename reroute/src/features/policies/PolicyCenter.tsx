@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2Icon, LockIcon, RefreshCwIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeftIcon, Loader2Icon, LockIcon, RefreshCwIcon } from "lucide-react";
 import { CONTAINER, PulseFooter, PulseHeader } from "@/components/pulse/shell";
 import { ReviewerControl, ReviewerSignInDialog, useReviewerSession } from "@/components/reroute/reviewer";
 import { ErrorState } from "@/components/reroute/shared";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Eyebrow } from "@/features/pulse/studio/parts";
+import { pulseApi } from "@/features/pulse/client";
 import { authenticity, clubLabel, policiesApi, type Library, type PackageSummary } from "./api";
 import { PackageDetail } from "./PackageDetail";
 import { UploadPanel } from "./UploadPanel";
@@ -44,13 +46,18 @@ function CenterNav() {
   );
 }
 
-/** The Policy Center. `?package=<id>` (e.g. from the Studio's policy picker) opens that package. */
+/**
+ * The Policy Center. `?package=<id>` opens that package; `?run=<goal id>` (from a campaign) lets an imported
+ * package be applied to that campaign, then returns to it for a fresh rights check.
+ */
 export function PolicyCenter() {
   const [library, setLibrary] = useState<Library | null>(null);
   const [libraryError, setLibraryError] = useState<unknown>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
   const { session, setSession } = useReviewerSession();
+  const router = useRouter();
 
   const loadLibrary = useCallback(
     (signal?: AbortSignal) =>
@@ -58,7 +65,9 @@ export function PolicyCenter() {
         (lib) => {
           setLibrary(lib);
           setLibraryError(null);
-          setSelectedId((current) => current ?? new URLSearchParams(window.location.search).get("package"));
+          const params = new URLSearchParams(window.location.search);
+          setSelectedId((current) => current ?? params.get("package"));
+          setRunId(params.get("run"));
         },
         (err: unknown) => {
           if (!signal?.aborted) setLibraryError(err);
@@ -79,12 +88,21 @@ export function PolicyCenter() {
 
   const choose = (id: string) => {
     setSelectedId(id);
-    window.history.replaceState(null, "", `/policies?${new URLSearchParams({ package: id })}`);
+    window.history.replaceState(null, "", `/policies?${new URLSearchParams({ package: id, ...(runId ? { run: runId } : {}) })}`);
     // Below lg the package sits under the library: bring it into view.
     if (window.matchMedia("(max-width: 1023px)").matches) document.getElementById("package-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const reviewer = session?.reviewer ?? null;
+
+  /** Selects the package for the campaign the presenter came from (its own versioned action), then goes back to it. */
+  const applyToCampaign = async (packageId: string) => {
+    if (!runId) return;
+    const goal = await pulseApi.goal(runId);
+    if (!goal) throw new Error("That campaign no longer exists");
+    if (goal.policy?.packageId !== packageId) await pulseApi.goalAction({ action: "setPolicy", id: runId, expectedVersion: goal.version, packageId });
+    router.push(`/?${new URLSearchParams({ run: runId, step: "campaign" })}`);
+  };
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -92,16 +110,38 @@ export function PolicyCenter() {
 
       <main className="flex-1">
         <section className={cn(CONTAINER, "py-8 sm:py-10")}>
+          {runId && (
+            <Link
+              href={`/?${new URLSearchParams({ run: runId, step: "campaign" })}`}
+              className="mb-5 inline-flex items-center gap-1.5 text-small text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+            >
+              <ArrowLeftIcon className="size-3.5" aria-hidden /> Back to your campaign
+            </Link>
+          )}
           <Eyebrow>Policy Center</Eyebrow>
           <h1 className="mt-2 max-w-3xl font-display text-title font-medium text-ink">What rules is PULSE checking your campaigns against?</h1>
           <p className="mt-3 max-w-2xl text-body text-ink-soft">
-            Every rights check runs against one rule package per club: the workspace default, unless a campaign picks another. Packages here
-            are fictional demo rules or uploaded rules nobody has verified.
+            Every rights check runs against one rule package per club: the workspace default, unless a campaign picks another. The packages here are
+            illustrative presets, a sample mapping and uploaded rules — none is a verified club agreement.
           </p>
           <p role="note" className="mt-5 flex max-w-2xl items-start gap-2.5 rounded-lg border border-line-strong px-4 py-3 text-small text-ink-soft">
             <LockIcon className="mt-0.5 size-4 shrink-0 text-ink-muted" aria-hidden />
-            <span>No uploaded or demo rule package can authorize publication. Publishing needs verified clearance and human approval.</span>
+            <span>No package in this library can authorize publication. Publishing needs a verified agreement and human approval.</span>
           </p>
+          <div className="mt-8">
+            <UploadPanel
+              reviewer={reviewer}
+              signInEnabled={session?.enabled ?? false}
+              uploadsAvailable={library?.uploadsAvailable ?? true}
+              campaignRunId={runId}
+              onSignIn={() => setSignInOpen(true)}
+              onUploaded={async (id) => {
+                await loadLibrary();
+                choose(id);
+              }}
+              onApplyToCampaign={applyToCampaign}
+            />
+          </div>
         </section>
 
         <div className={cn(CONTAINER, "grid gap-10 border-t border-line pt-8 pb-16 lg:grid-cols-12 lg:gap-12")}>
@@ -156,16 +196,6 @@ export function PolicyCenter() {
               ))
             )}
 
-            <UploadPanel
-              reviewer={reviewer}
-              signInEnabled={session?.enabled ?? false}
-              uploadsAvailable={library?.uploadsAvailable ?? true}
-              onSignIn={() => setSignInOpen(true)}
-              onUploaded={async (id) => {
-                await loadLibrary();
-                choose(id);
-              }}
-            />
           </aside>
 
           <section id="package-detail" className="min-w-0 scroll-mt-28 lg:col-span-8" aria-label="Selected rule package">

@@ -62,7 +62,9 @@ async function boundedBody(req: Request, max: number): Promise<Uint8Array<ArrayB
 
 /**
  * POST /api/policies — signed-in reviewer uploads a JSON rule package: a JSON body (the policy document) or
- * multipart `file` (≤ 200 KB). Stored as DEMO whatever it declares → 201 { package, notes }. PDF/DOCX/TXT/CSV → 422.
+ * multipart `file` (≤ 200 KB). Stored as DEMO whatever it declares → 201 { package, notes, stored: true }. On a
+ * deployment without the policy tables, the bundled example file → 200 { package: sample mapping, stored: false };
+ * any other file → 503 NOT_CONFIGURED after validation. PDF/DOCX/TXT/CSV → 422.
  */
 export const POST = route(async (req: Request) => {
   const { reviewer } = await requireReviewer(req);
@@ -78,9 +80,9 @@ export const POST = route(async (req: Request) => {
     if (file.size > MAX_UPLOAD_BYTES) throw new AppError("BAD_REQUEST", TOO_LARGE);
     if (!/\.json$/i.test(file.name) && file.type !== "application/json") return Response.json(UNSUPPORTED, { status: 422 });
     const result = await uploadPolicyPackage({ text: await file.text(), fileName: file.name, uploadedBy: reviewer });
-    return Response.json(result, { status: 201 });
+    return Response.json(result, { status: result.stored ? 201 : 200 });
   }
   if (!/^application\/(.+\+)?json\b/i.test(type)) return Response.json(UNSUPPORTED, { status: 422 });
   const result = await uploadPolicyPackage({ text: new TextDecoder().decode(body), uploadedBy: reviewer });
-  return Response.json(result, { status: 201 });
+  return Response.json(result, { status: result.stored ? 201 : 200 });
 });

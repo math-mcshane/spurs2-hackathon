@@ -1,14 +1,14 @@
 # PULSE — final readiness
 
-State as of 2026-10-23 ≈ 11:50 UTC, branch `hackathon-integration` at `66a2cd0`. Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) (§0 flagship, then earlier runs). Not a prediction of scores.
+State as of 2026-10-23 ≈ 12:30 UTC, branch `hackathon-integration` at `2f3d299` (+ docs). Evidence: [`../demo/DEMO_EVIDENCE.md`](../demo/DEMO_EVIDENCE.md) (first section = final flagship record). Not a prediction of scores.
 
-Environments: local production build (`next start -p 3400`, recommended), Vercel Preview https://spurs2-hackathon-6z5ttmdsi-merlins-projects-2b20d832.vercel.app (`66a2cd0`; public; shared Supabase **without** the policy-packages migration; flagship there: one issue, "Remove 0:14.5–0:17.5", 7.7 s — see `../pitch/CONTINGENCY.md`), local dev `:3300` (development only).
+Environments: Vercel Preview https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app (`2f3d299`; recommended; public; rotated reviewer credentials; shared Supabase **without** the policy-packages migration; all older previews deleted), local production build (`next start -p 3400`; same flagship evidence since the Pegasus cache was aligned), local dev `:3300` (stopped).
 
 ## Status table
 
 | Capability | Status | Evidence / note |
 |---|---|---|
-| Flagship: goal names a player → ScorePlay player-tag filter → moment → BLOCKED → TRIM → ALLOWED | **Fully working** | Chromium on a fresh production build, twice (≈ 11:41 and ≈ 11:45 UTC): "Activate our sponsor with Solanke's late goal for UK fans" → "Searched only the 15 videos ScorePlay tags with Dominic Ayodele Solanke-Mitchell" → moment 02 *solanke late goal* 0:09–0:20 → Blocked 0/3 (DHL boards 15–17 s, second run; "Tonali" 19–23 s, AI-named) → ★ "Remove 2 flagged parts (0:14.5–0:17.5, 0:18.5–0:19.7)", 6.4 s of 10.7 s, edit plan not rendered → Allowed 3/3 (demo) → approved → writeback dry run (2 logs, review=APPROVED). Rank comes from TwelveLabs (#5 for the partner-on-kit query) × the club's own title naming the goal (×2), shown in "Why this moment". Moment 02, not 01. |
+| Flagship: goal names a player → ScorePlay player-tag filter → moment → BLOCKED → TRIM → ALLOWED | **Fully working**, identical on preview and local | Preview UI as reviewer ≈ 12:19 UTC + API diff ≈ 12:27 UTC: moment 02 *solanke late goal* 9.07–19.73 → Blocked 0/3 (DHL 15–17 s) → ★ "Remove 0:14.5–0:17.5", 7.67 s of 10.67 s, edit plan not rendered → Allowed 3/3 (demo) → approved → writeback dry run (2 logs, review=APPROVED). Rank: TwelveLabs #5 × club title naming the goal (×2), shown in "Why this moment". |
 | Goal → 3 real moments (ScorePlay + Marengo, SP↔TL mapping) | **Fully working** | API runs 0.8–4.0 s, origin LIVE (04:25–04:54); prod-build UI 5.0–7.6 s for the flagship (11:41–11:45) |
 | Rights check per channel × market | **Fully working** | S1 BLOCKED 0/3, S2 NEEDS_REVIEW 6/21, Tickets ALLOWED 3/3 |
 | Recovery: localization, trim attempt + rejection, REPLACE, SAFE_SECTION, CHANGE_USAGE, REQUEST_CLEARANCE | **Fully working** | S1 same options/outcomes at 04:25, 04:35, 04:54; v2 wording at 04:54 and on the preview |
@@ -27,14 +27,14 @@ Environments: local production build (`next start -p 3400`, recommended), Vercel
 | CACHED fallback (`DEMO_REPLAY`) | **Fully working** for 9 Studio scenarios incl. the flagship | re-recorded ≈ 11:39 UTC, 167 files, replay verified (flagship TRIM → ALLOWED) |
 | Fan-signal board | **Simulated**, off | flag off |
 | Sales attribution | **Blocked externally** (no data source) | KPI "not connected" |
-| Video previews | **Blocked externally** (playback rights) | off |
+| Video previews, thumbnails, photo thumbnails | **Fully working for signed-in reviewers** (organizers confirmed display for reviewers) | `MEDIA_PREVIEW_ENABLED=true` (Vercel Preview/Production, local). Reviewer: TwelveLabs HLS + ScorePlay thumbnails + photo thumbnails; edit-plan playback skips the cut seconds. Anonymous: no media URL anywhere in the API (tested). |
 | Live ScorePlay writes | **Blocked externally** (authorization + real policy) | dry-run |
 | NBA footage analysis | **Blocked externally** | 65 videos, no NBA TwelveLabs index (rechecked ≈ 04:05) |
 | Pegasus on > 60 min video | **Blocked externally** (API limit) | full match has no product-run observation |
-| ScorePlay photos in the Studio | **Fully working** (metadata only) | Discover step shows ≤ 3 real ScorePlay photos per goal, matched on captions / person tags / event / orientation, each rights-checked by the engine (S1 at ≈ 05:20 UTC: CK1_9648.JPG, CK3_4457.JPG, PC1_3663.JPG — NEEDS_REVIEW 0/3: "the photo was not analysed"). Not visually analysed; no image URL in any response; included in the CACHED recording (154 files, re-recorded ≈ 05:22 UTC). Inventory: `PHOTO_INVENTORY.md` |
-| Build / tests / types / lint | **Fully working** | `next build` passes; vitest 418 passed / 15 skipped (35 files); tsc + eslint clean (≈ 11:47 UTC) |
-| Security review | **Fully working**, low items open | no critical/high; open low: anonymous library GET loads all stored packages (F7), in-memory per-instance rate limits on serverless, truncated Pegasus outputs not cached |
-| Timed browser rehearsal | **Fully working** for flagship, S2 (+ rules switch), S1 (≈ 11:41–11:46 UTC, production build) | Human visual verification of the DHL board: **not done** (AI-observed, second Pegasus run only). |
+| ScorePlay photos in the Studio | **Fully working** (metadata match; thumbnails for reviewers) | ≤ 3 real ScorePlay photos per goal matched on captions / person tags / event / orientation, each rights-checked (NEEDS_REVIEW: "the photo was not analysed"). Thumbnails only for a reviewer session. Inventory: `PHOTO_INVENTORY.md` |
+| Build / tests / types / lint | **Fully working** | `next build` passes; vitest 418 passed / 15 skipped (35 files); tsc + eslint clean (≈ 12:24 UTC) |
+| Security | **Incident resolved**, low items open | Presenter passcode exposed in an agent output → all reviewer credentials + session secret rotated (local + Vercel Preview, via stdin/0600 files, never printed), old sessions invalid, 17 older previews deleted (404). App auth tested on the new preview: new passcode 200; anonymous upload/review/writeback 403; cross-origin sign-in 403. Open low: anonymous policy-library GET (F7), per-instance rate limits, truncated Pegasus outputs not cached; ScorePlay/TwelveLabs media URLs are unsigned (whoever has a URL can fetch it — PULSE only hands them to reviewers). |
+| Timed browser rehearsal | **Fully working** for flagship + territory beat on the preview (≈ 12:15–12:20 UTC, reviewer, media on) | Human visual verification of the DHL board: **not done** (AI-observed by two Pegasus runs). |
 
 ## Per criterion
 

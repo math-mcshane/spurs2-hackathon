@@ -4,6 +4,30 @@ What was checked, how, when, and with which data origin. All times UTC, **2026-1
 
 Every ALLOWED below is **"Allowed under a demo policy — DEMO POLICY — NOT VERIFIED LEGAL CLEARANCE"**. `publishable` was `false` on every run.
 
+## Final flagship record — preview `hi425s3gm` and local, ≈ 12:15–12:30 UTC (supersedes the 11:38 section below)
+
+Commit `2f3d299`. Vercel Preview https://spurs2-hackathon-hi425s3gm-merlins-projects-2b20d832.vercel.app (shared Supabase) and local production build (local Supabase with the shared Pegasus cache mirrored in). Signed in as reviewer `presenter` (rotated credential). Every field below was **identical** on both environments (API diff, ≈ 12:27 UTC); the UI pass ran on the preview (build `reawytzpg`, same code minus the campaign-copy tenths fix) at ≈ 12:19–12:20 UTC.
+
+| Step | Exact result |
+|---|---|
+| Data origin | LIVE ("Live club data · ScorePlay + TwelveLabs") |
+| Player filter | ScorePlay tag search → Dominic Ayodele Solanke-Mitchell; 15 club videos tagged |
+| Moments | 1. Goal Slo Mo Man United 9x16 (A) v1.mp4 14.80–20.20 · **2. solanke late goal.mp4 9.07–19.73** · 3. Slide 1 - Goal.mov 0.00–10.00 |
+| Selected asset | ScorePlay **130851444** "solanke late goal.mp4" ↔ TwelveLabs video 6ad91200968fe117efe706a5 (index 6ad911d5500e82756f2eb468); TwelveLabs moment 9.066–19.733 s, #5 for "player celebrating a goal with the sponsor logo on his shirt clearly visible"; context ×2 (title names solanke, late, goal) |
+| Media (reviewer) | TwelveLabs HLS stream + ScorePlay thumbnail on every moment; 3 photo thumbnails; anonymous callers get none (API checked) |
+| AI observations in range (Pegasus product run cached 22 Oct 23:20 UTC, + bundled second run) | AIA 10–19 s (official partner — permitted); **DHL 15–17 s** "DHL logo visible on the advertising hoardings behind the celebrating players" (product run; the second run's identical-range DHL line is de-duplicated); Dominic Solanke 12–14 s (squad); "Tonalí" 19–20 s (matched to ScorePlay player Sandro Tonali — no issue) |
+| Check rights | BLOCKED · 0/3 · demo-tottenham-pl@2026-10-23.1 · "Sales and sponsored posts can’t show other brands — our official partners have exclusivity. Third-party branding on screen: DHL (crest/kit or boards), 15–17 s." |
+| Restricted interval | 0:15.0–0:17.0 (DHL) |
+| Proposed cuts | ★ TRIM "Remove 0:14.5–0:17.5" (0.5 s margin) · SAFE_SECTION 0:09.5–0:14.5 (allowed) · CHANGE_USAGE organic (allowed, changes the goal) · 3 REPLACE STILL_BLOCKED · REQUEST_CLEARANCE |
+| Retained | 9.07–14.50 + 17.50–19.73 = **7.67 s of 10.67 s**, "Edit plan — not rendered"; player skips 14.5–17.5 s (measured: playhead 14.51 → 17.62) |
+| Re-evaluation | ALLOWED · clearance DEMO · 3/3 · campaign v3, origin EDIT |
+| Receipt (preview UI run) | `d2a18c90-378f-473e-9f2c-328e2988874a`, segments 130851444@9.066–14.5 and @17.5–19.733; audit events RECEIPT_CREATED #143, REVIEW_RECORDED #145 (hash-chained) |
+| Reviewer | APPROVED by Demo presenter, 12:20:06 UTC; "Publishing locked" |
+| Writeback | DRY_RUN — 1 planned `POST /video/logs`, 2 timecoded logs (segment=9.07-14.50s, segment=17.50-19.73s), `review=APPROVED by Demo presenter`; nothing written |
+| Territory beat (S2, same session) | 6/21 NEEDS_REVIEW → ★ "Limit to licensed markets: GB, US" → ALLOWED 6/6, 2 markets |
+
+Why the earlier local run differed: see `docs/pitch/CONTINGENCY.md` ("Why local and preview used to differ"). Human visual verification of 0:15–0:17: not done.
+
 ## Flagship — Solanke's late goal (Studio, browser) — ≈ 11:38–11:46 UTC
 
 Fresh production build (`next start -p 3400`, commit `66a2cd0` code), local Supabase, live ScorePlay + TwelveLabs, previews off, writeback dry run. Driven in headless Chromium through the real UI; screenshots `docs/design/screenshots/recovery/flagship-0*.webp`.

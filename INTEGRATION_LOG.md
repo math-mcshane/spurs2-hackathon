@@ -147,3 +147,4 @@ long-running `next dev`). Design docs: `docs/design/` (force-added; `docs/` is i
 5. Vercel: enable Deployment Protection (event media), add a Firewall rate-limit rule on `/api/*` (e.g. 30 req/min/IP;
    5/min on `/api/pulse/goal`, `/api/recover`, `/api/auth/session`) — the in-app limiter is per instance.
 6. Merge with a merge commit after review; keep the `backup/*` refs until production is verified.
+- **PULSE final (pulse-final, `8f87e44`+):** three steps (Goal → Opportunities & Rights → Review & Audit; rights check, Find a way, apply and re-check inside Step 2), header club switcher, explicit target sponsor (AIA partner / DHL competing under THFC-13 / Kraken unknown → Needs review), only re-check-ALLOWED corrections are recommended, AI-only identities are unverified review items. Merged `spurs-sponsor`. Preview https://spurs2-hackathon-2am8b2j1f-merlins-projects-2b20d832.vercel.app — flagship verified in Chromium as reviewer (screenshots `docs/demo/final/`).
